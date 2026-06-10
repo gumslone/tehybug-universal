@@ -8,10 +8,10 @@
 #include <OneWire.h>
 #include <DallasTemperature.h>
 #include <FS.h>
-#include "AHT20.h"
 #include "DHTesp.h"
 #include "Max44009.h"
 #if !defined(ARDUINO_ESP8266_GENERIC)
+#include "AHT20.h"
 #include "bsec.h"
 #endif
 #include <AM2320_asukiaaa.h>
