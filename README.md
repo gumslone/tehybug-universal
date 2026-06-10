@@ -2,12 +2,12 @@ This is a different TeHyBug firmware fully written in C/C++, (previous was parti
 
 This firmware supports easy OTA Updates.
 
-<img src="https://github.com/gumslone/tehybug/blob/master/tehybug/images/2022-06-10T21_41_23.878Z-IMG_3707.jpg?raw=true" width="500">
+<img src="images/2022-06-10T21_41_23.878Z-IMG_3707.jpg" width="500">
 
 TeHyBug 18650 Universal
 
 
-<img src="https://github.com/gumslone/tehybug/blob/master/tehybug/images/mini-tehybug.jpg?raw=true" width="500">
+<img src="images/mini-tehybug.jpg" width="500">
 
 Mini TeHyBug
 
@@ -45,7 +45,7 @@ To return back to Config mode from the Live mode:
   
 ### Pinmapping Port B
   
-<img src="https://github.com/gumslone/tehybug/blob/master/tehybug/images/tehybug_port_b_pinmapping.png?raw=true" width="300">
+<img src="images/tehybug_port_b_pinmapping.png" width="300">
 
 ## Port A (black) supported sensors:
 * DHT21/DHT22/AM2032 (in dht simulation mode)
@@ -55,11 +55,20 @@ To return back to Config mode from the Live mode:
 
 ### Pinmapping Port A
   
-<img src="https://github.com/gumslone/tehybug/blob/master/tehybug/images/tehybug_port_a_pinmapping.png?raw=true" width="300">
+<img src="images/tehybug_port_a_pinmapping.png" width="300">
 
 ## Upload new firmware via web interface (recommended)
 
 To update the firmware from OTA WebInterface open http://tehybug.local/update in your browser, if this doesnt work, try to find out its IP from your router admin menu or use any local network ip scanner app for your mobile phone to get the device ip and then open http://<ip_address<ip address>>/update with your browser.
+
+## Firmware binaries
+The prebuilt binaries in the repository root are rebuilt automatically on every merge to `main`:
+
+| File | Board | Notes |
+| --- | --- | --- |
+| `tehybug.ino.esp8285.bin` | TeHyBug universal boards (ESP8285) | recommended |
+| `tehybug.ino.esp8285_debug.bin` | TeHyBug universal boards (ESP8285) | serial debug output enabled |
+| `tehybug.ino.generic.bin` | Mini TeHyBug / generic ESP8266 dev boards | |
 
 ## How to program/flash the board (advanced users only)
 To flash firmware use the .esp8285.bin file.
@@ -74,7 +83,7 @@ Replace /dev/cu.usbserial-1410 with your usb2serial port.
 
 ## Web Gui
   
-<img src="https://github.com/gumslone/tehybug/blob/master/tehybug/images/webgui.png?raw=true" width="800">
+<img src="images/webgui.png" width="800">
 
 Demo web configuration page: https://tehybug.com/tehybug/v1/html/demo.html
 
@@ -83,9 +92,9 @@ Demo web configuration page: https://tehybug.com/tehybug/v1/html/demo.html
 - Connect the power supply to micro USB port
 - TeHyBug will boot, the LED will turn solid blue
 - Connect to a TeHyBug wifi network like the image below (Password: TeHyBug123)
-- <img src="https://github.com/gumslone/tehybug/blob/master/tehybug/images/wifimanager.png?raw=true" width="350">
+- <img src="images/wifimanager.png" width="350">
 - open http://192.168.4.1/ in your browser, and click the configuration button
-- <img src="https://github.com/gumslone/tehybug/blob/master/tehybug/images/credentials.png?raw=true" width="350">
+- <img src="images/credentials.png" width="350">
 - Provide credentials of your WIFI network and save them
 - If your credentials were correct, the TeHyBug WIFI network will disapear
 - TeHyBug will connect to your network and boot in a configuration mode with solid blue LED light
@@ -98,3 +107,23 @@ To delete the all the configs and reset wifi configuration.
 1. hit the RESET button
 2. after that push and hold the MODE button for 20 seconnds untill the LED turns red
 3. release the MODE button.
+
+## Building from source
+
+Requirements: [arduino-cli](https://arduino.github.io/arduino-cli/) and git. Everything else is pinned:
+
+- All Arduino libraries are vendored in [`libraries/`](libraries/) — exact known-good versions, including a PubSubClient patched to `MQTT_MAX_PACKET_SIZE 4000` (required for the Home Assistant discovery messages).
+- [`ci/install-deps.sh`](ci/install-deps.sh) installs the ESP8266 core 2.7.4 and applies the `platform.local.txt` override needed to link the precompiled BSEC (BME680) library.
+
+```bash
+./ci/install-deps.sh        # one-time: install the ESP8266 toolchain
+./build.sh                  # build for ESP8285 (default)
+./build.sh all              # build esp8285 + generic
+./build.sh esp8285 debug    # build with serial debug output
+```
+
+The flashable binary is placed next to the sketch as `tehybug.ino.<variant>.bin`.
+
+## Development
+
+Active development happens on the `development` branch. Every pull request to `main` is built by GitHub Actions ([build workflow](.github/workflows/build.yml)) and the resulting binaries are attached as workflow artifacts. After a merge to `main`, the workflow rebuilds all firmware variants and commits the updated binaries back to the repository.
