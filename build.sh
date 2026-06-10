@@ -45,8 +45,8 @@ esac
 
 ESP8285_FQBN="esp8266:esp8266:esp8285:$ESP8285_OPTS,$DBG_OPT"
 
-# TeHyBug mini board
-GENERIC_FQBN="esp8266:esp8266:generic:$DBG_OPT"
+# TeHyBug mini board; basic SSL ciphers to match the esp8285 build
+GENERIC_FQBN="esp8266:esp8266:generic:ssl=basic,$DBG_OPT"
 
 build() {
   local variant="$1" fqbn="$2"

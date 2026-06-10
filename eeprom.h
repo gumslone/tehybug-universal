@@ -1,7 +1,23 @@
 #pragma once
-#include <EepromFS.h>
 #include "debug.h"
 #include "rtc_time.h"
+
+#if defined(ARDUINO_ESP8266_GENERIC)
+// The TeHyBug mini has no data-log EEPROM; this stub keeps the call
+// sites (data logging, /api/datalog) compiling without the EepromFS
+// driver. mounted() stays false, so the endpoints report "not active".
+class TeHyBugEeprom {
+  public:
+    TeHyBugEeprom(RtcTime &) {}
+    void setup() {}
+    bool mounted() { return false; }
+    void readdir() {}
+    String read(const char *) { return String(); }
+    bool appendLine(const String &, const String &, uint8_t) { return false; }
+    String listFilesJson() { return "[]"; }
+};
+#else
+#include <EepromFS.h>
 
 // Slot-based data log on an external I2C EEPROM (e.g. AT24C32 on a
 // DS3231 RTC module). One file per day of month ("<mday>.txt"); when no
@@ -134,3 +150,4 @@ class TeHyBugEeprom{
   bool m_mounted{false};
 
 };
+#endif

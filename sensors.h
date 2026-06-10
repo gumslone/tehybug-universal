@@ -11,7 +11,9 @@
 #include "AHT20.h"
 #include "DHTesp.h"
 #include "Max44009.h"
+#if !defined(ARDUINO_ESP8266_GENERIC)
 #include "bsec.h"
+#endif
 #include <AM2320_asukiaaa.h>
 #include <ErriezBMX280.h>
 #include "debug.h"
@@ -22,9 +24,11 @@
 ErriezBMX280 bmx280 = ErriezBMX280(0x76);
 ErriezBMX280 bmp280 = ErriezBMX280(0x77);
 
+#if !defined(ARDUINO_ESP8266_GENERIC)
 Bsec bme680;
 uint8_t bsecState[BSEC_MAX_STATE_BLOB_SIZE] = {0};
 uint16_t stateUpdateCounter = 0;
+#endif
 
 Max44009 Max44009Lux(0x4A);
 
@@ -56,6 +60,7 @@ void read_bmx280() {
   tehybug.addSensorData("alt", bmx280.readAltitude(SEA_LEVEL_PRESSURE_HPA));
 }
 
+#if !defined(ARDUINO_ESP8266_GENERIC)
 void checkIaqSensorStatus(void) {
   if (bme680.status != BSEC_OK) {
     if (bme680.status < BSEC_OK) {
@@ -150,6 +155,7 @@ void read_bme680() {
   // Save state periodically
   saveBME680State();
 }
+#endif
 
 void read_max44009() {
   const float lux = Max44009Lux.getLux();
@@ -275,9 +281,11 @@ void read_sensors() {
   if (tehybug.sensor.bmx) {
     read_bmx280();
   }
+#if !defined(ARDUINO_ESP8266_GENERIC)
   if (tehybug.sensor.bme680) {
     read_bme680();
   }
+#endif
   if (tehybug.sensor.max44009) {
     read_max44009();
   }
@@ -325,21 +333,25 @@ void findI2Csensors() {
   if (i2cScanner::addressExists("0x5c")) {
     tehybug.sensor.am2320 = true;
   }
+#if !defined(ARDUINO_ESP8266_GENERIC)
   if (i2cScanner::addressExists("0x77")) {
     tehybug.sensor.bme680 = true;
   }
+#endif
   if (i2cScanner::addressExists("0x4a")) {
     tehybug.sensor.max44009 = true;
   }
   if (i2cScanner::addressExists("0x38")) {
     tehybug.sensor.aht20 = true;
   }
+#if !defined(ARDUINO_ESP8266_GENERIC)
   if (i2cScanner::addressExists("0x50")) {
     tehybug.peripherals.eeprom = true;
   }
   if (i2cScanner::addressExists("0x68")) {
     tehybug.peripherals.ds3231 = true;
   }
+#endif
 }
 
 void setupBmx280() {
@@ -379,6 +391,7 @@ void setupBmx280() {
     BMX280_STANDBY_MS_500); // 0_5, 10, 20, 62_5, 125, 250, 500, 1000
 }
 
+#if !defined(ARDUINO_ESP8266_GENERIC)
 void setupBme680() {
   D_println(F("BME680 test"));
 
@@ -418,6 +431,7 @@ void setupBme680() {
   // Load saved calibration state
   loadBME680State();
 }
+#endif
 
 void setupSensors() {
   if (!tehybug.sensor.dht && !tehybug.sensor.ds18b20) {
@@ -428,9 +442,11 @@ void setupSensors() {
   if (tehybug.sensor.bmx) {
     setupBmx280();
   }
+#if !defined(ARDUINO_ESP8266_GENERIC)
   if (tehybug.sensor.bme680) {
     setupBme680();
   }
+#endif
   if (tehybug.sensor.max44009) {
     D_print("\nStart max44009_setAutomaticMode : ");
     D_println(MAX44009_LIB_VERSION);

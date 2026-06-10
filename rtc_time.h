@@ -1,8 +1,30 @@
 #pragma once
-#include <ds3231.h>
 #include "debug.h"
 #include "common_functions.h"
 #include "configuration.h"
+
+#if defined(ARDUINO_ESP8266_GENERIC)
+// The TeHyBug mini has no DS3231 RTC; this stub keeps the call sites
+// (data logging, /api/settime) compiling without pulling in the driver.
+class RtcTime {
+  public:
+    RtcTime(TeHyBugConfig &) {}
+    void setup() {}
+    uint8_t getHours() { return 0; }
+    uint8_t getMinutes() { return 0; }
+    uint8_t getSeconds() { return 0; }
+    uint8_t getMonthDay() { return 0; }
+    uint8_t getDay() { return 0; }
+    uint8_t getMonth() { return 0; }
+    uint16_t getYear() { return 0; }
+    bool isTimeSet() { return false; }
+    String timestamp() { return String(); }
+    void update() {}
+    void setTime(uint16_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t,
+                 uint8_t) {}
+};
+#else
+#include <ds3231.h>
 
 class RtcTime {
   public:
@@ -68,3 +90,4 @@ class RtcTime {
     TeHyBugConfig & m_conf;
 
 };
+#endif
