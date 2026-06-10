@@ -20,7 +20,9 @@
 #include <TickerScheduler.h>
 #include <WebSocketsServer.h>
 
+#if !defined(ARDUINO_ESP8266_GENERIC)
 #include <WiFiClientSecureBearSSL.h>
+#endif
 #include <WiFiManager.h>
 
 #include <Wire.h>
@@ -42,16 +44,17 @@ char wifiSsid[16];
 const char *wifiPassword = "TeHyBug123";
 
 WiFiClient espClient;
+#if !defined(ARDUINO_ESP8266_GENERIC)
+// https data push; left out of the 1MB mini build to keep OTA possible
 BearSSL::WiFiClientSecure espClient_ssl;
+#endif
 HTTPClient httpClient;
 
 PubSubClient mqttClient(espClient);
 WiFiManager wifiManager;
 ESP8266WebServer server(80);
 WebSocketsServer webSocket = WebSocketsServer(81);
-#if !defined(ARDUINO_ESP8266_GENERIC)
 ESP8266HTTPUpdateServer httpUpdater;
-#endif
 
 TickerScheduler ticker(5);
 
@@ -166,9 +169,11 @@ void setup() {
   // should be called after the fs mount
   tehybug.getDeviceKey();
 
+#if !defined(ARDUINO_ESP8266_GENERIC)
   // reduce buffer size and ignore certificate verification
   espClient_ssl.setBufferSizes(256, 256);
   espClient_ssl.setInsecure();
+#endif
 
   // force config when no data serving mode is selected
   if (tehybug.conf.firstStart() || !tehybug.anyServeModeActive()) {

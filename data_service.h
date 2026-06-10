@@ -11,9 +11,13 @@
 
 WiFiClient & getClient(const String & url)
 {
+#if !defined(ARDUINO_ESP8266_GENERIC)
   if (url.startsWith("https")) {
     return espClient_ssl;
   }
+#endif
+  // the mini build has no TLS client: https targets fail with a
+  // connection error, plain http works
   return espClient;
 }
 

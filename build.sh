@@ -26,15 +26,20 @@ MODE="${2:-nodebug}"
 # The debug port (dbg) option is appended depending on the mode.
 ESP8285_OPTS="baud=115200,xtal=80,CrystalFreq=26,eesz=2M64,ResetMethod=nodemcu,lvl=None____,ip=lm2f,vt=flash,exception=legacy,wipe=none,ssl=basic"
 
+# The sketch only uses HTTPClient's modern begin(client, url) API; the
+# legacy 1.1 API would link the unused axTLS stack (~55 KB flash).
+CPP_FLAGS="-DHTTPCLIENT_1_1_COMPATIBLE=0"
+
 case "$MODE" in
   debug)
     DBG_OPT="dbg=Serial"
-    EXTRA_ARGS=(--build-property "compiler.cpp.extra_flags=-DDEBUG=1")
+    CPP_FLAGS="$CPP_FLAGS -DDEBUG=1"
     SUFFIX="_debug"
     ;;
   nodebug)
     DBG_OPT="dbg=Disabled"
-    EXTRA_ARGS=()
+    # strip WiFiManager's debug strings (~10 KB flash)
+    CPP_FLAGS="$CPP_FLAGS -DWM_NODEBUG=1"
     SUFFIX=""
     ;;
   *)
@@ -43,10 +48,14 @@ case "$MODE" in
     ;;
 esac
 
+EXTRA_ARGS=(--build-property "compiler.cpp.extra_flags=$CPP_FLAGS")
+
 ESP8285_FQBN="esp8266:esp8266:esp8285:$ESP8285_OPTS,$DBG_OPT"
 
-# TeHyBug mini board; basic SSL ciphers to match the esp8285 build
-GENERIC_FQBN="esp8266:esp8266:generic:ssl=basic,$DBG_OPT"
+# TeHyBug mini board: 1MB flash, so the smallest FS (64KB) leaves
+# ~470KB for OTA updates — the firmware must stay below that. lwIP
+# without features (no NAPT etc.) saves a few KB.
+GENERIC_FQBN="esp8266:esp8266:generic:eesz=1M64,ip=lm2n,ssl=basic,$DBG_OPT"
 
 build() {
   local variant="$1" fqbn="$2"

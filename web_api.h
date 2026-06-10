@@ -3,8 +3,7 @@
 //
 // Expects the following globals (defined in tehybug.ino before this
 // header is included): `tehybug`, `server`, `webSocket`, `wifiManager`,
-// `httpUpdater` (non-generic boards) — plus `read_sensors()` from
-// sensors.h.
+// `httpUpdater` — plus `read_sensors()` from sensors.h.
 #include <ESP8266WebServer.h>
 #include <WebSocketsServer.h>
 #include <ArduinoJson.h>
@@ -262,9 +261,7 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload,
 }
 
 void setupWebServer() {
-#if !defined(ARDUINO_ESP8266_GENERIC)
   httpUpdater.setup(&server);
-#endif
   server.on(F("/api/info"), HTTP_GET, handleGetInfo);
   server.on(F("/api/config"), HTTP_POST, handleSetConfig);
   server.on(F("/api/config"), HTTP_GET, handleGetConfig);

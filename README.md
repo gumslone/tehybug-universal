@@ -68,7 +68,7 @@ The prebuilt binaries in the repository root are rebuilt automatically on every 
 | --- | --- | --- |
 | `tehybug.ino.esp8285.bin` | TeHyBug universal boards (ESP8285) | recommended |
 | `tehybug.ino.esp8285_debug.bin` | TeHyBug universal boards (ESP8285) | serial debug output enabled |
-| `tehybug.ino.generic.bin` | Mini TeHyBug / generic ESP8266 dev boards | |
+| `tehybug.ino.generic.bin` | Mini TeHyBug / generic ESP8266 dev boards (1MB flash) | small enough for OTA updates; no BME680, no RTC/EEPROM data log, no https data push (plain http works) |
 
 ## How to program/flash the board (advanced users only)
 To flash firmware use the .esp8285.bin file.
