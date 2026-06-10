@@ -26,6 +26,13 @@ jobs:
       - name: Install toolchain
         run: ./ci/install-deps.sh
 
+      # The firmware derives its version from the compile timestamp
+      # (YYMMDDHHMM, see fw_version.h); capture the same timestamp at build
+      # start so the release tag matches the version the device reports.
+      - name: Set version
+        id: version
+        run: echo "tag=v$(date -u +%y%m%d%H%M)" >> "$GITHUB_OUTPUT"
+
       - name: Build firmware binaries
         run: |
           ./build.sh all
@@ -49,3 +56,18 @@ jobs:
             git commit -m "Build firmware binaries [skip ci]"
             git push
           fi
+
+      - name: Create release
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          git tag "$TAG"
+          git push origin "$TAG"
+          gh release create "$TAG" \
+            --title "TeHyBug firmware $TAG" \
+            --notes "Automated build of $(git rev-parse --short HEAD)." \
+            tehybug.ino.esp8285.bin \
+            tehybug.ino.esp8285_debug.bin \
+            tehybug.ino.generic.bin

@@ -126,4 +126,4 @@ The flashable binary is placed next to the sketch as `tehybug.ino.<variant>.bin`
 
 ## Development
 
-Active development happens on the `development` branch. Every pull request to `main` is built by GitHub Actions ([build workflow](.github/workflows/build.yml)) and the resulting binaries are attached as workflow artifacts. After a merge to `main`, the workflow rebuilds all firmware variants and commits the updated binaries back to the repository.
+Active development happens on the `development` branch. Every pull request to `main` is built by GitHub Actions ([build workflow](.github/workflows/build.yml)) and the resulting binaries are attached as workflow artifacts. After a merge to `main`, the workflow rebuilds all firmware variants, commits the updated binaries back to the repository and publishes a [release](https://github.com/gumslone/tehybug-universal/releases) with the binaries attached. The release tag (`vYYMMDDHHMM`) matches the firmware version reported by the device.
