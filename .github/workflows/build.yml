@@ -1,0 +1,51 @@
+name: Build firmware
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: arduino/setup-arduino-cli@v2
+
+      - name: Cache Arduino toolchain
+        uses: actions/cache@v4
+        with:
+          path: ~/.arduino15
+          key: arduino-deps-${{ hashFiles('ci/install-deps.sh') }}
+
+      - name: Install toolchain
+        run: ./ci/install-deps.sh
+
+      - name: Build firmware binaries
+        run: |
+          ./build.sh all
+          ./build.sh esp8285 debug
+
+      - name: Upload firmware artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: firmware
+          path: tehybug.ino.*.bin
+
+      - name: Commit updated binaries
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add tehybug.ino.esp8285.bin tehybug.ino.esp8285_debug.bin tehybug.ino.generic.bin
+          if git diff --cached --quiet; then
+            echo "Binaries unchanged, nothing to commit."
+          else
+            git commit -m "Build firmware binaries [skip ci]"
+            git push
+          fi

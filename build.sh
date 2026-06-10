@@ -10,8 +10,8 @@ set -euo pipefail
 #            and sets the core debug port to Serial; binaries get a
 #            _debug suffix (default: nodebug)
 #
-# Requires: arduino-cli with the esp8266:esp8266 core (2.7.4) and the
-# project libraries installed.
+# Requires: arduino-cli with the esp8266:esp8266 core (2.7.4); see
+# ci/install-deps.sh. All libraries are vendored in ./libraries.
 
 SKETCH_DIR="$(cd "$(dirname "$0")" && pwd)"
 TARGET="${1:-esp8285}"
@@ -55,11 +55,14 @@ build() {
   echo "==> Building $variant ($MODE)"
   arduino-cli compile \
     --fqbn "$fqbn" \
+    --libraries "$SKETCH_DIR/libraries" \
     --build-path "$build_dir" \
     ${EXTRA_ARGS[@]+"${EXTRA_ARGS[@]}"} \
     "$SKETCH_DIR"
 
-  cp "$build_dir/tehybug.ino.bin" "$SKETCH_DIR/tehybug.ino.$variant$SUFFIX.bin"
+  # arduino-cli names the binary after the sketch (tehybug-universal.ino);
+  # keep the historical tehybug.ino.* name for the published binaries.
+  cp "$build_dir/tehybug-universal.ino.bin" "$SKETCH_DIR/tehybug.ino.$variant$SUFFIX.bin"
   echo "==> Done: tehybug.ino.$variant$SUFFIX.bin"
 }
 
