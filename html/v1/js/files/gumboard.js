@@ -1,15 +1,10 @@
 ;
 var ipAddress = $(location).attr('hostname');
 var pageName = 'dash';
-var devMode = false;
 var timeleft;
 var rebootTimer;
 var json;
 var boardURL = 'https://tehybug.com/tehybug/v1/';
-
-if (ipAddress.includes('localhost')) {
-    devMode = true;
-}
 
 $(function () {
     // Active Menu Button select
@@ -20,21 +15,12 @@ $(function () {
 
     ChangePage('main', '#page');
 
-    var script = document.createElement('script');
-    script.src = 'https://cdn.jsdelivr.net/npm/feather-icons@4.28.0/dist/feather.min.js';
-    script.type = 'text/javascript';
-    document.getElementsByTagName('head')[0].appendChild(script);
-    
     setTimeout(function () {
         connectionStart();
     }, 1000);
 });
 
 var connection = null;
-
-function capitalizeFirstLetter(string) {
-    return string.charAt(0).toUpperCase() + string.slice(1);
-}
 
 function connectionStart() {
     if (connection != null && connection.readyState != WebSocket.CLOSED) {
@@ -287,22 +273,6 @@ function StartCountDown(_timeleft) {
     }, 1000);
 }
 
-function SendTest(type, input) {
-    if (isNullOrWhitespace(input)) {
-        return;
-    }
-
-    const obj = {};
-    console.log(obj);
-    connection.send(obj);
-}
-
-function isNullOrWhitespace(input) {
-    if (typeof input === 'undefined' || input == null) {
-        return true;
-    }
-    return input.replace(/\s/g, '').length < 1;
-}
 function openIpAddress(element) {
     const ip = element.innerText;
     const ipRegex = /^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
