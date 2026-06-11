@@ -86,33 +86,33 @@ function updateConnectionStatus(isOnline) {
     feather.replace();
 }
 
-function sensorData(key, value) {
-    const sensorMap = {
-        'temp': { name: "Temperature", unit: "°C", url: '&t=%temp%', mqtt: ', "temp":"%temp%"' },
-        'temp_imp': { name: "Temperature", unit: "°F", url: '', mqtt: ', "temp_imp":"%temp_imp%"' },
-        'temp2': { name: "Temperature2", unit: "°C", url: '&t=%temp2%', mqtt: ', "temp2":"%temp2%"' },
-        'temp2_imp': { name: "Temperature2", unit: "°F", url: '', mqtt: ', "temp2_imp":"%temp2_imp%"' },
-        'humi': { name: "Humidity", unit: "%RH", url: '&h=%humi%', mqtt: ', "humi":"%humi%"' },
-        'humi2': { name: "Humidity2", unit: "%RH", url: '', mqtt: ', "humi2":"%humi2%"' },
-        'ah': { name: "Absolute humidity", unit: "g/m³", url: '&ah=%ah%', mqtt: ', "ah":"%ah%"' },
-        'ah2': { name: "Absolute humidity2", unit: "g/m³", url: '', mqtt: ', "ah2":"%ah2%"' },
-        'cr': { name: "Comfort ratio", unit: "%", url: '', mqtt: ', "cr":"%cr%"' },
-        'cr2': { name: "Comfort ratio2", unit: "%", url: '', mqtt: ', "cr2":"%cr2%"' },
-        'dew': { name: "Dew point", unit: "°C", url: '', mqtt: ', "dew":"%dew%"' },
-        'dew_imp': { name: "Dew point", unit: "°F", url: '', mqtt: ', "dew_imp":"%dew_imp%"' },
-        'hi': { name: "Heat index", unit: "°C", url: '', mqtt: ', "hi":"%hi%"' },
-        'hi_imp': { name: "Heat index", unit: "°F", url: '', mqtt: ', "hi_imp":"%hi_imp%"' },
-        'air': { name: "Gas resistance", unit: "kOhm", url: '&a=%air%', mqtt: ', "air":"%air%"' },
-        'iaq': { name: "Indoor air quality", unit: "", url: '', mqtt: ', "iaq":"%iaq%"' },
-        'qfe': { name: "Atmospheric pressure", unit: "hPa", url: '&p=%qfe%', mqtt: ', "qfe":"%qfe%"' },
-        'alt': { name: "Altitude", unit: "m", url: '', mqtt: ', "alt":"%alt%"' },
-        'eco2': { name: "CO2 equivalent", unit: "", url: '', mqtt: ', "eco2":"%eco2%"' },
-        'bvoc': { name: "breath VOC equivalent", unit: "", url: '', mqtt: ', "bvoc":"%bvoc%"' },
-        'uv': { name: "UV index", unit: "", url: '&u=%uv%', mqtt: ', "uv":"%uv%"' },
-        'lux': { name: "Ambient light", unit: "Lux", url: '&l=%lux%', mqtt: ', "lux":"%lux%"' },
-        'adc': { name: "ADC", unit: "ADC", url: '&x=%adc%', mqtt: ', "adc":"%adc%"' }
-    };
+const sensorMap = {
+    'temp': { name: "Temperature", unit: "°C", url: '&t=%temp%', mqtt: ', "temp":"%temp%"' },
+    'temp_imp': { name: "Temperature", unit: "°F", url: '', mqtt: ', "temp_imp":"%temp_imp%"' },
+    'temp2': { name: "Temperature2", unit: "°C", url: '&t=%temp2%', mqtt: ', "temp2":"%temp2%"' },
+    'temp2_imp': { name: "Temperature2", unit: "°F", url: '', mqtt: ', "temp2_imp":"%temp2_imp%"' },
+    'humi': { name: "Humidity", unit: "%RH", url: '&h=%humi%', mqtt: ', "humi":"%humi%"' },
+    'humi2': { name: "Humidity2", unit: "%RH", url: '', mqtt: ', "humi2":"%humi2%"' },
+    'ah': { name: "Absolute humidity", unit: "g/m³", url: '&ah=%ah%', mqtt: ', "ah":"%ah%"' },
+    'ah2': { name: "Absolute humidity2", unit: "g/m³", url: '', mqtt: ', "ah2":"%ah2%"' },
+    'cr': { name: "Comfort ratio", unit: "%", url: '', mqtt: ', "cr":"%cr%"' },
+    'cr2': { name: "Comfort ratio2", unit: "%", url: '', mqtt: ', "cr2":"%cr2%"' },
+    'dew': { name: "Dew point", unit: "°C", url: '', mqtt: ', "dew":"%dew%"' },
+    'dew_imp': { name: "Dew point", unit: "°F", url: '', mqtt: ', "dew_imp":"%dew_imp%"' },
+    'hi': { name: "Heat index", unit: "°C", url: '', mqtt: ', "hi":"%hi%"' },
+    'hi_imp': { name: "Heat index", unit: "°F", url: '', mqtt: ', "hi_imp":"%hi_imp%"' },
+    'air': { name: "Gas resistance", unit: "kOhm", url: '&a=%air%', mqtt: ', "air":"%air%"' },
+    'iaq': { name: "Indoor air quality", unit: "", url: '', mqtt: ', "iaq":"%iaq%"' },
+    'qfe': { name: "Atmospheric pressure", unit: "hPa", url: '&p=%qfe%', mqtt: ', "qfe":"%qfe%"' },
+    'alt': { name: "Altitude", unit: "m", url: '', mqtt: ', "alt":"%alt%"' },
+    'eco2': { name: "CO2 equivalent", unit: "", url: '', mqtt: ', "eco2":"%eco2%"' },
+    'bvoc': { name: "breath VOC equivalent", unit: "", url: '', mqtt: ', "bvoc":"%bvoc%"' },
+    'uv': { name: "UV index", unit: "", url: '&u=%uv%', mqtt: ', "uv":"%uv%"' },
+    'lux': { name: "Ambient light", unit: "Lux", url: '&l=%lux%', mqtt: ', "lux":"%lux%"' },
+    'adc': { name: "ADC", unit: "ADC", url: '&x=%adc%', mqtt: ', "adc":"%adc%"' }
+};
 
+function sensorData(key, value) {
     if (!sensorMap[key]) {
         return;
     }
@@ -153,7 +153,11 @@ function RefreshData(input) {
         return;
     }
 
-    if (pageName == 'main') {
+    // Only reset the dashboard sensor table when this message actually
+    // carries sensor readings: on connect the device pushes info, sensor
+    // data and config in sequence, and the trailing config message would
+    // otherwise wipe the freshly rendered table.
+    if (pageName == 'main' && Object.keys(jsonData).some(function (k) { return sensorMap[k]; })) {
         $("#sensor_data").html('');
     }
 
