@@ -1,11 +1,4 @@
-<?php
-header("Access-Control-Allow-Origin: *");
-header("Access-Control-Allow-Methods: POST, GET, OPTIONS");
-header("Access-Control-Allow-Headers: Origin");
-header('P3P: CP="CAO PSA OUR"'); // Makes IE to support cookies
-header("Access-Control-Allow-Headers: Origin, X-Requested-With, Content-Type, Accept");
-
-?>
+<?php require __DIR__ . '/inc/cors.php'; ?>
 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
     <h1 class="h2">Sensor Settings</h1>
 </div>
@@ -77,32 +70,12 @@ header("Access-Control-Allow-Headers: Origin, X-Requested-With, Content-Type, Ac
 </div>
 
 
-<div class="col-md-12 text-center">
-    <hr>
-</div>
-<div class="col-md-12">
+<div class="col-md-12 mt-4">
     <div class="alert alert-danger text-center" role="alert">
         <strong>Warning:</strong> Activating a sensor that is not connected may cause the device to enter a reboot loop. Please ensure your selections match your physical hardware.
     </div>
 </div>
-<div class="col-md-12 text-center">
-    <button type="button" class="btn btn-success shadow" onclick="SaveConfig()" data-bs-toggle="modal" data-bs-target="#popup" style="padding: 12px 40px; font-weight: 600; border-radius: 8px; transition: all 0.3s ease;"><span data-feather="save"></span> Save
-        Config</button>
-</div>
-
-<div class="modal fade" id="popup">
-    <div class="modal-dialog modal-dialog-centered modal-lg">
-        <div class="modal-content">
-            <div class="modal-header bg-light">
-                <h3 class="modal-title text-success">Config saved!</h3>
-            </div>
-            <div class="modal-body">
-                <h5>System will be restarted, please wait <span id="countdowntimer">9</span> seconds to reload!
-                </h5>
-            </div>
-        </div>
-    </div>
-</div>
+<?php require __DIR__ . '/inc/save_modal.php'; ?>
 
 <!-- Sensor Information Section -->
 <div class="row mt-4">
