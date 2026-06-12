@@ -149,6 +149,11 @@ void setupServeTickers() {
     // HA reports on the MQTT interval
     addServeTicker(slot++, tehybug.serveData.mqtt.frequency, haSendData);
   }
+  if (tehybug.serveData.eeprom.active) {
+    // the EEPROM log is written inside read_sensors(); a bare tick (no
+    // network send) is enough to drive it on its own frequency
+    addServeTicker(slot++, tehybug.serveData.eeprom.frequency, [] {});
+  }
 }
 
 /* Setup & loop */
@@ -161,13 +166,30 @@ void setup() {
     delay(10);
   }
 
-  setupWifi();
-  D_println(wifiSsid);
-  // call after wifi setup
-  loadConfig();
+  // load the config before deciding on WiFi: offline mode (stored in the
+  // config) must be known before any radio is brought up
+  mountConfig();
 
   // should be called after the fs mount
   tehybug.getDeviceKey();
+
+  // a held MODE button forces config mode (WiFi on) even from offline mode
+  checkModeButton();
+
+  // Offline mode: never bring up WiFi. Just set up the sensors; the loop
+  // measures, appends to the EEPROM log and deep-sleeps on the log
+  // frequency. A MODE-button press above takes the normal path instead.
+  if (tehybug.offlineEnabled() && !tehybug.device.configMode) {
+    D_println(F("Starting offline mode"));
+    WiFi.mode(WIFI_OFF);
+    setupSensors();
+    return;
+  }
+
+  setupWifi();
+  D_println(wifiSsid);
+  // call after wifi setup
+  setupNetwork();
 
 #if !defined(ARDUINO_ESP8266_GENERIC)
   // reduce buffer size and ignore certificate verification
@@ -180,8 +202,6 @@ void setup() {
     tehybug.device.configMode = true;
     D_println("Data serving mode not selected or first start");
   }
-
-  checkModeButton();
 
   if (tehybug.device.configMode) {
     D_println(F("Starting config mode"));
@@ -219,6 +239,16 @@ void setup() {
 }
 
 void loop() {
+  // offline mode: measure, append to the EEPROM log, deep-sleep. No WiFi,
+  // no web server and no online scenarios. The deep sleep resets the
+  // device, so this restarts setup() on the next wakeup.
+  if (tehybug.offlineEnabled() && !tehybug.device.configMode) {
+    read_sensors();
+    yield();
+    tehybug.pixel.off();
+    startDeepSleep(tehybug.serveData.eeprom.frequency);
+    return;
+  }
   // config mode
   if (tehybug.device.configMode) {
     MDNS.update();

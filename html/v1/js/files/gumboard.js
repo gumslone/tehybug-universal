@@ -163,7 +163,7 @@ function RefreshData(input) {
 
     $.each(jsonData, function (key, val) {
         // Config JSON
-        const configPages = ['settings', 'ha_settings', 'cloud_settings', 'setsensor', 'scenarios', 'setsystem'];
+        const configPages = ['settings', 'ha_settings', 'cloud_settings', 'setsensor', 'scenarios', 'setsystem', 'datalog'];
         if (configPages.includes(pageName)) {
             if (typeof val === 'boolean') {
                 $("#" + key).not(".dont-change").prop('checked', val);

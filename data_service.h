@@ -67,6 +67,15 @@ void serve_data() {
       startSleep(tehybug.serveData.mqtt.frequency);
     }
   }
+
+  // EEPROM-only with sleep enabled but WiFi still on (offline mode is the
+  // no-WiFi variant): nothing was pushed online above, so sleep here on the
+  // log frequency instead of spinning the loop.
+  if (tehybug.sleepEnabled() && tehybug.serveData.eeprom.active &&
+      !tehybug.serveData.get.active && !tehybug.serveData.post.active &&
+      !tehybug.serveData.mqtt.active && !tehybug.serveData.ha.active) {
+    startSleep(tehybug.serveData.eeprom.frequency);
+  }
 }
 
 void checkScenario(Scenario &s) {

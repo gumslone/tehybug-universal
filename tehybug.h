@@ -152,7 +152,14 @@ class TeHyBug {
 
     bool anyServeModeActive() {
       return serveData.get.active || serveData.post.active ||
-             serveData.mqtt.active || serveData.ha.active;
+             serveData.mqtt.active || serveData.ha.active ||
+             serveData.eeprom.active;
+    }
+
+    // EEPROM-only mode: no WiFi, measure + log + deep-sleep. Needs the
+    // EEPROM peripheral to be present (the mini board has none).
+    bool offlineEnabled() {
+      return device.offlineMode && peripherals.eeprom;
     }
 
     // data logging needs both the RTC (timestamps) and the EEPROM (storage)
@@ -161,9 +168,9 @@ class TeHyBug {
     }
 
     // appends the current measurements with a timestamp to the EEPROM
-    // day file; at most one entry per minute
+    // day file; at most one entry per minute (the timestamp resolution)
     void logSensorData() {
-      if (!dataLogAvailable() || device.configMode) {
+      if (!serveData.eeprom.active || !dataLogAvailable() || device.configMode) {
         return;
       }
       time.update();
@@ -175,14 +182,25 @@ class TeHyBug {
         return;
       }
 
-      // measured values only; derived ones can be recalculated
-      static const char *loggedKeys[] = {"temp", "humi", "temp2", "humi2",
-                                         "qfe", "alt", "lux", "adc",
-                                         "iaq", "eco2", "bvoc", "air"};
-      String line = stamp;
-      for (const char *key : loggedKeys) {
-        if (sensorData.containsKey(key)) {
-          line += String(" ") + key + "=" + sensorData[key].as<String>();
+      // a custom placeholder template (e.g. "%temp% %humi%") logs only the
+      // chosen fields; an empty template falls back to the default set of
+      // measured values (derived ones can be recalculated)
+      String line = stamp + " ";
+      if (serveData.eeprom.message.length() > 0) {
+        line += replacePlaceholders(serveData.eeprom.message);
+      } else {
+        static const char *loggedKeys[] = {"temp", "humi", "temp2", "humi2",
+                                           "qfe", "alt", "lux", "adc",
+                                           "iaq", "eco2", "bvoc", "air"};
+        bool first = true;
+        for (const char *key : loggedKeys) {
+          if (sensorData.containsKey(key)) {
+            if (!first) {
+              line += " ";
+            }
+            first = false;
+            line += String(key) + "=" + sensorData[key].as<String>();
+          }
         }
       }
       line += "\n";
