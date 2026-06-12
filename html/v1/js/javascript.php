@@ -13,7 +13,7 @@
 $jsFiles = [
     './files/bootstrap.min.js',
     './files/jquery-3.6.0.min.js',
-    './files/jquery.weekline.min.js',
+    './files/feather.min.js',
     './files/gumboard.js',
 ];
 
@@ -40,8 +40,10 @@ if (isset($_SERVER['HTTP_ACCEPT_ENCODING']) && strpos($_SERVER['HTTP_ACCEPT_ENCO
 foreach ($jsFiles as $file) {
     if (file_exists($file)) {
         readfile($file);
-        // Add a newline to prevent issues with files that don't end with one.
-        echo "\n";
+        // Separate files with a newline plus an empty statement: a minified
+        // file may end in an unterminated line comment (e.g. a sourceMappingURL
+        // marker) or lack a trailing semicolon, which would corrupt the next one.
+        echo "\n;\n";
     }
 }
 

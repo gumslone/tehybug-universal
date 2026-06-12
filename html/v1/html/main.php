@@ -1,11 +1,4 @@
-<?php
-header("Access-Control-Allow-Origin: *");
-header("Access-Control-Allow-Methods: POST, GET, OPTIONS");
-header("Access-Control-Allow-Headers: Origin");
-header('P3P: CP="CAO PSA OUR"'); // Makes IE to support cookies
-header("Access-Control-Allow-Headers: Origin, X-Requested-With, Content-Type, Accept");
-
-?>
+<?php require __DIR__ . '/inc/cors.php'; ?>
 <header class="navbar navbar-dark sticky-top flex-md-nowrap p-0 shadow" style="background-color: #2c3e50;">
   <a class="navbar-brand col-md-3 col-lg-2 me-0 px-3" style="text-shadow: 0 1px 0 rgba(0, 0, 0, 0.5);" href="#">TeHyBug</a>
   <button class="navbar-toggler position-absolute d-md-none collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#sidebarMenu" aria-controls="sidebarMenu" aria-expanded="false" aria-label="Toggle navigation">

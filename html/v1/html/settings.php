@@ -1,10 +1,4 @@
-<?php
-header("Access-Control-Allow-Origin: *");
-header("Access-Control-Allow-Methods: POST, GET, OPTIONS");
-header("Access-Control-Allow-Headers: Origin");
-header('P3P: CP="CAO PSA OUR"'); // Makes IE to support cookies
-header("Access-Control-Allow-Headers: Origin, X-Requested-With, Content-Type, Accept");
-?>
+<?php require __DIR__ . '/inc/cors.php'; ?>
 
 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
     <h1 class="h2">Data Serving Settings</h1>
@@ -104,63 +98,33 @@ header("Access-Control-Allow-Headers: Origin, X-Requested-With, Content-Type, Ac
     </div>
 </div>
 
-<div class="row">
-    <div class="col-md-12 my-4">
-        <hr>
-        <div class="text-center">
-            <button type="button" class="btn btn-success shadow" onclick="SaveConfig()" data-bs-toggle="modal" data-bs-target="#popup" style="padding: 12px 40px; font-weight: 600; border-radius: 8px; transition: all 0.3s ease;">
-                <span data-feather="save"></span> Save Config
-            </button>
-        </div>
+<?php
+$saveModalExtra = <<<'HTML'
+<div class="alert alert-info">
+    <strong><span data-feather="info"></span> Next Steps:</strong>
+    <p class="mb-0">To start serving data, you need to configure additional system settings:</p>
+</div>
+
+<div class="card mb-3">
+    <div class="card-body">
+        <h5 class="card-title">
+            <span data-feather="settings"></span> Required System Settings
+        </h5>
+        <ul class="mb-0">
+            <li><strong>Activate Live Mode:</strong> Go to System Settings to disable configuration mode and start serving sensor data</li>
+            <li><strong>Power Management:</strong> Configure sleep mode options for battery operation</li>
+            <li><strong>System Restart:</strong> Changes require a system restart to take effect</li>
+        </ul>
     </div>
 </div>
 
-
-<!-- Success Modal -->
-<div class="modal fade" id="popup">
-    <div class="modal-dialog modal-dialog-centered modal-lg">
-        <div class="modal-content">
-            <div class="modal-header bg-light">
-                <h3 class="modal-title text-success">Config saved!</h3>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                <!-- Reboot Confirmation -->
-                <div class="alert alert-success">
-                    <strong>
-                        <span data-feather="refresh-cw"></span> System will restart
-                    </strong>
-                    <p class="mb-0">Please wait <span id="countdowntimer">12</span> seconds to reload the page.</p>
-                </div>
-                <div class="alert alert-info">
-                    <strong><span data-feather="info"></span> Next Steps:</strong>
-                    <p class="mb-0">To start serving data, you need to configure additional system settings:</p>
-                </div>
-
-                <div class="card mb-3">
-                    <div class="card-body">
-                        <h5 class="card-title">
-                            <span data-feather="settings"></span> Required System Settings
-                        </h5>
-                        <ul class="mb-0">
-                            <li><strong>Activate Live Mode:</strong> Go to System Settings to disable configuration mode and start serving sensor data</li>
-                            <li><strong>Power Management:</strong> Configure sleep mode options for battery operation</li>
-                            <li><strong>System Restart:</strong> Changes require a system restart to take effect</li>
-                        </ul>
-                    </div>
-                </div>
-
-                <div class="alert alert-warning">
-                    <strong><span data-feather="alert-triangle"></span> Important:</strong>
-                    <p class="mb-0">Visit the <strong>System Settings</strong> page to complete configuration and activate your device.</p>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-            </div>
-        </div>
-    </div>
+<div class="alert alert-warning">
+    <strong><span data-feather="alert-triangle"></span> Important:</strong>
+    <p class="mb-0">Visit the <strong>System Settings</strong> page to complete configuration and activate your device.</p>
 </div>
+HTML;
+require __DIR__ . '/inc/save_modal.php';
+?>
 
 <!-- Placeholders Section -->
 <div class="row">
