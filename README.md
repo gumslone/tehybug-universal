@@ -9,7 +9,7 @@ TeHyBug 18650 Universal
 
 <img src="images/mini-tehybug.jpg" width="500">
 
-Mini TeHyBug
+Mini TeHyBug (ESP8285 — uses the `esp8285` firmware build, same as the universal)
 
 
 This firmware is compatible with tehybug universal boards (without display) like:
