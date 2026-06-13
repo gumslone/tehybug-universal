@@ -13,38 +13,47 @@
                 <div class="form-group mb-3">
                     <label for="mqttServer">Server (IP or hostname)</label>
                     <input type="text" class="form-control" id="mqttServer" minlength="3" maxlength="63" placeholder="Loading or no data">
+                    <small class="text-muted">IP address or hostname of your MQTT broker (e.g. 192.168.1.100 or homeassistant.local).</small>
                 </div>
                 <div class="form-group mb-3">
                     <label for="mqttPort" class="form-label">Port</label>
                     <input type="number" class="form-control" id="mqttPort" placeholder="Loading or no data" value="1883">
+                    <small class="text-muted">Broker port — 1883 for plain MQTT, 8883 for TLS.</small>
                 </div>
                 <div class="form-group mb-3">
                     <label for="mqttUser" class="form-label">User</label>
                     <input type="text" class="form-control" id="mqttUser" placeholder="Optional" autocomplete="off">
+                    <small class="text-muted">Broker username. Leave blank for anonymous brokers.</small>
                 </div>
                 <div class="form-group mb-3">
                     <label for="mqttPassword" class="form-label">Password</label>
                     <input type="password" class="form-control" id="mqttPassword" placeholder="Optional" autocomplete="off">
+                    <small class="text-muted">Broker password. Leave blank if none is required.</small>
                 </div>
                 <div class="form-group mb-3">
                     <label for="mqttMasterTopic" class="form-label">Topic</label>
                     <input type="text" class="form-control" id="mqttMasterTopic">
+                    <small class="text-muted">Base topic the readings are published under, e.g. home/sensors/tehybug.</small>
                 </div>
                 <div class="form-group mb-3">
                     <label for="mqttMessage" class="form-label">Message</label>
                     <input type="text" class="form-control" id="mqttMessage" placeholder="Loading or no data">
+                    <small class="text-muted">Payload template — <code>%placeholders%</code> are replaced with sensor values before publishing.</small>
                 </div>
                 <div class="form-group mb-3">
                     <label for="mqttFrequency" class="form-label">Data Frequency (seconds)</label>
                     <input type="number" class="form-control" id="mqttFrequency" value="900">
+                    <small class="text-muted">Seconds between publishes. Larger values save power.</small>
                 </div>
                 <div class="form-check form-switch">
                     <input type="checkbox" class="form-check-input" id="mqttRetained">
                     <label class="form-check-label" for="mqttRetained">MQTT retained</label>
+                    <small class="text-muted d-block">Broker keeps the last message so new subscribers receive it immediately.</small>
                 </div>
                 <div class="form-check form-switch">
                     <input type="checkbox" class="form-check-input" id="mqttActive">
                     <label class="form-check-label" for="mqttActive">MQTT active</label>
+                    <small class="text-muted d-block">Publish readings to the MQTT broker.</small>
                 </div>
                 <input type="checkbox" class="form-check-input dont-change" id="haActive" style="display:none;">
             </div>
@@ -59,14 +68,17 @@
                 <div class="form-group mb-3">
                     <label for="httpGetURL" class="form-label">HTTP Get URL</label>
                     <input type="url" class="form-control" id="httpGetURL" minlength="7" placeholder="https://example.com Loading or no data" pattern="[Hh][Tt][Tt][Pp][Ss]?:\/\/(?:(?:[a-zA-Z\u00a1-\uffff0-9]+-?)*[a-zA-Z\u00a1-\uffff0-9]+)(?:\.(?:[a-zA-Z\u00a1-\uffff0-9]+-?)*[a-zA-Z\u00a1-\uffff0-9]+)*(?:\.(?:[a-zA-Z\u00a1-\uffff]{2,}))(?::\d{2,5})?(?:\/[^\s]*)?" >
+                    <small class="text-muted">Full URL requested each interval — <code>%placeholders%</code> are replaced with sensor values.</small>
                 </div>
                 <div class="form-group mb-3">
                     <label for="httpGetFrequency" class="form-label">Data Frequency (seconds)</label>
                     <input type="number" class="form-control" id="httpGetFrequency" value="900">
+                    <small class="text-muted">Seconds between requests.</small>
                 </div>
                 <div class="form-check form-switch">
                     <input type="checkbox" class="form-check-input" id="httpGetActive">
                     <label class="form-check-label" for="httpGetActive">HTTP active</label>
+                    <small class="text-muted d-block">Send readings as an HTTP GET request.</small>
                 </div>
             </div>
         </div>
@@ -80,18 +92,22 @@
                 <div class="form-group mb-3">
                     <label for="httpPostURL" class="form-label">HTTP Post URL</label>
                     <input type="url" class="form-control" id="httpPostURL" minlength="7" placeholder="https://example.com Loading or no data" pattern="[Hh][Tt][Tt][Pp][Ss]?:\/\/(?:(?:[a-zA-Z\u00a1-\uffff0-9]+-?)*[a-zA-Z\u00a1-\uffff0-9]+)(?:\.(?:[a-zA-Z\u00a1-\uffff0-9]+-?)*[a-zA-Z\u00a1-\uffff0-9]+)*(?:\.(?:[a-zA-Z\u00a1-\uffff]{2,}))(?::\d{2,5})?(?:\/[^\s]*)?" >
+                    <small class="text-muted">Endpoint that receives the JSON body each interval.</small>
                 </div>
                 <div class="form-group mb-3">
                     <label for="httpPostFrequency" class="form-label">Data Frequency (seconds)</label>
                     <input type="number" class="form-control" id="httpPostFrequency" value="900">
+                    <small class="text-muted">Seconds between requests.</small>
                 </div>
                 <div class="form-group mb-3">
                     <label for="httpPostJson" class="form-label">Post Json</label>
                     <input type="text" class="form-control" id="httpPostJson" placeholder="Loading or no data">
+                    <small class="text-muted">JSON body template — <code>%placeholders%</code> are replaced with sensor values.</small>
                 </div>
                 <div class="form-check form-switch">
                     <input type="checkbox" class="form-check-input" id="httpPostActive">
                     <label class="form-check-label" for="httpPostActive">HTTP active</label>
+                    <small class="text-muted d-block">Send readings as an HTTP POST request.</small>
                 </div>
             </div>
         </div>

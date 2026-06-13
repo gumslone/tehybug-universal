@@ -13,6 +13,7 @@
                 <div class="mb-3">
                     <label for="scenario<?php echo $i; ?>_type" class="form-label">Type</label>
                     <select class="form-select" name="scenario<?php echo $i; ?>_type" id="scenario<?php echo $i; ?>_type" aria-label="Type">
+                    <small class="text-muted">What happens when the condition is met: an HTTP request, or driving GPIO 13 high/low.</small>
                         <option value="get">HTTP GET</option>
                         <option value="post">HTTP POST</option>
                         <option value="io13_1">IO_13 HIGH</option>
@@ -22,14 +23,17 @@
                 <div class="mb-3">
                     <label for="scenario<?php echo $i; ?>_url" class="form-label">URL</label>
                     <input type="url" class="form-control" id="scenario<?php echo $i; ?>_url" minlength="7" placeholder="https://example.com Loading or no data" pattern="[Hh][Tt][Tt][Pp][Ss]?:\/\/(?:(?:[a-zA-Z\u00a1-\uffff0-9]+-?)*[a-zA-Z\u00a1-\uffff0-9]+)(?:\.(?:[a-zA-Z\u00a1-\uffff0-9]+-?)*[a-zA-Z\u00a1-\uffff0-9]+)*(?:\.(?:[a-zA-Z\u00a1-\uffff]{2,}))(?::\d{2,5})?(?:\/[^\s]*)?">
+                    <small class="text-muted">Target URL for the HTTP GET / POST actions (ignored for the IO_13 actions).</small>
                 </div>
                 <div class="mb-3">
                     <label for="scenario<?php echo $i; ?>_message" class="form-label">Post Json (HTTP POST only)</label>
                     <input type="text" class="form-control" id="scenario<?php echo $i; ?>_message" placeholder="Loading or no data">
+                    <small class="text-muted">JSON body for HTTP POST — <code>%temp%</code> / <code>%humi%</code> are replaced with values.</small>
                 </div>
                 <div class="mb-3">
                     <label for="scenario<?php echo $i; ?>_data" class="form-label">Data</label>
                     <select class="form-select" name="scenario<?php echo $i; ?>_data" id="scenario<?php echo $i; ?>_data" aria-label="Data">
+                    <small class="text-muted">Which reading the condition checks.</small>
                         <option value="temp">Temperature</option>
                         <option value="humi">Humidity</option>
                     </select>
@@ -37,6 +41,7 @@
                 <div class="mb-3">
                     <label for="scenario<?php echo $i; ?>_condition" class="form-label">Condition</label>
                     <select class="form-select" name="scenario<?php echo $i; ?>_condition" id="scenario<?php echo $i; ?>_condition" aria-label="Condition">
+                    <small class="text-muted">How the reading is compared to the value below.</small>
                         <option value="gt">&gt;</option>
                         <option value="lt">&lt;</option>
                         <option value="eq">=</option>
@@ -45,10 +50,12 @@
                 <div class="mb-3">
                     <label for="scenario<?php echo $i; ?>_value" class="form-label">Value</label>
                     <input type="text" class="form-control" pattern="[0-9]" id="scenario<?php echo $i; ?>_value" placeholder="Loading or no value set">
+                    <small class="text-muted">Threshold the reading is compared against.</small>
                 </div>
                 <div class="form-check form-switch">
                     <input type="checkbox" class="form-check-input" id="scenario<?php echo $i; ?>_active">
                     <label class="form-check-label" for="scenario<?php echo $i; ?>_active">active</label>
+                    <small class="text-muted d-block">Evaluate this scenario on every sensor read.</small>
                 </div>
             </div>
         </div>
