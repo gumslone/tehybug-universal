@@ -100,7 +100,7 @@ void sendSensorData() {
 
 void sendConfig() {
   sendToWebsocketClients(tehybug.conf.getConfig(),
-                         {"/settings", "/setsensor", "/scenarios", "/setsystem"});
+                         {"/settings", "/setsensor", "/scenarios", "/setsystem", "/datalog"});
 }
 
 void Log(String function, String message) {

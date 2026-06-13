@@ -95,9 +95,10 @@ void setupMdns() {
   MDNS.addServiceTxt("http", "tcp", "endpoint", "/");
 }
 
-void loadConfig()
+// Mounts SPIFFS and loads the stored config. Must run before the WiFi
+// decision so offline mode (read from config) can skip WiFi entirely.
+void mountConfig()
 {
-  // Mounting FileSystem
   D_println(F("Mounting file system..."));
   if (SPIFFS.begin()) {
     D_println(F("File system successfully mounted."));
@@ -105,6 +106,11 @@ void loadConfig()
   } else {
     D_println(F("Failed to mount FS"));
   }
+}
+
+// Brings up the soft-AP (config mode) / mDNS once WiFi is connected.
+void setupNetwork()
+{
   if(tehybug.device.configMode)
   {
     WiFi.softAP(wifiSsid, wifiPassword);

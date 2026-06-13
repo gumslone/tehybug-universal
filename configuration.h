@@ -50,6 +50,11 @@ class TeHyBugConfig {
 
       setIfNotDefault(json, "haActive", m_serveData.ha.active, serveData.ha.active);
 
+      setIfNotDefault(json, "eepromLogActive", m_serveData.eeprom.active, serveData.eeprom.active);
+      setIfNotDefault(json, "eepromLogFrequency", m_serveData.eeprom.frequency, serveData.eeprom.frequency);
+      setIfNotDefault(json, "eepromLogMessage", m_serveData.eeprom.message, serveData.eeprom.message);
+      setIfNotDefault(json, "offlineModeActive", m_device.offlineMode, device.offlineMode);
+
       setIfNotDefault(json, "httpGetURL", m_serveData.get.url,  serveData.get.url);
       setIfNotDefault(json, "httpGetActive", m_serveData.get.active, serveData.get.active);
       setIfNotDefault(json, "httpGetFrequency", m_serveData.get.frequency, serveData.get.frequency);
@@ -209,6 +214,11 @@ class TeHyBugConfig {
       setFrequency(json, "mqttFrequency", m_serveData.mqtt.frequency);
 
       setData(json, "haActive", m_serveData.ha.active);
+
+      setData(json, "eepromLogActive", m_serveData.eeprom.active);
+      setFrequency(json, "eepromLogFrequency", m_serveData.eeprom.frequency);
+      setData(json, "eepromLogMessage", m_serveData.eeprom.message);
+      setData(json, "offlineModeActive", m_device.offlineMode);
 
       // http
       setData(json, "httpGetURL", m_serveData.get.url);

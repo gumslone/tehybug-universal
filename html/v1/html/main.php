@@ -92,10 +92,18 @@
                     </li>
                     
                     <li class="nav-item">
-                        <a class="nav-link" href="javascript:void(0);" 
+                        <a class="nav-link" href="javascript:void(0);"
                            onclick="ChangeContent(this, 'scenarios', '#right-content');">
                             <span data-feather="layers"></span>
                             Scenarios
+                        </a>
+                    </li>
+
+                    <li class="nav-item">
+                        <a class="nav-link" href="javascript:void(0);"
+                           onclick="ChangeContent(this, 'datalog', '#right-content');">
+                            <span data-feather="hard-drive"></span>
+                            Data Log
                         </a>
                     </li>
 

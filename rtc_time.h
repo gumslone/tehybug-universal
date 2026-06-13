@@ -19,6 +19,7 @@ class RtcTime {
     uint16_t getYear() { return 0; }
     bool isTimeSet() { return false; }
     String timestamp() { return String(); }
+    String timeOfDay() { return String(); }
     void update() {}
     void setTime(uint16_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t,
                  uint8_t) {}
@@ -65,6 +66,11 @@ class RtcTime {
       return String(getYear()) + "-" + IntFormat(getMonth()) + "-" +
              IntFormat(getMonthDay()) + " " + IntFormat(getHours()) + ":" +
              IntFormat(getMinutes());
+    }
+    // "HH:MM" of the last update(); used by the EEPROM log, where the date
+    // is already implied by the per-day file name
+    String timeOfDay() {
+      return IntFormat(getHours()) + ":" + IntFormat(getMinutes());
     }
     void update()
     {

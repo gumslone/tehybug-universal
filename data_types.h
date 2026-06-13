@@ -10,6 +10,10 @@ struct Device {
   bool configMode{true};
   bool sleepMode{false};
   bool lightSleepMode{false};
+  // EEPROM-only mode: the device never brings up WiFi, it just measures,
+  // appends to the offline log and deep-sleeps. Hold the MODE button on
+  // boot to re-enter config mode (WiFi on) and read the log.
+  bool offlineMode{false};
   RemoteControl remoteControl{};
 };
 struct Sensor {
@@ -74,9 +78,19 @@ struct MqttDataServ {
 struct HaDataServ {
   bool active{false};
 };
+// Offline data log on the I2C EEPROM. `message` is a placeholder template
+// (e.g. "%temp% %humi%") expanded per entry; empty means log the default
+// measured-value set. `frequency` is the seconds between log writes and,
+// in offline mode, the deep-sleep interval.
+struct EepromDataServ {
+  bool active{false};
+  int frequency{60};
+  String message;
+};
 struct DataServ {
   HttpGetDataServ get{};
   HttpPostDataServ post{};
   MqttDataServ mqtt{};
   HaDataServ ha{};
+  EepromDataServ eeprom{};
 };

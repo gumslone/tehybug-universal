@@ -152,7 +152,14 @@ class TeHyBug {
 
     bool anyServeModeActive() {
       return serveData.get.active || serveData.post.active ||
-             serveData.mqtt.active || serveData.ha.active;
+             serveData.mqtt.active || serveData.ha.active ||
+             serveData.eeprom.active;
+    }
+
+    // EEPROM-only mode: no WiFi, measure + log + deep-sleep. Needs the
+    // EEPROM peripheral to be present (the mini board has none).
+    bool offlineEnabled() {
+      return device.offlineMode && peripherals.eeprom;
     }
 
     // data logging needs both the RTC (timestamps) and the EEPROM (storage)
@@ -161,9 +168,9 @@ class TeHyBug {
     }
 
     // appends the current measurements with a timestamp to the EEPROM
-    // day file; at most one entry per minute
+    // day file; at most one entry per minute (the timestamp resolution)
     void logSensorData() {
-      if (!dataLogAvailable() || device.configMode) {
+      if (!serveData.eeprom.active || !dataLogAvailable() || device.configMode) {
         return;
       }
       time.update();
@@ -175,14 +182,30 @@ class TeHyBug {
         return;
       }
 
-      // measured values only; derived ones can be recalculated
-      static const char *loggedKeys[] = {"temp", "humi", "temp2", "humi2",
-                                         "qfe", "alt", "lux", "adc",
-                                         "iaq", "eco2", "bvoc", "air"};
-      String line = stamp;
-      for (const char *key : loggedKeys) {
-        if (sensorData.containsKey(key)) {
-          line += String(" ") + key + "=" + sensorData[key].as<String>();
+      // Compact format to fit more entries in the small EEPROM slots: the
+      // date is implied by the per-day file name, so only "HH:MM" is stored,
+      // and each default value is written as "<value><code>" (e.g.
+      // "22.6t 48.3h 1013.2p") reusing the same one-letter field codes as
+      // the cloud GET URL. A custom placeholder template (e.g. "%temp%
+      // %humi%") instead logs exactly what the user wrote.
+      String line = time.timeOfDay() + " ";
+      if (serveData.eeprom.message.length() > 0) {
+        line += replacePlaceholders(serveData.eeprom.message);
+      } else {
+        static const struct { const char *key; const char *code; } loggedFields[] = {
+          {"temp", "t"},  {"humi", "h"},  {"temp2", "t2"}, {"humi2", "h2"},
+          {"qfe", "p"},   {"alt", "al"},  {"lux", "l"},    {"adc", "x"},
+          {"iaq", "q"},   {"eco2", "c"},  {"bvoc", "v"},   {"air", "a"}
+        };
+        bool first = true;
+        for (const auto & f : loggedFields) {
+          if (sensorData.containsKey(f.key)) {
+            if (!first) {
+              line += " ";
+            }
+            first = false;
+            line += sensorData[f.key].as<String>() + f.code;
+          }
         }
       }
       line += "\n";
