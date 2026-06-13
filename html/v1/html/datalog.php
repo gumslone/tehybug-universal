@@ -53,11 +53,29 @@
                 <div class="alert alert-warning small mb-0">
                     <strong><span data-feather="alert-triangle"></span> Reading the log:</strong> the web interface is unavailable while offline. To read the stored data, press <strong>RESET</strong>, then press and hold <strong>MODE</strong> until the LED turns blue to re-enter config mode (WiFi on), then come back to this page.
                 </div>
+                <div id="offline_exclusive" class="alert alert-info small mt-3 mb-0" style="display:none;">
+                    <strong><span data-feather="info"></span> Offline mode is exclusive:</strong> saving it switches off every other mode (MQTT, Home Assistant, HTTP GET/POST, deep/light sleep and config mode) and turns EEPROM logging on.
+                </div>
                 <div id="offline_unavailable" class="alert alert-secondary small mt-3 mb-0" style="display:none;">
                     <strong>Note:</strong> No RTC + EEPROM module was detected, so offline mode and logging have no effect on this device.
                 </div>
             </div>
         </div>
+    </div>
+
+    <!-- Other modes are saved with this form. They mirror the current device
+         config (populated over the websocket) so a plain save leaves them
+         untouched; enabling offline mode above switches them all off via JS.
+         reboot is forced so EEPROM-log / offline-mode changes take effect. -->
+    <div style="display:none;">
+        <input type="checkbox" class="form-check-input" id="mqttActive">
+        <input type="checkbox" class="form-check-input" id="haActive">
+        <input type="checkbox" class="form-check-input" id="httpGetActive">
+        <input type="checkbox" class="form-check-input" id="httpPostActive">
+        <input type="checkbox" class="form-check-input" id="sleepModeActive">
+        <input type="checkbox" class="form-check-input" id="lightSleepModeActive">
+        <input type="checkbox" class="form-check-input" id="configModeActive">
+        <input type="checkbox" class="form-check-input dont-change" id="reboot" checked>
     </div>
 </div>
 
@@ -99,6 +117,21 @@
     connectionStart();
 
     loadDataLog();
+
+    $(function () {
+        // Offline mode is exclusive. When it is enabled, switch off every
+        // other serving / sleep / config mode and make sure logging is on,
+        // so saving the form lands the device in a clean offline state.
+        $("#offlineModeActive").change(function () {
+            $("#offline_exclusive").toggle(this.checked);
+            if (this.checked) {
+                $("#mqttActive, #haActive, #httpGetActive, #httpPostActive, " +
+                  "#sleepModeActive, #lightSleepModeActive, #configModeActive")
+                    .prop('checked', false);
+                $("#eepromLogActive").prop('checked', true);
+            }
+        });
+    });
 
     function dataLogUrl(query) {
         return 'http://' + ipAddress + '/api/' + query;
