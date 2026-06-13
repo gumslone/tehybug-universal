@@ -183,6 +183,25 @@ void setupServeTickers() {
   }
 }
 
+// Probe the RTC + EEPROM module before the offline-mode decision in setup().
+// offlineEnabled() depends on peripherals.eeprom, which is otherwise only set
+// later inside setupSensors() — too late, so the device would fall through to
+// WiFi even with offline mode configured. Must run after checkModeButton(),
+// since the MODE button shares GPIO0 with the I2C SDA line.
+void detectDataLogModule() {
+#if !defined(ARDUINO_ESP8266_GENERIC)
+  Wire.begin(I2C_SDA, I2C_SCL);
+  i2cScanner::scan();
+  i2cScanner::scan();
+  if (i2cScanner::addressExists("0x50")) {
+    tehybug.peripherals.eeprom = true;
+  }
+  if (i2cScanner::addressExists("0x68")) {
+    tehybug.peripherals.ds3231 = true;
+  }
+#endif
+}
+
 /* Setup & loop */
 
 void setup() {
@@ -202,6 +221,14 @@ void setup() {
 
   // a held MODE button forces config mode (WiFi on) even from offline mode
   checkModeButton();
+
+  // Offline mode is gated on the EEPROM being present, which is otherwise only
+  // detected later in setupSensors(). Probe the RTC+EEPROM module now (only
+  // when offline mode is configured) so the decision below is correct instead
+  // of always falling through to WiFi.
+  if (tehybug.device.offlineMode && !tehybug.device.configMode) {
+    detectDataLogModule();
+  }
 
   // Offline mode: never bring up WiFi. Just set up the sensors; the loop
   // measures, appends to the EEPROM log and deep-sleeps on the log
