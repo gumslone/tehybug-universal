@@ -26,13 +26,13 @@ MODE="${2:-nodebug}"
 TOOL="${TOOL:-arduino}"
 
 # Matches the Arduino IDE board settings used for the universal board:
-# Generic ESP8285 Module, 80 MHz, 26 MHz crystal,
+# Generic ESP8285 Module, Builtin Led 2, 80 MHz, 26 MHz crystal,
 # 2MB (FS:64KB OTA:~992KB), dtr reset, lwIP v2 lower memory, vtables in
 # flash, legacy exceptions, erase only sketch, basic SSL.
-# The "Builtin Led" menu is omitted: it only defines LED_BUILTIN, which
-# this firmware never uses (it drives SIGNAL_LED_PIN / NeoPixel instead).
+# (LED_BUILTIN=2 is set for parity with the IDE even though the firmware
+# drives SIGNAL_LED_PIN / NeoPixel rather than LED_BUILTIN.)
 # The debug port (dbg) option is appended depending on the mode.
-ESP8285_OPTS="baud=115200,xtal=80,CrystalFreq=26,eesz=2M64,ResetMethod=nodemcu,lvl=None____,ip=lm2f,vt=flash,exception=legacy,wipe=none,ssl=basic"
+ESP8285_OPTS="baud=115200,led=2,xtal=80,CrystalFreq=26,eesz=2M64,ResetMethod=nodemcu,lvl=None____,ip=lm2f,vt=flash,exception=legacy,wipe=none,ssl=basic"
 
 # The sketch only uses HTTPClient's modern begin(client, url) API; the
 # legacy 1.1 API would link the unused axTLS stack (~55 KB flash).
