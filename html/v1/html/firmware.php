@@ -35,17 +35,17 @@
                 </thead>
                 <tbody>
                     <tr>
-                        <td>TeHyBug universal (ESP8285) <span class="badge bg-success">recommended</span></td>
+                        <td>TeHyBug universal &amp; Mini TeHyBug (ESP8285) <span class="badge bg-success">recommended</span></td>
                         <td><code>tehybug.ino.esp8285.bin</code></td>
                         <td><a href="https://github.com/gumslone/tehybug-universal/raw/main/firmware/tehybug.ino.esp8285.bin" target="_blank">Download</a></td>
                     </tr>
                     <tr>
-                        <td>ESP8285 with serial debug output</td>
+                        <td>ESP8285 (universal / Mini) with serial debug output</td>
                         <td><code>tehybug.ino.esp8285_debug.bin</code></td>
                         <td><a href="https://github.com/gumslone/tehybug-universal/raw/main/firmware/tehybug.ino.esp8285_debug.bin" target="_blank">Download</a></td>
                     </tr>
                     <tr>
-                        <td>Mini TeHyBug / generic ESP8266 (1&nbsp;MB)</td>
+                        <td>Old / first-gen TeHyBug (esp-01 based, generic ESP8266, 1&nbsp;MB)</td>
                         <td><code>tehybug.ino.generic.bin</code></td>
                         <td><a href="https://github.com/gumslone/tehybug-universal/raw/main/firmware/tehybug.ino.generic.bin" target="_blank">Download</a></td>
                     </tr>
@@ -53,9 +53,10 @@
             </table>
         </div>
         <div class="alert alert-info small mb-0">
-            <strong>Which file?</strong> Use the <code>esp8285</code> build for the TeHyBug universal boards and the
-            <code>generic</code> build for the Mini TeHyBug. The <code>_debug</code> build is only for troubleshooting
-            (it prints over serial and is larger).
+            <strong>Which file?</strong> Use the <code>esp8285</code> build for the TeHyBug universal <em>and</em> Mini
+            TeHyBug (both use the ESP8285). The <code>generic</code> build is only for old / first-generation TeHyBugs
+            (esp-01 based generic ESP8266). The <code>_debug</code> build is only for troubleshooting (it prints over
+            serial and is larger).
         </div>
     </div>
 </div>

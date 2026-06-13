@@ -136,7 +136,7 @@ class TeHyBug {
     }
 
     // EEPROM-only mode: no WiFi, measure + log + deep-sleep. Needs the
-    // EEPROM peripheral to be present (the mini board has none).
+    // EEPROM peripheral present (the generic 1MB build has no EEPROM driver).
     bool offlineEnabled() {
       return mode_logic::offlineEnabled(device, peripherals);
     }

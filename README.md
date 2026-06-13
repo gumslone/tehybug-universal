@@ -9,7 +9,7 @@ TeHyBug 18650 Universal
 
 <img src="images/mini-tehybug.jpg" width="500">
 
-Mini TeHyBug
+Mini TeHyBug (ESP8285 — uses the `esp8285` firmware build, same as the universal)
 
 
 This firmware is compatible with tehybug universal boards (without display) like:
@@ -48,7 +48,7 @@ With a DS3231 RTC + I²C EEPROM module attached, TeHyBug can store timestamped r
 - **Own log interval.** The log frequency is independent of the data-serving intervals; in offline mode it also sets the deep-sleep interval. A day file holds a limited number of entries, so pick an interval that fits a full day — the Data Log page shows a capacity table and, once a day file is full, the rest of that day is not recorded.
 - **Offline mode.** Enabling offline mode logs with WiFi completely off. The web interface is unavailable while offline; to read the data, press RESET then hold MODE until the LED turns blue to re-enter Config mode.
 
-> Not available on the Mini TeHyBug / generic build, which has no RTC/EEPROM hardware.
+> Available in the ESP8285 build (TeHyBug universal and Mini) when an RTC + EEPROM module is attached. The slim generic (1MB) build for old / first-generation boards omits the RTC/EEPROM driver entirely.
 
 ## Port B (green) supported sensors:
 * BME680
@@ -82,9 +82,9 @@ The prebuilt binaries in [`firmware/`](firmware/) are rebuilt automatically on e
 
 | File | Board | Notes |
 | --- | --- | --- |
-| `firmware/tehybug.ino.esp8285.bin` | TeHyBug universal boards (ESP8285) | recommended |
-| `firmware/tehybug.ino.esp8285_debug.bin` | TeHyBug universal boards (ESP8285) | serial debug output enabled |
-| `firmware/tehybug.ino.generic.bin` | Mini TeHyBug / generic ESP8266 dev boards (1MB flash) | small enough for OTA updates; no BME680, no RTC/EEPROM data log, no https data push (plain http works) |
+| `firmware/tehybug.ino.esp8285.bin` | TeHyBug universal (v2) and Mini TeHyBug (ESP8285) | recommended |
+| `firmware/tehybug.ino.esp8285_debug.bin` | TeHyBug universal / Mini (ESP8285) | serial debug output enabled |
+| `firmware/tehybug.ino.generic.bin` | Old / first-generation TeHyBug boards (esp-01 based, generic ESP8266, 1MB flash) | slimmed to fit 1MB and stay OTA-updatable; no BME680, no RTC/EEPROM data log, no https data push (plain http works) |
 
 ## How to program/flash the board (advanced users only)
 To flash firmware use the `firmware/tehybug.ino.esp8285.bin` file.
@@ -158,7 +158,7 @@ Either drive it directly:
 
 ```bash
 pio run -e esp8285        # universal board (recommended)
-pio run -e generic        # mini TeHyBug / 1 MB
+pio run -e generic        # old/first-gen TeHyBug / 1 MB
 pio run -e esp8285_debug  # with serial debug output
 ```
 

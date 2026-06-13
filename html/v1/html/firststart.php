@@ -158,7 +158,7 @@
                 <div id="collapseOne" class="accordion-collapse collapse" data-bs-parent="#troubleshootingAccordion">
                     <div class="accordion-body">
                         <ul>
-                            <li>Hold MODE button for 20 seconds during reset for factory reset</li>
+                            <li>Factory reset: press and release RESET, then hold MODE for ~20 seconds until the LED turns red (do not hold MODE while pressing RESET — see the MODE-button note below)</li>
                             <li>Connect to TeHyBug WiFi network (password: TeHyBug123)</li>
                             <li>Reconfigure WiFi credentials at http://192.168.4.1/</li>
                         </ul>
@@ -256,9 +256,59 @@
                     </div>
                 </div>
             </div>
+            <div class="accordion-item">
+                <h2 class="accordion-header" id="headingSeven">
+                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseSeven">
+                        Can I log data without a network or server?
+                    </button>
+                </h2>
+                <div id="collapseSeven" class="accordion-collapse collapse" data-bs-parent="#troubleshootingAccordion">
+                    <div class="accordion-body">
+                        <ul>
+                            <li>Yes &mdash; with a DS3231 RTC + EEPROM module attached, the device stores timestamped readings on itself, with no server, broker or internet.</li>
+                            <li>Configure and read the log on the <a href="javascript:void(0);" onclick="ChangeContent(this, 'datalog', '#right-content');">Data Log</a> page; set the device clock there once so timestamps are correct.</li>
+                            <li>Enable <strong>Offline mode</strong> to run with WiFi completely off for the lowest power draw. The web interface is unavailable while offline &mdash; return to config mode (RESET, then MODE until the LED turns blue) to read the data.</li>
+                            <li>Available on the ESP8285 build (TeHyBug universal / Mini); the 1&nbsp;MB build for old boards has no data-log support.</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            <div class="accordion-item">
+                <h2 class="accordion-header" id="headingEight">
+                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseEight">
+                        MODE button does nothing, or the device seems stuck after I press it
+                    </button>
+                </h2>
+                <div id="collapseEight" class="accordion-collapse collapse" data-bs-parent="#troubleshootingAccordion">
+                    <div class="accordion-body">
+                        <ul>
+                            <li><strong>Do not hold MODE while pressing RESET.</strong> The MODE button is on GPIO0, so holding it down during reset puts the chip into firmware-flash (UART download) mode and the firmware never starts.</li>
+                            <li>Correct order: press and release RESET first, <em>then</em> press the MODE button.</li>
+                            <li>In Offline / deep-sleep modes you have a few seconds after the device boots to press MODE; in other modes press it as the device boots.</li>
+                            <li>If the device seems stuck, just press RESET again (without touching MODE) to boot normally.</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            <div class="accordion-item">
+                <h2 class="accordion-header" id="headingNine">
+                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseNine">
+                        Do I need to update the firmware?
+                    </button>
+                </h2>
+                <div id="collapseNine" class="accordion-collapse collapse" data-bs-parent="#troubleshootingAccordion">
+                    <div class="accordion-body">
+                        <ul>
+                            <li><strong>Only if you need to.</strong> If everything works, you do not have to update &mdash; an update can introduce new bugs that break a feature that currently works for you.</li>
+                            <li>Update when you want a new feature or to fix a problem you actually have. Note your current version (Dashboard &rarr; System Info &rarr; Version) first so you can roll back.</li>
+                            <li>See the <a href="javascript:void(0);" onclick="ChangeContent(this, 'firmware', '#right-content');">Downloads &amp; Changelog</a> page for downloads and what changed.</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
         </div>
         <hr>
-        
+
         <h5 class="card-title">Additional Resources</h5>
         <p class="card-text">More information about TeHyBug can be found at:</p>
         <ul>

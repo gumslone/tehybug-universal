@@ -4,8 +4,8 @@
 #include "configuration.h"
 
 #if defined(ARDUINO_ESP8266_GENERIC)
-// The TeHyBug mini has no DS3231 RTC; this stub keeps the call sites
-// (data logging, /api/settime) compiling without pulling in the driver.
+// The generic (1MB) build drops the DS3231 RTC driver to save flash; this
+// stub keeps the call sites (data logging, /api/settime) compiling.
 class RtcTime {
   public:
     RtcTime(TeHyBugConfig &) {}

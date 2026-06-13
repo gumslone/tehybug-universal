@@ -81,9 +81,10 @@ EXTRA_ARGS=(--build-property "compiler.cpp.extra_flags=$CPP_FLAGS")
 
 ESP8285_FQBN="esp8266:esp8266:esp8285:$ESP8285_OPTS,$DBG_OPT"
 
-# TeHyBug mini board: 1MB flash, so the smallest FS (64KB) leaves
-# ~470KB for OTA updates — the firmware must stay below that. lwIP
-# without features (no NAPT etc.) saves a few KB.
+# Old / first-generation TeHyBug boards (esp-01 based, generic ESP8266):
+# 1MB flash, so the smallest FS (64KB) leaves ~470KB for OTA updates — the
+# firmware must stay below that. lwIP without features (no NAPT etc.) saves a
+# few KB. (The Mini TeHyBug uses the ESP8285 build, not this one.)
 GENERIC_FQBN="esp8266:esp8266:generic:eesz=1M64,ip=lm2n,ssl=basic,$DBG_OPT"
 
 build() {

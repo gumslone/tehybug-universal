@@ -8,9 +8,10 @@
 class RtcTime;
 
 #if defined(ARDUINO_ESP8266_GENERIC)
-// The TeHyBug mini has no data-log EEPROM; this stub keeps the call
-// sites (data logging, /api/datalog) compiling without the EepromFS
-// driver. mounted() stays false, so the endpoints report "not active".
+// The generic (1MB) build (old / first-gen TeHyBug) drops the data-log
+// EEPROM driver to save flash; this stub keeps the call sites (data logging,
+// /api/datalog) compiling. mounted() stays false, so the endpoints report
+// "not active".
 class TeHyBugEeprom {
   public:
     TeHyBugEeprom(RtcTime &) {}
