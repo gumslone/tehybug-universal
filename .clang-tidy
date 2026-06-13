@@ -1,0 +1,21 @@
+# clang-tidy config for the host-compilable firmware logic (run via
+# tests/tidy.sh over the test TUs, which pull in the project headers below).
+# Disabled checks are either noise for embedded C++ or artifacts of the test
+# shims rather than real firmware issues:
+#   exception-escape / throwing-static-initialization
+#       -> the std::string/std::set-backed shims throw; Arduino String does not
+#   unchecked-string-to-number-conversion
+#       -> atoi acts on device-controlled strings ("13.txt", "io13_1")
+#   easily-swappable-parameters / narrowing-conversions / widening-of-mult
+#       -> noisy for int/uint8_t embedded code
+Checks: >
+  clang-analyzer-*,
+  bugprone-*,
+  performance-*,
+  -bugprone-easily-swappable-parameters,
+  -bugprone-narrowing-conversions,
+  -bugprone-implicit-widening-of-multiplication-result,
+  -bugprone-unchecked-string-to-number-conversion,
+  -bugprone-exception-escape,
+  -bugprone-throwing-static-initialization
+HeaderFilterRegex: '(eeprom|mode_logic|common_functions|data_types|i2cscanner)\.h$'

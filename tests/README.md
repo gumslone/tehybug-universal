@@ -52,6 +52,17 @@ the EEPROM present), `anyServeModeActive`, `dataLogAvailable`, and
 `TeHyBug` class delegates to these, so `setup()`/`loop()` themselves stay thin
 hardware orchestration while their decisions are tested here.
 
+## Static analysis (clang-tidy)
+
+```sh
+./tests/tidy.sh        # needs clang-tidy on PATH (or set $CLANG_TIDY)
+```
+
+Runs clang-tidy (`clang-analyzer-*`, `bugprone-*`, `performance-*`) over the
+same host-compilable TUs, using the root [`.clang-tidy`](../.clang-tidy) for
+the check set and a header filter scoped to the project headers. Any warning
+fails the run. It runs in CI alongside the tests.
+
 ## Adding tests
 
 `eeprom.h` is unit-testable because it only forward-declares `RtcTime`. Other

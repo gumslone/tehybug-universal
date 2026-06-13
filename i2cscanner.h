@@ -29,6 +29,9 @@ void scan() {
       D_println(String(address, HEX));
     }
   }
+  // Branches differ only in the log message; identical only because
+  // D_println is a no-op when DEBUG is 0.
+  // NOLINTNEXTLINE(bugprone-branch-clone)
   if (devicesFound == 0)
   {
     D_println("No I2C devices found\n");
