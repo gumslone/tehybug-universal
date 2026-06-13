@@ -12,18 +12,22 @@
                 <div class="form-check form-switch mb-2">
                     <input type="checkbox" class="form-check-input" id="sleepModeActive">
                     <label class="form-check-label" for="sleepModeActive">Deep Sleep (powersaving for battery operations)</label>
+                    <small class="text-muted d-block">Device powers down between readings — lowest power, but unreachable and config mode is off while asleep.</small>
                 </div>
                 <div class="form-check form-switch mb-2">
                     <input type="checkbox" class="form-check-input" id="lightSleepModeActive">
                     <label class="form-check-label" for="lightSleepModeActive">Light Sleep (WiFi sleep only)</label>
+                    <small class="text-muted d-block">CPU sleeps between readings; WiFi stays connected so the device stays reachable.</small>
                 </div>
                 <div class="form-check form-switch mb-2">
                     <input type="checkbox" class="form-check-input" id="configModeActive" checked>
                     <label class="form-check-label" for="configModeActive">Config Mode Active (disable config mode to activate live mode)</label>
+                    <small class="text-muted d-block">Keeps the web interface up. Turn off to start serving data (live mode).</small>
                 </div>
                 <div class="form-check form-switch">
                     <input type="checkbox" class="form-check-input" id="reboot">
                     <label class="form-check-label" for="reboot">Reboot device after saving</label>
+                    <small class="text-muted d-block">Restart the device on save so the changes take effect.</small>
                 </div>
             </div>
         </div>

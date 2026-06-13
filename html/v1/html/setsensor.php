@@ -13,10 +13,12 @@
                 <div class="form-check form-switch">
                     <input type="checkbox" class="form-check-input" id="dht_sensor">
                     <label class="form-check-label" for="dht_sensor">DHTXX Active</label>
+                    <small class="text-muted d-block">DHT11/21/22 temperature &amp; humidity sensor on Port B (green).</small>
                 </div>
                 <div class="form-check form-switch">
                     <input type="checkbox" class="form-check-input" id="ds18b20_sensor">
                     <label class="form-check-label" for="ds18b20_sensor">DS18B20 Active</label>
+                    <small class="text-muted d-block">DS18B20 temperature sensor on Port B. Cannot be combined with DHT on the same port.</small>
                 </div>
             </div>
         </div>
@@ -30,14 +32,17 @@
                 <div class="form-check form-switch">
                     <input type="checkbox" class="form-check-input" id="second_dht_sensor">
                     <label class="form-check-label" for="second_dht_sensor">DHTXX Active</label>
+                    <small class="text-muted d-block">DHT sensor on Port A (black).</small>
                 </div>
                 <div class="form-check form-switch">
                     <input type="checkbox" class="form-check-input" id="second_ds18b20_sensor">
                     <label class="form-check-label" for="second_ds18b20_sensor">DS18B20 Active</label>
+                    <small class="text-muted d-block">DS18B20 sensor on Port A.</small>
                 </div>
                 <div class="form-check form-switch">
                     <input type="checkbox" class="form-check-input" id="adc_sensor">
                     <label class="form-check-label" for="adc_sensor">ADC Active</label>
+                    <small class="text-muted d-block">Read the analog input on Port A (e.g. soil moisture).</small>
                 </div>
             </div>
         </div>
@@ -51,18 +56,22 @@
                 <div class="form-group mb-3">
                     <label for="calibrationTemp">Temperature</label>
                     <input type="number" class="form-control" step=".1" id="calibrationTemp" value="0">
+                    <small class="text-muted">Offset added to the temperature reading, in °C (e.g. -1.5).</small>
                 </div>
                 <div class="form-group mb-3">
                     <label for="calibrationHumi">Humidity</label>
                     <input type="number" class="form-control" step=".1" id="calibrationHumi" value="0">
+                    <small class="text-muted">Offset added to the humidity reading, in %RH.</small>
                 </div>
                 <div class="form-group mb-3">
                     <label for="calibrationQfe">Barometric Air Pressure</label>
                     <input type="number" class="form-control" step="1" id="calibrationQfe" value="0">
+                    <small class="text-muted">Offset added to the barometric pressure reading, in hPa.</small>
                 </div>
                 <div class="form-check form-switch">
                     <input type="checkbox" class="form-check-input" id="calibrationActive">
                     <label class="form-check-label" for="calibrationActive">Calibration active</label>
+                    <small class="text-muted d-block">Apply the offsets above to the readings.</small>
                 </div>
             </div>
         </div>

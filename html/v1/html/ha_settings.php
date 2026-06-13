@@ -22,30 +22,37 @@
                 <div class="form-group mb-3">
                     <label for="mqttServer">Server (IP or hostname)</label>
                     <input type="text" class="form-control" id="mqttServer" minlength="3" maxlength="63" placeholder="Loading or no data">
+                    <small class="text-muted">IP or hostname of your Home Assistant / MQTT broker (e.g. 192.168.1.100 or homeassistant.local).</small>
                 </div>
                 <div class="form-group mb-3">
                     <label for="mqttPort">Port</label>
                     <input type="number" class="form-control" id="mqttPort" placeholder="Loading or no data" value="1883">
+                    <small class="text-muted">Broker port — 1883 for plain MQTT, 8883 for TLS.</small>
                 </div>
                 <div class="form-group mb-3">
                     <label for="mqttUser">User</label>
                     <input type="text" class="form-control" id="mqttUser" placeholder="Optional" autocomplete="off">
+                    <small class="text-muted">MQTT username (e.g. the Mosquitto add-on user).</small>
                 </div>
                 <div class="form-group mb-3">
                     <label for="mqttPassword">Password</label>
                     <input type="password" class="form-control" id="mqttPassword" placeholder="Optional" autocomplete="off">
+                    <small class="text-muted">MQTT password.</small>
                 </div>
                 <div class="form-group mb-3">
                     <label for="mqttFrequency">Data frequency (seconds)</label>
                     <input type="number" class="form-control" id="mqttFrequency" value="600" autocomplete="off">
+                    <small class="text-muted">Seconds between updates sent to Home Assistant.</small>
                 </div>
                 <div class="form-check form-switch">
                     <input type="checkbox" class="form-check-input" id="lightSleepModeActive">
                     <label class="form-check-label" for="lightSleepModeActive">Light Sleep</label>
+                    <small class="text-muted d-block">CPU sleeps between updates; WiFi stays connected so the device stays reachable.</small>
                 </div>
                 <div class="form-check form-switch" title="makes sense for data frequencies above 300s">
                     <input type="checkbox" class="form-check-input" id="sleepModeActive">
                     <label class="form-check-label" for="sleepModeActive">Deep Sleep</label>
+                    <small class="text-muted d-block">Device deep-sleeps between updates — lowest power. Best for frequencies above 300 s.</small>
                 </div>
 
                 <div style="display:none;">
