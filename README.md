@@ -21,7 +21,7 @@ This firmware is compatible with tehybug universal boards (without display) like
 
 ## Buttons
 - Reset: forces TeHyBug to reboot/restart
-- Mode button: activates the configuration mode after reset during the device boot
+- Mode button: activates the configuration mode. Press it **after** the device has booted, not while pressing RESET — the MODE button is on GPIO0, so holding it down during reset puts the ESP into firmware-flash (UART download) mode instead.
 
 ## Device Modes
 - Live mode: when your device is configured to serve data (via http/mqtt) and you enable the powersaving deep sleep and deactivate the config mode in the system settings. <img width="402" alt="Bildschirmfoto 2023-11-04 um 16 26 51" src="https://github.com/gumslone/tehybug/assets/12110353/2b2524da-0643-447a-abb0-873b50236c4e">
@@ -32,9 +32,9 @@ This firmware is compatible with tehybug universal boards (without display) like
 
 
 To return back to Config mode from the Live mode (or Offline mode):
-1. hit the RESET button
-2. in Offline / deep-sleep modes the LED glows white for a few seconds after reset — this is the window to press the MODE button
-3. push and hold the MODE button untill the LED turns blue
+1. hit the RESET button and release it — do **not** hold MODE yet (holding MODE during reset boots the ESP into flash mode)
+2. in Offline / deep-sleep modes the LED then glows white for a few seconds — this is the window to use the MODE button
+3. while the LED is white, push and hold the MODE button untill it turns blue
 4. release the MODE button.
 
 ## Offline data logging (RTC + EEPROM)
