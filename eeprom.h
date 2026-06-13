@@ -1,6 +1,11 @@
 #pragma once
 #include "debug.h"
-#include "rtc_time.h"
+
+// eeprom.h only holds a RtcTime reference (never calls it), so a forward
+// declaration is enough and keeps this header free of the rtc_time.h ->
+// configuration.h chain — which lets it be unit-tested on the host (see
+// tests/). In the firmware build rtc_time.h is fully included earlier.
+class RtcTime;
 
 #if defined(ARDUINO_ESP8266_GENERIC)
 // The TeHyBug mini has no data-log EEPROM; this stub keeps the call

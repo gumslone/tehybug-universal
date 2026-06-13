@@ -1,0 +1,15 @@
+name: Tests
+
+on:
+  pull_request:
+  push:
+    branches: [main, development]
+
+jobs:
+  native-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run native host tests
+        run: ./tests/run.sh
