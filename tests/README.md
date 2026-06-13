@@ -44,6 +44,14 @@ parsing, and the `key2unit` / `key2name` / `cf2name` lookup tables.
 [`test_i2c.cpp`](test_i2c.cpp) covers `i2cScanner` against the fake bus — the
 device detection that decides offline mode and which sensors are present.
 
+[`test_mode_logic.cpp`](test_mode_logic.cpp) covers the boot/serve decision
+logic that `setup()` and `loop()` hinge on
+([`../mode_logic.h`](../mode_logic.h)): `sleepEnabled`, `offlineEnabled` (needs
+the EEPROM present), `anyServeModeActive`, `dataLogAvailable`, and
+`minDataFrequency` (smallest active interval, HA-on-MQTT, default 60 s). The
+`TeHyBug` class delegates to these, so `setup()`/`loop()` themselves stay thin
+hardware orchestration while their decisions are tested here.
+
 ## Adding tests
 
 `eeprom.h` is unit-testable because it only forward-declares `RtcTime`. Other

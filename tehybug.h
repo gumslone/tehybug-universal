@@ -5,6 +5,7 @@
 #include "debug.h"
 #include "common_functions.h"
 #include "data_types.h"
+#include "mode_logic.h"
 #include "pixel.h"
 #include "configuration.h"
 #include "UUID.h"
@@ -125,46 +126,24 @@ class TeHyBug {
     // smallest configured reporting interval of all active data services,
     // used to pick the BME680 sample rate
     int minDataFrequency() {
-      int minFreq = INT_MAX;
-
-      if (serveData.mqtt.active && serveData.mqtt.frequency > 0) {
-        minFreq = min(minFreq, serveData.mqtt.frequency);
-      }
-      if (serveData.get.active && serveData.get.frequency > 0) {
-        minFreq = min(minFreq, serveData.get.frequency);
-      }
-      if (serveData.post.active && serveData.post.frequency > 0) {
-        minFreq = min(minFreq, serveData.post.frequency);
-      }
-      // HA reports on the MQTT interval
-      if (serveData.ha.active && serveData.mqtt.frequency > 0) {
-        minFreq = min(minFreq, serveData.mqtt.frequency);
-      }
-
-      // If no services are active or all frequencies are 0, default to 60s
-      if (minFreq == INT_MAX || minFreq == 0) {
-        minFreq = 60;
-      }
-
+      const int minFreq = mode_logic::minDataFrequency(serveData);
       D_println("Minimum data frequency: " + String(minFreq) + "s");
       return minFreq;
     }
 
     bool anyServeModeActive() {
-      return serveData.get.active || serveData.post.active ||
-             serveData.mqtt.active || serveData.ha.active ||
-             serveData.eeprom.active;
+      return mode_logic::anyServeModeActive(serveData);
     }
 
     // EEPROM-only mode: no WiFi, measure + log + deep-sleep. Needs the
     // EEPROM peripheral to be present (the mini board has none).
     bool offlineEnabled() {
-      return device.offlineMode && peripherals.eeprom;
+      return mode_logic::offlineEnabled(device, peripherals);
     }
 
     // data logging needs both the RTC (timestamps) and the EEPROM (storage)
     bool dataLogAvailable() {
-      return peripherals.eeprom && peripherals.ds3231;
+      return mode_logic::dataLogAvailable(peripherals);
     }
 
     // appends the current measurements with a timestamp to the EEPROM
@@ -236,7 +215,7 @@ class TeHyBug {
 
     bool sleepEnabled()
     {
-      return device.sleepMode || device.lightSleepMode;
+      return mode_logic::sleepEnabled(device);
     }
     void shouldSensorDataBeGarbageCollected(bool value)
     {

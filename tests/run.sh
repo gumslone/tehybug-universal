@@ -16,10 +16,12 @@ echo "==> Building"
 "$CXX" $STD $INC tests/test_eeprom.cpp libraries/EepromFS-main/EepromFS.cpp -o "$OUT/test_eeprom"
 "$CXX" $STD $INC tests/test_common.cpp -o "$OUT/test_common"
 "$CXX" $STD $INC tests/test_i2c.cpp -o "$OUT/test_i2c"
+"$CXX" $STD $INC tests/test_mode_logic.cpp -o "$OUT/test_mode_logic"
 
 echo "==> Running"
 rc=0
 "$OUT/test_eeprom" || rc=1
 "$OUT/test_common" || rc=1
 "$OUT/test_i2c" || rc=1
+"$OUT/test_mode_logic" || rc=1
 exit $rc
