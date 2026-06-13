@@ -1,7 +1,7 @@
 // Native host test for the I2C device detection used to decide offline mode
 // and which sensors/peripherals are present.
 #include "test_framework.h"
-#include "../i2cscanner.h"
+#include "../src/i2cscanner.h"
 
 int main() {
   std::printf("Running i2cScanner tests...\n");

@@ -1,6 +1,6 @@
 // Native host tests for the pure helpers in common_functions.h.
 #include "test_framework.h"
-#include "../common_functions.h"
+#include "../src/common_functions.h"
 
 static void test_int_format() {
   CASE("IntFormat zero-pads below 10");

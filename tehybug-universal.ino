@@ -4,8 +4,8 @@
 // The sketch is built as a single translation unit: the module headers
 // below contain function definitions and are included exactly once, in
 // dependency order.
-#include "debug.h"
-#include "board.h"
+#include "src/debug.h"
+#include "src/board.h"
 
 #include <Arduino.h>
 #include <ArduinoJson.h>
@@ -27,10 +27,10 @@
 
 #include <Wire.h>
 
-#include "common_functions.h"
-#include "fw_version.h"
-#include "i2cscanner.h"
-#include "tehybug.h"
+#include "src/common_functions.h"
+#include "src/fw_version.h"
+#include "src/i2cscanner.h"
+#include "src/tehybug.h"
 
 /* Global objects */
 
@@ -60,14 +60,14 @@ TickerScheduler ticker(5);
 
 /* Modules (function definitions, include order matters) */
 
-#include "http_request.h"
-#include "ha.h"
-#include "sensors.h"
-#include "web_api.h"
-#include "mqtt_service.h"
-#include "sleep_modes.h"
-#include "data_service.h"
-#include "wifi_service.h"
+#include "src/http_request.h"
+#include "src/ha.h"
+#include "src/sensors.h"
+#include "src/web_api.h"
+#include "src/mqtt_service.h"
+#include "src/sleep_modes.h"
+#include "src/data_service.h"
+#include "src/wifi_service.h"
 
 /* Button & LED */
 

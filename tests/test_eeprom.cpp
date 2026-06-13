@@ -9,7 +9,7 @@
 // enough to satisfy the reference the constructor takes.
 class RtcTime {};
 
-#include "../eeprom.h"
+#include "../src/eeprom.h"
 
 static RtcTime g_rtc;
 

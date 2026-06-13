@@ -23,7 +23,7 @@ pull request (`.github/workflows/tests.yml`).
 ## Coverage
 
 [`test_eeprom.cpp`](test_eeprom.cpp) exercises the EEPROM data log
-([`../eeprom.h`](../eeprom.h)) end-to-end against the fake chip:
+([`../src/eeprom.h`](../src/eeprom.h)) end-to-end against the fake chip:
 
 - format / mount / capacity (32 slots)
 - append + read round-trip; read of a missing file; a full slot keeping only
@@ -37,7 +37,7 @@ pull request (`.github/workflows/tests.yml`).
   correctly across the month wrap-around
 
 [`test_common.cpp`](test_common.cpp) covers the pure helpers in
-[`../common_functions.h`](../common_functions.h): `IntFormat` zero-padding,
+[`../src/common_functions.h`](../src/common_functions.h): `IntFormat` zero-padding,
 `GetRSSIasQuality`, `temp2Imp` (°C→°F), the `io13_1`/`io13_0` scenario-type
 parsing, and the `key2unit` / `key2name` / `cf2name` lookup tables.
 
@@ -46,7 +46,7 @@ device detection that decides offline mode and which sensors are present.
 
 [`test_mode_logic.cpp`](test_mode_logic.cpp) covers the boot/serve decision
 logic that `setup()` and `loop()` hinge on
-([`../mode_logic.h`](../mode_logic.h)): `sleepEnabled`, `offlineEnabled` (needs
+([`../src/mode_logic.h`](../src/mode_logic.h)): `sleepEnabled`, `offlineEnabled` (needs
 the EEPROM present), `anyServeModeActive`, `dataLogAvailable`, and
 `minDataFrequency` (smallest active interval, HA-on-MQTT, default 60 s). The
 `TeHyBug` class delegates to these, so `setup()`/`loop()` themselves stay thin

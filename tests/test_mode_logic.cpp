@@ -1,7 +1,7 @@
 // Native host tests for the boot/serve decision logic that setup() and loop()
 // hinge on (mode_logic.h).
 #include "test_framework.h"
-#include "../mode_logic.h"
+#include "../src/mode_logic.h"
 
 using namespace mode_logic;
 
