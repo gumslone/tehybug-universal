@@ -140,6 +140,22 @@ Requirements: [arduino-cli](https://arduino.github.io/arduino-cli/) and git. Eve
 
 The flashable binary is placed in `firmware/` as `firmware/tehybug.ino.<variant>.bin`.
 
+### PlatformIO
+
+[`platformio.ini`](platformio.ini) mirrors the same board options, flags and
+vendored libraries, so the project also builds with [PlatformIO](https://platformio.org/):
+
+```bash
+pio run -e esp8285        # universal board (recommended)
+pio run -e generic        # mini TeHyBug / 1 MB
+pio run -e esp8285_debug  # with serial debug output
+```
+
+The sketch stays at the repo root (so the arduino-cli build is unchanged);
+PlatformIO compiles it as a single translation unit and writes its output to
+`.pio/build/<env>/firmware.bin`. The arduino-cli `build.sh` remains the
+reference the CI release uses.
+
 ## Development
 
 Active development happens on the `development` branch. Every pull request to `main` is built by GitHub Actions ([build workflow](.github/workflows/build.yml)) and the resulting binaries are attached as workflow artifacts. After a merge to `main`, the workflow rebuilds all firmware variants, commits the updated binaries back to the repository and publishes a [release](https://github.com/gumslone/tehybug-universal/releases) with the binaries attached. The release tag (`vYYMMDDHHMM`) matches the firmware version reported by the device.

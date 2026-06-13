@@ -4,3 +4,6 @@
 
 # native test build output
 tests/build/
+
+# PlatformIO build output
+.pio/
