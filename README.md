@@ -124,6 +124,16 @@ To delete the all the configs and reset wifi configuration.
 2. after that push and hold the MODE button for 20 seconnds untill the LED turns red
 3. release the MODE button.
 
+## Repository layout
+
+- [`tehybug-universal.ino`](tehybug-universal.ino) — the sketch (entry point), at the repo root
+- [`src/`](src/) — the firmware module headers; the sketch includes them as one translation unit
+- [`firmware/`](firmware/) — prebuilt, flashable binaries
+- [`libraries/`](libraries/) — vendored Arduino libraries (pinned, known-good versions)
+- [`html/`](html/) — the PHP/JS/CSS configuration web UI (hosted at tehybug.com)
+- [`tests/`](tests/) — native host tests + clang-tidy static analysis
+- [`build.sh`](build.sh) / [`platformio.ini`](platformio.ini) — the two build paths
+
 ## Building from source
 
 Requirements: [arduino-cli](https://arduino.github.io/arduino-cli/) and git. Everything else is pinned:
@@ -166,6 +176,30 @@ PlatformIO compiles it as a single translation unit and writes its output to
 `.pio/build/<env>/firmware.bin`. The arduino-cli `build.sh` remains the
 reference the CI release uses.
 
+### Tests
+
+The hardware-independent firmware logic (the EEPROM data log + date index, the
+`common_functions` helpers, I²C device detection, and the boot/serve decision
+logic) has native host tests that run on a desktop compiler — no board or
+Arduino toolchain needed — plus a clang-tidy static-analysis pass. See
+[`tests/`](tests/README.md):
+
+```bash
+./tests/run.sh    # native host tests (fake I²C EEPROM; 88 assertions)
+./tests/tidy.sh   # clang-tidy over the host-compilable headers
+```
+
 ## Development
 
-Active development happens on the `development` branch. Every pull request to `main` is built by GitHub Actions ([build workflow](.github/workflows/build.yml)) and the resulting binaries are attached as workflow artifacts. After a merge to `main`, the workflow rebuilds all firmware variants, commits the updated binaries back to the repository and publishes a [release](https://github.com/gumslone/tehybug-universal/releases) with the binaries attached. The release tag (`vYYMMDDHHMM`) matches the firmware version reported by the device.
+Active development happens on the `development` branch.
+
+Every push and pull request runs the [tests workflow](.github/workflows/tests.yml):
+the native host tests, the clang-tidy static analysis, and a PlatformIO build of
+the `esp8285` and `generic` environments.
+
+Every pull request to `main` is also built by the [build workflow](.github/workflows/build.yml)
+(arduino-cli) and the resulting binaries are attached as workflow artifacts. After a merge to
+`main`, that workflow rebuilds all firmware variants, commits the updated binaries back to
+the repository and publishes a [release](https://github.com/gumslone/tehybug-universal/releases)
+with the binaries attached. The release tag (`vYYMMDDHHMM`) matches the firmware version
+reported by the device.
