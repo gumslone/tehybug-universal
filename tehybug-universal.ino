@@ -92,10 +92,9 @@ void turnLedOn() {
   }
 }
 
-// How long to wait for a MODE-button press after a manual reset when the
-// device is configured to sleep/go-offline right after setup. Without this
-// window the button is sampled for a single instant, so the user has to race
-// the boot to catch it before the device deep-sleeps.
+// How long to wait for a MODE-button press after a manual reset in offline
+// mode. Without this window the button is sampled for a single instant, so
+// the user has to race the boot to catch it before the device deep-sleeps.
 constexpr unsigned long BUTTON_WAKE_WINDOW_MS = 3000;
 
 // True when this boot is an automatic wake from deep sleep, as opposed to a
@@ -106,26 +105,23 @@ bool wokeFromDeepSleep() {
 
 // Short press toggles config mode, holding for 20 seconds factory-resets.
 //
-// In offline / deep-sleep modes the device sleeps immediately after setup, so
-// a missed press means waiting for the next wake. After a manual reset (not an
-// automatic deep-sleep wake) the MODE button is therefore polled for a few
-// seconds with the LED lit white as a "press now" cue, instead of being
-// sampled only once.
+// Offline mode brings up no WiFi and deep-sleeps right after setup, so the
+// MODE button is the only way back to config mode. After a manual reset (not
+// an automatic deep-sleep wake) the button is polled for a few seconds rather
+// than sampled once. This is limited to offline mode and gives no LED cue:
+// otherwise the indication would trigger on every restart, including
+// live/deep-sleep serving mode, where WiFi is available on each wake anyway.
 void checkModeButton() {
   pinMode(BUTTON_PIN, INPUT_PULLUP);
   delay(100);
 
-  const bool sleepsAfterSetup =
-    tehybug.device.offlineMode || tehybug.device.sleepMode;
-  if (sleepsAfterSetup && !wokeFromDeepSleep() &&
+  if (tehybug.device.offlineMode && !wokeFromDeepSleep() &&
       digitalRead(BUTTON_PIN) == HIGH) {
-    tehybug.pixel.on(255, 255, 255); // white: window to press MODE is open
     const unsigned long start = millis();
     while (digitalRead(BUTTON_PIN) == HIGH &&
            (millis() - start) < BUTTON_WAKE_WINDOW_MS) {
       delay(10);
     }
-    tehybug.pixel.off();
   }
 
   if (digitalRead(BUTTON_PIN) == LOW) {

@@ -33,9 +33,10 @@ This firmware is compatible with tehybug universal boards (without display) like
 
 To return back to Config mode from the Live mode (or Offline mode):
 1. hit the RESET button and release it — do **not** hold MODE yet (holding MODE during reset boots the ESP into flash mode)
-2. in Offline / deep-sleep modes the LED then glows white for a few seconds — this is the window to use the MODE button
-3. while the LED is white, push and hold the MODE button untill it turns blue
-4. release the MODE button.
+2. right after the device boots, push and hold the MODE button untill the LED turns blue
+3. release the MODE button.
+
+In Offline mode you have a few seconds after boot to press MODE; in the other modes press it as the device boots.
 
 ## Offline data logging (RTC + EEPROM)
 
