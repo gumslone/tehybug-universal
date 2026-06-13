@@ -16,7 +16,7 @@ WiFiClient & getClient(const String & url)
     return espClient_ssl;
   }
 #endif
-  // the mini build has no TLS client: https targets fail with a
+  // the generic (1MB) build has no TLS client: https targets fail with a
   // connection error, plain http works
   return espClient;
 }

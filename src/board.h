@@ -1,7 +1,7 @@
 #pragma once
 
-// Pin mapping differs between the TeHyBug mini (generic ESP8266 build)
-// and the universal board (ESP8285 build).
+// Pin mapping differs between the generic 1MB build (old / first-gen
+// TeHyBug, esp-01 based) and the ESP8285 build (TeHyBug universal and Mini).
 #if defined(ARDUINO_ESP8266_GENERIC)
 #define PIXEL_ACTIVE 0
 #define SIGNAL_LED_PIN 1
