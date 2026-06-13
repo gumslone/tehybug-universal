@@ -12,6 +12,11 @@ inline void delayMicroseconds(unsigned long) {}
 inline unsigned long millis() { return 0; }
 inline void yield() {}
 
+#define DEC 10
+#define HEX 16
+#define OCT 8
+#define BIN 2
+
 // Arduino String, backed by std::string, implementing the subset the project
 // uses. Methods mirror the Arduino API (indexOf/substring/startsWith/...).
 class String {
@@ -25,6 +30,25 @@ class String {
   String(long v) : m_s(std::to_string(v)) {}
   String(unsigned long v) : m_s(std::to_string(v)) {}
   String(unsigned char v) : m_s(std::to_string((int)v)) {}
+  // String(value, base) — Arduino formats non-decimal bases as lowercase
+  String(long v, int base) {
+    if (base == 10) {
+      m_s = std::to_string(v);
+      return;
+    }
+    unsigned long u = (unsigned long)v;
+    if (u == 0) {
+      m_s = "0";
+      return;
+    }
+    const char *digits = "0123456789abcdef";
+    std::string out;
+    while (u > 0) {
+      out = std::string(1, digits[u % (unsigned)base]) + out;
+      u /= (unsigned)base;
+    }
+    m_s = out;
+  }
 
   unsigned int length() const { return (unsigned int)m_s.size(); }
   const char *c_str() const { return m_s.c_str(); }

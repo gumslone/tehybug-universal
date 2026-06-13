@@ -6,6 +6,8 @@
 #include <cstdint>
 #include <cstddef>
 #include <deque>
+#include <initializer_list>
+#include <set>
 #include <vector>
 
 class FakeWire {
@@ -15,7 +17,15 @@ class FakeWire {
   void begin() {}
   void begin(int, int) {}
 
-  void beginTransmission(int) { m_tx.clear(); }
+  // which I2C addresses acknowledge (default: just the data-log EEPROM)
+  void setPresent(std::initializer_list<int> addrs) {
+    m_present = std::set<int>(addrs);
+  }
+
+  void beginTransmission(int addr) {
+    m_addr = addr;
+    m_tx.clear();
+  }
 
   size_t write(int b) {
     m_tx.push_back((uint8_t)(b & 0xFF));
@@ -28,8 +38,10 @@ class FakeWire {
 
   // First two bytes of a transmission set the address pointer; any further
   // bytes are written sequentially from there (a page/byte write).
+  // Returns 0 (ack) only if the addressed device is present.
   uint8_t endTransmission() {
-    if (m_tx.size() >= 2) {
+    const bool ack = m_present.count(m_addr) > 0;
+    if (ack && m_tx.size() >= 2) {
       m_ptr = ((unsigned)m_tx[0] << 8) | m_tx[1];
       for (size_t i = 2; i < m_tx.size(); i++) {
         if (m_ptr < SIZE) m_mem[m_ptr] = m_tx[i];
@@ -37,11 +49,12 @@ class FakeWire {
       }
     }
     m_tx.clear();
-    return 0; // ack
+    return ack ? 0 : 2; // 2 = NACK on address
   }
 
-  int requestFrom(int, int n) {
+  int requestFrom(int addr, int n) {
     m_rx.clear();
+    if (m_present.count(addr) == 0) return 0;
     for (int i = 0; i < n; i++) {
       m_rx.push_back(m_ptr < SIZE ? m_mem[m_ptr] : 0xFF);
       m_ptr++;
@@ -56,14 +69,18 @@ class FakeWire {
     return v;
   }
 
-  // test helper: wipe the simulated chip (fresh, unformatted EEPROM)
+  // test helper: wipe the simulated chip (fresh, unformatted EEPROM) and
+  // reset the present devices to just the EEPROM
   void wipe() {
     for (size_t i = 0; i < SIZE; i++) m_mem[i] = 0;
+    m_present = {0x50};
   }
 
  private:
   uint8_t m_mem[SIZE] = {0};
   unsigned m_ptr = 0;
+  int m_addr = 0;
+  std::set<int> m_present{0x50};
   std::vector<uint8_t> m_tx;
   std::deque<uint8_t> m_rx;
 };

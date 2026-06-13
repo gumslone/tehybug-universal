@@ -3,40 +3,13 @@
 // date index and the month-rollover behaviour that the index enables.
 //
 // Build & run:  tests/run.sh   (or see the g++ line there)
-#include <cstdio>
-#include <string>
+#include "test_framework.h"
 
 // eeprom.h only forward-declares RtcTime and never calls it; a stub type is
 // enough to satisfy the reference the constructor takes.
 class RtcTime {};
 
 #include "../eeprom.h"
-
-// ---- tiny assertion framework -------------------------------------------
-static int g_pass = 0, g_fail = 0;
-static const char *g_case = "";
-#define CASE(name) g_case = name
-#define CHECK(cond)                                                      \
-  do {                                                                   \
-    if (cond) {                                                          \
-      g_pass++;                                                          \
-    } else {                                                             \
-      g_fail++;                                                          \
-      std::printf("  FAIL [%s] %s:%d: %s\n", g_case, __FILE__, __LINE__, \
-                  #cond);                                                \
-    }                                                                    \
-  } while (0)
-#define CHECK_EQ_STR(a, b)                                                  \
-  do {                                                                      \
-    std::string _a((a)), _b((b));                                          \
-    if (_a == _b) {                                                         \
-      g_pass++;                                                             \
-    } else {                                                                \
-      g_fail++;                                                             \
-      std::printf("  FAIL [%s] %s:%d: \"%s\" != \"%s\"\n", g_case,          \
-                  __FILE__, __LINE__, _a.c_str(), _b.c_str());             \
-    }                                                                       \
-  } while (0)
 
 static RtcTime g_rtc;
 
@@ -131,6 +104,44 @@ static void test_recycle_preserves_index() {
   CHECK_EQ_STR(fs.fileDate(20).c_str(), "2026-06-20");
 }
 
+static void test_read_nonexistent() {
+  CASE("read of a missing file is empty");
+  TeHyBugEeprom fs = freshFs();
+  CHECK_EQ_STR(fs.read("nope.txt").c_str(), "");
+  CHECK_EQ_STR(fs.fileDate(9).c_str(), ""); // no index yet
+}
+
+static void test_slot_full_truncates() {
+  CASE("a full slot keeps what fits");
+  TeHyBugEeprom fs = freshFs();
+  // a line far larger than one ~1 KB slot is truncated, not rejected
+  String big;
+  for (int i = 0; i < 5000; i++) big += 'x';
+  CHECK(fs.appendLine("9.txt", big, 9));
+  const unsigned int len = fs.read("9.txt").length();
+  CHECK(len > 900);  // most of the slot is usable
+  CHECK(len < 1100); // but capped at the slot size, not 5000
+}
+
+static void test_recycle_picks_oldest_by_wrap() {
+  CASE("recycle picks the oldest day across the month wrap");
+  TeHyBugEeprom fs = freshFs();
+  fs.setFileDate(10, "2026-06-10"); // index occupies one slot
+  // fill the remaining 31 slots with day files 1..31
+  for (int d = 1; d <= 31; d++) {
+    char name[16];
+    std::snprintf(name, sizeof(name), "%d.txt", d);
+    fs.appendLine(name, "x\n", (uint8_t)d);
+  }
+  // FS is full; appending on day 2 must recycle the file furthest in the
+  // past, which for currentMday=2 is day 3 ((2-3+31)%31 = 30, the max age)
+  fs.appendLine("99.txt", "new\n", 2);
+  CHECK_EQ_STR(fs.read("3.txt").c_str(), "");      // day 3 recycled
+  CHECK_EQ_STR(fs.read("99.txt").c_str(), "new\n"); // new file written
+  CHECK_EQ_STR(fs.read("1.txt").c_str(), "x\n");   // newer days kept
+  CHECK_EQ_STR(fs.fileDate(10).c_str(), "2026-06-10"); // index untouched
+}
+
 int main() {
   std::printf("Running eeprom tests...\n");
   test_format_and_capacity();
@@ -139,6 +150,8 @@ int main() {
   test_index_hidden_and_dated_in_listing();
   test_month_rollover();
   test_recycle_preserves_index();
-  std::printf("\n%d passed, %d failed\n", g_pass, g_fail);
-  return g_fail == 0 ? 0 : 1;
+  test_read_nonexistent();
+  test_slot_full_truncates();
+  test_recycle_picks_oldest_by_wrap();
+  return SUMMARY();
 }
