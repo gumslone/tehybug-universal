@@ -145,9 +145,7 @@ String key2icon(const String & key)
     return "mdi:water-percent";
   else if (key == "ah")
     return "mdi:water";
-  else if (key == "cr")
-    return "mdi:sofa-outline";
-  else if (key == "cs")
+  else if (key == "cr" || key == "cs")
     return "mdi:sofa-outline";
   else if (key == "qfe")
     return "mdi:gauge";

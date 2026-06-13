@@ -20,6 +20,7 @@ class RtcTime {
     bool isTimeSet() { return false; }
     String timestamp() { return String(); }
     String timeOfDay() { return String(); }
+    String dateString() { return String(); }
     void update() {}
     void setTime(uint16_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t,
                  uint8_t) {}
@@ -71,6 +72,11 @@ class RtcTime {
     // is already implied by the per-day file name
     String timeOfDay() {
       return IntFormat(getHours()) + ":" + IntFormat(getMinutes());
+    }
+    // "YYYY-MM-DD" of the last update(); recorded in the EEPROM date index
+    String dateString() {
+      return String(getYear()) + "-" + IntFormat(getMonth()) + "-" +
+             IntFormat(getMonthDay());
     }
     void update()
     {

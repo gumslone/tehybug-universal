@@ -78,16 +78,16 @@ With a DS3231 RTC + I²C EEPROM module attached, TeHyBug can store timestamped r
 To update the firmware from OTA WebInterface open http://tehybug.local/update in your browser, if this doesnt work, try to find out its IP from your router admin menu or use any local network ip scanner app for your mobile phone to get the device ip and then open http://<ip_address<ip address>>/update with your browser.
 
 ## Firmware binaries
-The prebuilt binaries in the repository root are rebuilt automatically on every merge to `main`:
+The prebuilt binaries in [`firmware/`](firmware/) are rebuilt automatically on every merge to `main`:
 
 | File | Board | Notes |
 | --- | --- | --- |
-| `tehybug.ino.esp8285.bin` | TeHyBug universal boards (ESP8285) | recommended |
-| `tehybug.ino.esp8285_debug.bin` | TeHyBug universal boards (ESP8285) | serial debug output enabled |
-| `tehybug.ino.generic.bin` | Mini TeHyBug / generic ESP8266 dev boards (1MB flash) | small enough for OTA updates; no BME680, no RTC/EEPROM data log, no https data push (plain http works) |
+| `firmware/tehybug.ino.esp8285.bin` | TeHyBug universal boards (ESP8285) | recommended |
+| `firmware/tehybug.ino.esp8285_debug.bin` | TeHyBug universal boards (ESP8285) | serial debug output enabled |
+| `firmware/tehybug.ino.generic.bin` | Mini TeHyBug / generic ESP8266 dev boards (1MB flash) | small enough for OTA updates; no BME680, no RTC/EEPROM data log, no https data push (plain http works) |
 
 ## How to program/flash the board (advanced users only)
-To flash firmware use the .esp8285.bin file.
+To flash firmware use the `firmware/tehybug.ino.esp8285.bin` file.
 For flashing and programming you can use ARDUINO IDE, select there generic ESP8285 board.
 Also you can use the [ESPTool](https://github.com/espressif/esptool) to flash binaries to the board or other tools which are described at: https://nodemcu.readthedocs.io/en/latest/flash/
 
@@ -138,7 +138,23 @@ Requirements: [arduino-cli](https://arduino.github.io/arduino-cli/) and git. Eve
 ./build.sh esp8285 debug    # build with serial debug output
 ```
 
-The flashable binary is placed next to the sketch as `tehybug.ino.<variant>.bin`.
+The flashable binary is placed in `firmware/` as `firmware/tehybug.ino.<variant>.bin`.
+
+### PlatformIO
+
+[`platformio.ini`](platformio.ini) mirrors the same board options, flags and
+vendored libraries, so the project also builds with [PlatformIO](https://platformio.org/):
+
+```bash
+pio run -e esp8285        # universal board (recommended)
+pio run -e generic        # mini TeHyBug / 1 MB
+pio run -e esp8285_debug  # with serial debug output
+```
+
+The sketch stays at the repo root (so the arduino-cli build is unchanged);
+PlatformIO compiles it as a single translation unit and writes its output to
+`.pio/build/<env>/firmware.bin`. The arduino-cli `build.sh` remains the
+reference the CI release uses.
 
 ## Development
 

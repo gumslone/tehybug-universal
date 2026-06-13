@@ -42,14 +42,14 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: firmware
-          path: tehybug.ino.*.bin
+          path: firmware/tehybug.ino.*.bin
 
       - name: Commit updated binaries
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add tehybug.ino.esp8285.bin tehybug.ino.esp8285_debug.bin tehybug.ino.generic.bin
+          git add firmware/tehybug.ino.esp8285.bin firmware/tehybug.ino.esp8285_debug.bin firmware/tehybug.ino.generic.bin
           if git diff --cached --quiet; then
             echo "Binaries unchanged, nothing to commit."
           else
@@ -68,6 +68,6 @@ jobs:
           gh release create "$TAG" \
             --title "TeHyBug firmware $TAG" \
             --notes "Automated build of $(git rev-parse --short HEAD)." \
-            tehybug.ino.esp8285.bin \
-            tehybug.ino.esp8285_debug.bin \
-            tehybug.ino.generic.bin
+            firmware/tehybug.ino.esp8285.bin \
+            firmware/tehybug.ino.esp8285_debug.bin \
+            firmware/tehybug.ino.generic.bin

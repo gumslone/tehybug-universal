@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Builds the TeHyBug firmware with arduino-cli and places the flashable
-# binary next to the sketch (tehybug.ino.<variant>.bin).
+# binary in firmware/ (firmware/tehybug.ino.<variant>.bin).
 #
 # Usage: ./build.sh [esp8285|generic|all] [nodebug|debug]
 #   variant  board to build for (default: esp8285)
@@ -70,9 +70,10 @@ build() {
     "$SKETCH_DIR"
 
   # arduino-cli names the binary after the sketch (tehybug-universal.ino);
-  # keep the historical tehybug.ino.* name for the published binaries.
-  cp "$build_dir/tehybug-universal.ino.bin" "$SKETCH_DIR/tehybug.ino.$variant$SUFFIX.bin"
-  echo "==> Done: tehybug.ino.$variant$SUFFIX.bin"
+  # keep the historical tehybug.ino.* name for the published binaries, in firmware/.
+  mkdir -p "$SKETCH_DIR/firmware"
+  cp "$build_dir/tehybug-universal.ino.bin" "$SKETCH_DIR/firmware/tehybug.ino.$variant$SUFFIX.bin"
+  echo "==> Done: firmware/tehybug.ino.$variant$SUFFIX.bin"
 }
 
 case "$TARGET" in
