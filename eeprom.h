@@ -19,12 +19,15 @@ class TeHyBugEeprom {
 #else
 #include <EepromFS.h>
 
-// Slot-based data log on an external I2C EEPROM (e.g. AT24C32 on a
-// DS3231 RTC module). One file per day of month ("<mday>.txt"); when no
-// free slot is left the oldest day file is removed.
+// Slot-based data log on the external I2C EEPROM (FT24C256A, 32 KB, on the
+// DS3231 RTC module). One file per day of month ("<mday>.txt"), so 32 slots
+// of ~1 KB hold a full month of daily logs; when no free slot is left the
+// oldest day file is removed. NOTE: begin() reuses the slot count an
+// already-formatted EEPROM was created with — SLOTS only applies when
+// formatting a blank chip.
 class TeHyBugEeprom{
   public :
-  static constexpr uint8_t SLOTS = 8;
+  static constexpr uint8_t SLOTS = 32;
 
   TeHyBugEeprom(RtcTime & time): m_efs(0x50, 0), m_time(time) {}
 
