@@ -20,14 +20,23 @@ const char mainPage[] PROGMEM = R"=====(
 <html>
 <head>
 <script>
-let xhr = new XMLHttpRequest();
-xhr.open('GET', '/api/getip');
-xhr.send();
-xhr.onload = function() {
-  if (xhr.status == 200) {
-    document.getElementById("ip").innerHTML = xhr.responseText;
-  }
-};
+// Fill in the device IP in the offline fallback message. Run after the DOM is
+// ready so the #ip element exists (on a local device the response can arrive
+// before the body is parsed), and assign onload before send.
+function setBugIp() {
+  var xhr = new XMLHttpRequest();
+  xhr.open('GET', '/api/getip');
+  xhr.onload = function() {
+    var el = document.getElementById("ip");
+    if (xhr.status == 200 && el) { el.innerHTML = xhr.responseText; }
+  };
+  xhr.send();
+}
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', setBugIp);
+} else {
+  setBugIp();
+}
 </script>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
