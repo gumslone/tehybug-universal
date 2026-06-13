@@ -86,33 +86,58 @@
         <span data-feather="list"></span> Changelog
     </div>
     <div class="card-body">
-        <p class="small text-muted">Newest changes first. Firmware versions are date-based
-        (<code>YYMMDDHHMM</code>); see the <a href="https://github.com/gumslone/tehybug-universal/releases" target="_blank">releases</a> for exact version tags.</p>
-
-        <h6>Offline data logging</h6>
-        <ul class="small">
-            <li>Log readings to an attached RTC + EEPROM module with no server or network &mdash; one file per day of month, a full month retained.</li>
-            <li>Pick exactly which values to log with placeholders (e.g. <code>%temp% %humi%</code>); compact on-device format fits more entries, and each day file keeps its full calendar date.</li>
-            <li>New <strong>Offline mode</strong>: the device runs with WiFi off for the lowest power draw. Enabling it switches every other mode off.</li>
-            <li>Configure and read the log on the <a href="javascript:void(0);" onclick="ChangeContent(this, 'datalog', '#right-content');">Data Log</a> page.</li>
-        </ul>
-
-        <h6>Usability</h6>
-        <ul class="small">
-            <li>Inline help under every setting on the configuration pages.</li>
-            <li>More reliable return to config mode from offline / deep-sleep modes after a reset.</li>
-        </ul>
-
-        <h6>Fixes</h6>
-        <ul class="small">
-            <li>Offline mode no longer falls back to WiFi when the EEPROM is present.</li>
-            <li>A day file reused in a new month no longer mixes dates.</li>
-            <li>The dashboard sensor table is no longer cleared right after connecting.</li>
-        </ul>
+        <p class="small text-muted">Loaded from the project repository, so it is always current.</p>
+        <div id="changelog" class="small">
+            <p class="text-muted">Loading changelog&hellip;</p>
+        </div>
     </div>
 </div>
 
 <script>
     feather.replace();
     connectionStart();
+
+    // Pull the changelog from the repository so it stays current without
+    // re-deploying this page. GitHub raw sends a permissive CORS header.
+    (function () {
+        var target = document.getElementById('changelog');
+        if (!target) { return; }
+        var url = 'https://raw.githubusercontent.com/gumslone/tehybug-universal/main/CHANGELOG.md';
+
+        function esc(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+        function inline(s) {
+            return esc(s)
+                .replace(/`([^`]+)`/g, '<code>$1</code>')
+                .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+                .replace(/\[([^\]]+)\]\((https?:[^)]+)\)/g, '<a href="$2" target="_blank">$1</a>');
+        }
+        function mdToHtml(md) {
+            var lines = md.split('\n'), out = [], inList = false, para = [], m;
+            function closeList() { if (inList) { out.push('</ul>'); inList = false; } }
+            function flushPara() { if (para.length) { out.push('<p>' + para.join(' ') + '</p>'); para = []; } }
+            for (var i = 0; i < lines.length; i++) {
+                var line = lines[i];
+                if ((m = line.match(/^###\s+(.*)/)))      { flushPara(); closeList(); out.push('<h6 class="mt-2">' + inline(m[1]) + '</h6>'); }
+                else if ((m = line.match(/^##\s+(.*)/)))   { flushPara(); closeList(); out.push('<h6 class="mt-3">' + inline(m[1]) + '</h6>'); }
+                else if (line.match(/^#\s+/))              { flushPara(); closeList(); /* top-level title: card header already says Changelog */ }
+                else if ((m = line.match(/^\s*[-*]\s+(.*)/))) { flushPara(); if (!inList) { out.push('<ul>'); inList = true; } out.push('<li>' + inline(m[1]) + '</li>'); }
+                else if (line.trim() === '')               { flushPara(); closeList(); }
+                else                                       { para.push(inline(line)); }
+            }
+            flushPara();
+            closeList();
+            return out.join('\n');
+        }
+
+        fetch(url, { cache: 'no-store' })
+            .then(function (r) { if (!r.ok) { throw new Error(r.status); } return r.text(); })
+            .then(function (md) {
+                target.innerHTML = mdToHtml(md);
+                if (typeof feather !== 'undefined') { feather.replace(); }
+            })
+            .catch(function () {
+                target.innerHTML = '<div class="alert alert-secondary mb-0">Could not load the changelog. ' +
+                    'Read it on <a href="https://github.com/gumslone/tehybug-universal/blob/main/CHANGELOG.md" target="_blank">GitHub</a>.</div>';
+            });
+    })();
 </script>
