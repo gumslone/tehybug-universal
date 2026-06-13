@@ -28,11 +28,25 @@ This firmware is compatible with tehybug universal boards (without display) like
 
 - Config mode: TeHyBug serves a web interface at http://tehybug.local where you can configure everything.
 
+- Offline mode (requires the RTC + EEPROM module): the device never connects to WiFi. It wakes on the log interval, measures, appends one entry to the on-device log and deep-sleeps again — the lowest possible power draw with no network. See [Offline data logging](#offline-data-logging-rtc--eeprom) below.
 
-To return back to Config mode from the Live mode:
+
+To return back to Config mode from the Live mode (or Offline mode):
 1. hit the RESET button
 2. after that push and hold the MODE button untill the LED turns blue
 3. release the MODE button.
+
+## Offline data logging (RTC + EEPROM)
+
+With a DS3231 RTC + I²C EEPROM module attached, TeHyBug can store timestamped readings on the device itself — no server, broker or network required. Configure and read the log on the **Data Log** page of the web interface.
+
+- **One file per day.** A file per day of month is written. The EEPROM is split into 8 fixed slots, so the last 8 days are kept; when a new day starts the oldest day file is recycled.
+- **Pick what to log.** Store the default measured set, or a custom placeholder template (e.g. `%temp% %humi%`) to keep only the fields you care about.
+- **Compact format.** To fit more into the small slots (~1 KB each) the date is omitted — it is implied by the file name — and each value is tagged with a short code, e.g. `07:55 22.6t 48.3h 1013.2p`. This roughly doubles the entries per day file versus a verbose `key=value` line.
+- **Own log interval.** The log frequency is independent of the data-serving intervals; in offline mode it also sets the deep-sleep interval. A day file holds a limited number of entries, so pick an interval that fits a full day — the Data Log page shows a capacity table and, once a day file is full, the rest of that day is not recorded.
+- **Offline mode.** Enabling offline mode logs with WiFi completely off. The web interface is unavailable while offline; to read the data, press RESET then hold MODE until the LED turns blue to re-enter Config mode.
+
+> Not available on the Mini TeHyBug / generic build, which has no RTC/EEPROM hardware.
 
 ## Port B (green) supported sensors:
 * BME680
