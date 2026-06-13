@@ -264,7 +264,7 @@
         <ul>
             <li><a href="https://tehybug.com" target="_blank">tehybug.com</a> - Official website</li>
             <li><a href="https://www.tindie.com/stores/gumslone/" target="_blank">Tindie Store</a> - Purchase hardware</li>
-            <li><a href="https://github.com/gumslone/tehybug" target="_blank">GitHub Repository</a> - Source code and documentation</li>
+            <li><a href="https://github.com/gumslone/tehybug-universal" target="_blank">GitHub Repository</a> - Source code and documentation</li>
         </ul>
         
         <div class="alert alert-info" role="alert">
