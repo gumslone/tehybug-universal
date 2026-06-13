@@ -92,10 +92,37 @@ void turnLedOn() {
   }
 }
 
+// How long to wait for a MODE-button press after a manual reset in offline
+// mode. Without this window the button is sampled for a single instant, so
+// the user has to race the boot to catch it before the device deep-sleeps.
+constexpr unsigned long BUTTON_WAKE_WINDOW_MS = 3000;
+
+// True when this boot is an automatic wake from deep sleep, as opposed to a
+// power-on or a manual press of the RESET button.
+bool wokeFromDeepSleep() {
+  return ESP.getResetInfoPtr()->reason == REASON_DEEP_SLEEP_AWAKE;
+}
+
 // Short press toggles config mode, holding for 20 seconds factory-resets.
+//
+// Offline mode brings up no WiFi and deep-sleeps right after setup, so the
+// MODE button is the only way back to config mode. After a manual reset (not
+// an automatic deep-sleep wake) the button is polled for a few seconds rather
+// than sampled once. This is limited to offline mode and gives no LED cue:
+// otherwise the indication would trigger on every restart, including
+// live/deep-sleep serving mode, where WiFi is available on each wake anyway.
 void checkModeButton() {
-  delay(100);
   pinMode(BUTTON_PIN, INPUT_PULLUP);
+  delay(100);
+
+  if (tehybug.device.offlineMode && !wokeFromDeepSleep() &&
+      digitalRead(BUTTON_PIN) == HIGH) {
+    const unsigned long start = millis();
+    while (digitalRead(BUTTON_PIN) == HIGH &&
+           (millis() - start) < BUTTON_WAKE_WINDOW_MS) {
+      delay(10);
+    }
+  }
 
   if (digitalRead(BUTTON_PIN) == LOW) {
     const unsigned long pressed = millis();

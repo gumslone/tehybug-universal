@@ -21,18 +21,34 @@ This firmware is compatible with tehybug universal boards (without display) like
 
 ## Buttons
 - Reset: forces TeHyBug to reboot/restart
-- Mode button: activates the configuration mode after reset during the device boot
+- Mode button: activates the configuration mode. Press it **after** the device has booted, not while pressing RESET — the MODE button is on GPIO0, so holding it down during reset puts the ESP into firmware-flash (UART download) mode instead.
 
 ## Device Modes
 - Live mode: when your device is configured to serve data (via http/mqtt) and you enable the powersaving deep sleep and deactivate the config mode in the system settings. <img width="402" alt="Bildschirmfoto 2023-11-04 um 16 26 51" src="https://github.com/gumslone/tehybug/assets/12110353/2b2524da-0643-447a-abb0-873b50236c4e">
 
 - Config mode: TeHyBug serves a web interface at http://tehybug.local where you can configure everything.
 
+- Offline mode (requires the RTC + EEPROM module): the device never connects to WiFi. It wakes on the log interval, measures, appends one entry to the on-device log and deep-sleeps again — the lowest possible power draw with no network. See [Offline data logging](#offline-data-logging-rtc--eeprom) below.
 
-To return back to Config mode from the Live mode:
-1. hit the RESET button
-2. after that push and hold the MODE button untill the LED turns blue
+
+To return back to Config mode from the Live mode (or Offline mode):
+1. hit the RESET button and release it — do **not** hold MODE yet (holding MODE during reset boots the ESP into flash mode)
+2. right after the device boots, push and hold the MODE button untill the LED turns blue
 3. release the MODE button.
+
+In Offline mode you have a few seconds after boot to press MODE; in the other modes press it as the device boots.
+
+## Offline data logging (RTC + EEPROM)
+
+With a DS3231 RTC + I²C EEPROM module attached, TeHyBug can store timestamped readings on the device itself — no server, broker or network required. Configure and read the log on the **Data Log** page of the web interface.
+
+- **One file per day, a full month retained.** A file per day of month is written. The 32 KB EEPROM (FT24C256A) is split into 32 slots of ~1 KB each, so every day of the month gets its own file; when no free slot is left the oldest day file is recycled.
+- **Pick what to log.** Store the default measured set, or a custom placeholder template (e.g. `%temp% %humi%`) to keep only the fields you care about.
+- **Compact format.** To fit more into the small slots (~1 KB each) the date is omitted — it is implied by the file name — and each value is tagged with a short code, e.g. `07:55 22.6t 48.3h 1013.2p`. This roughly doubles the entries per day file versus a verbose `key=value` line.
+- **Own log interval.** The log frequency is independent of the data-serving intervals; in offline mode it also sets the deep-sleep interval. A day file holds a limited number of entries, so pick an interval that fits a full day — the Data Log page shows a capacity table and, once a day file is full, the rest of that day is not recorded.
+- **Offline mode.** Enabling offline mode logs with WiFi completely off. The web interface is unavailable while offline; to read the data, press RESET then hold MODE until the LED turns blue to re-enter Config mode.
+
+> Not available on the Mini TeHyBug / generic build, which has no RTC/EEPROM hardware.
 
 ## Port B (green) supported sensors:
 * BME680

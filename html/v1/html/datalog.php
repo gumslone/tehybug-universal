@@ -53,7 +53,7 @@
                 </div>
                 <p class="small">In offline mode the device never connects to WiFi. It wakes on the log frequency, measures, appends one entry to the EEPROM log and deep-sleeps again &mdash; the lowest possible power draw and no network needed.</p>
                 <div class="alert alert-warning small mb-0">
-                    <strong><span data-feather="alert-triangle"></span> Reading the log:</strong> the web interface is unavailable while offline. To read the stored data, press <strong>RESET</strong>, then press and hold <strong>MODE</strong> until the LED turns blue to re-enter config mode (WiFi on), then come back to this page.
+                    <strong><span data-feather="alert-triangle"></span> Reading the log:</strong> the web interface is unavailable while offline. To read the stored data, press and release <strong>RESET</strong> (do <strong>not</strong> hold MODE during reset &mdash; that boots the ESP into flash mode), then within a few seconds press and hold <strong>MODE</strong> until the LED turns <strong>blue</strong> to re-enter config mode (WiFi on), and come back to this page.
                 </div>
                 <div id="offline_exclusive" class="alert alert-info small mt-3 mb-0" style="display:none;">
                     <strong><span data-feather="info"></span> Offline mode is exclusive:</strong> saving it switches off every other mode (MQTT, Home Assistant, HTTP GET/POST, deep/light sleep and config mode) and turns EEPROM logging on.
@@ -89,12 +89,12 @@
                 <h4 class="mb-0"><span data-feather="hard-drive"></span> Storage capacity &amp; limits</h4>
             </div>
             <div class="card-body">
-                <p>The log lives on the small I&#178;C EEPROM of the RTC module, which is divided
-                into <strong>8 fixed slots &mdash; one file per day of month</strong>. Each slot
-                holds roughly <strong>1&nbsp;KB (about 1006 bytes on the standard module</strong>,
-                the exact size depends on the EEPROM chip).</p>
+                <p>The log lives on the 32&nbsp;KB I&#178;C EEPROM (FT24C256A) of the RTC module,
+                which is divided into <strong>32 slots &mdash; one file per day of month</strong>.
+                Each slot holds roughly <strong>1&nbsp;KB (about 1006 bytes)</strong>, so a full
+                month of daily files fits.</p>
                 <ul class="small">
-                    <li><strong>At most 8 days are kept.</strong> When a 9th day starts, the oldest day file is recycled (erased) to make room.</li>
+                    <li><strong>Up to a full month is kept</strong> (one file per day of month). When all slots are in use and a new day starts, the oldest day file is recycled (erased) to make room.</li>
                     <li><strong>A day file that fills up stops accepting entries</strong> for the rest of that day; logging resumes in the next day's file. Pick a frequency so a full day fits.</li>
                     <li><strong>Fewer fields &amp; a longer frequency = more coverage.</strong> Use the <em>Logged Fields</em> template above to store only what you need.</li>
                 </ul>
@@ -119,9 +119,9 @@
                 </div>
                 <div class="alert alert-info small mb-0">
                     <strong><span data-feather="info"></span> Example:</strong> logging temperature + humidity
-                    every 30&nbsp;minutes stores ~48 readings per day &mdash; just under one day file, so the
-                    last 8 days stay available. Logging every minute fills a day file in well under an hour,
-                    after which the rest of that day is not recorded.
+                    every 30&nbsp;minutes stores ~48 readings per day &mdash; about one day file, so a full
+                    month of days stays available. Logging every minute fills a day file in well under an
+                    hour, after which the rest of that day is not recorded.
                 </div>
             </div>
         </div>
