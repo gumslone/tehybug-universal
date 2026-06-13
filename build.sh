@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Builds the TeHyBug firmware with arduino-cli and places the flashable
-# binary in firmware/ (firmware/tehybug.ino.<variant>.bin).
+# Builds the TeHyBug firmware. By default it uses arduino-cli and places the
+# flashable binary in firmware/ (firmware/tehybug.ino.<variant>.bin); set
+# TOOL=platformio to build the same variant(s) with PlatformIO instead (output
+# stays in PlatformIO's .pio/build/<env>/firmware.bin).
 #
 # Usage: ./build.sh [esp8285|generic|all] [nodebug|debug]
 #   variant  board to build for (default: esp8285)
@@ -10,12 +12,18 @@ set -euo pipefail
 #            and sets the core debug port to Serial; binaries get a
 #            _debug suffix (default: nodebug)
 #
+# Backend (env var):
+#   TOOL=arduino     (default) build with arduino-cli
+#   TOOL=platformio  build with PlatformIO (alias: pio); override the pio
+#                    binary with PIO=/path/to/pio if it is not on PATH
+#
 # Requires: arduino-cli with the esp8266:esp8266 core (2.7.4); see
 # ci/install-deps.sh. All libraries are vendored in ./libraries.
 
 SKETCH_DIR="$(cd "$(dirname "$0")" && pwd)"
 TARGET="${1:-esp8285}"
 MODE="${2:-nodebug}"
+TOOL="${TOOL:-arduino}"
 
 # Matches the Arduino IDE board settings used for the universal board:
 # Generic ESP8285 Module, 80 MHz, 26 MHz crystal,
@@ -47,6 +55,27 @@ case "$MODE" in
     exit 1
     ;;
 esac
+
+# --- PlatformIO backend -----------------------------------------------------
+# Maps the variant/mode to PlatformIO environments (esp8285, esp8285_debug,
+# generic, generic_debug — see platformio.ini) and builds them with `pio run`.
+if [ "$TOOL" = "platformio" ] || [ "$TOOL" = "pio" ]; then
+  PIO="${PIO:-pio}"
+  command -v "$PIO" >/dev/null 2>&1 || PIO="python3 -m platformio"
+  case "$TARGET" in
+    esp8285|generic) PIO_ENVS=("$TARGET$SUFFIX") ;;
+    all) PIO_ENVS=("esp8285$SUFFIX" "generic$SUFFIX") ;;
+    *) echo "Usage: $0 [esp8285|generic|all] [nodebug|debug]" >&2; exit 1 ;;
+  esac
+  echo "==> Building with PlatformIO: ${PIO_ENVS[*]}"
+  pio_args=()
+  for e in "${PIO_ENVS[@]}"; do pio_args+=(-e "$e"); done
+  $PIO run "${pio_args[@]}"
+  for e in "${PIO_ENVS[@]}"; do
+    echo "==> Done: .pio/build/$e/firmware.bin"
+  done
+  exit 0
+fi
 
 EXTRA_ARGS=(--build-property "compiler.cpp.extra_flags=$CPP_FLAGS")
 

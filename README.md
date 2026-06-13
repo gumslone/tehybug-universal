@@ -143,12 +143,22 @@ The flashable binary is placed in `firmware/` as `firmware/tehybug.ino.<variant>
 ### PlatformIO
 
 [`platformio.ini`](platformio.ini) mirrors the same board options, flags and
-vendored libraries, so the project also builds with [PlatformIO](https://platformio.org/):
+vendored libraries, so the project also builds with [PlatformIO](https://platformio.org/).
+Either drive it directly:
 
 ```bash
 pio run -e esp8285        # universal board (recommended)
 pio run -e generic        # mini TeHyBug / 1 MB
 pio run -e esp8285_debug  # with serial debug output
+```
+
+…or pick the backend from `build.sh` with the `TOOL` env var (same variant /
+mode arguments, so one command line works for both tools):
+
+```bash
+./build.sh esp8285                    # arduino-cli (default)
+TOOL=platformio ./build.sh esp8285    # same build via PlatformIO
+TOOL=platformio ./build.sh all debug  # esp8285_debug + generic_debug
 ```
 
 The sketch stays at the repo root (so the arduino-cli build is unchanged);
