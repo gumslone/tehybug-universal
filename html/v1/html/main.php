@@ -114,10 +114,17 @@
 
                     <!-- Maintenance -->
                     <li class="nav-item">
-                        <a class="nav-link" href="javascript:void(0);" 
+                        <a class="nav-link" href="javascript:void(0);"
                            onclick="ChangeContentIframe(this, 'update', '#right-content');">
                             <span data-feather="upload"></span>
                             Firmware Update
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="javascript:void(0);"
+                           onclick="ChangeContent(this, 'firmware', '#right-content');">
+                            <span data-feather="download"></span>
+                            Downloads &amp; Changelog
                         </a>
                     </li>
 
@@ -141,7 +148,7 @@
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="https://github.com/gumslone/tehybug/tree/master/tehybug" target="_blank">
+                        <a class="nav-link" href="https://github.com/gumslone/tehybug-universal" target="_blank">
                             <span data-feather="github"></span>
                             GitHub Repository
                             <span data-feather="external-link" style="width: 14px; height: 14px;"></span>
