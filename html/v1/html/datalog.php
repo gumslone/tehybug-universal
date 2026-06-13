@@ -147,7 +147,7 @@
                             <span data-feather="refresh-cw"></span> Refresh
                         </button>
                     </p>
-                    <p class="small text-muted mb-2">One file per day of month is written; the oldest file is recycled when the EEPROM is full.</p>
+                    <p class="small text-muted mb-2">One file per day of month is written (named by day number); its full calendar date is kept in a separate index slot and shown below. The oldest file is recycled when the EEPROM is full.</p>
                     <details class="small text-muted mb-2">
                         <summary>Field code legend (default logging)</summary>
                         <div class="mt-1">
@@ -162,7 +162,7 @@
                     </details>
                     <div class="table-responsive">
                         <table class="table table-sm">
-                            <thead><tr><th>File</th><th>Size</th><th></th></tr></thead>
+                            <thead><tr><th>Date</th><th>File</th><th>Size</th><th></th></tr></thead>
                             <tbody id="datalog_files"></tbody>
                         </table>
                     </div>
@@ -214,12 +214,14 @@
             const rows = $('#datalog_files');
             rows.html('');
             $.each(data.files, function (i, file) {
-                rows.append('<tr><td>Day ' + file.name.replace('.txt', '') + ' (' + file.name + ')</td>' +
+                const date = file.date ? file.date : ('Day ' + file.name.replace('.txt', ''));
+                rows.append('<tr><td>' + date + '</td>' +
+                    '<td class="text-muted">' + file.name + '</td>' +
                     '<td>' + file.size + ' B</td>' +
                     '<td><button type="button" class="btn btn-sm btn-outline-primary" onclick="viewLogFile(\'' + file.name + '\')">View</button></td></tr>');
             });
             if (data.files.length === 0) {
-                rows.append('<tr><td colspan="3">No log files yet.</td></tr>');
+                rows.append('<tr><td colspan="4">No log files yet.</td></tr>');
             }
             feather.replace();
         }).fail(function () {

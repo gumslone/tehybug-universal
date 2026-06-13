@@ -182,6 +182,23 @@ class TeHyBug {
         return;
       }
 
+      // Day files are named only by day of month, so a slot reused in a new
+      // month (e.g. "13.txt" from June 13 to July 13) would otherwise mix
+      // dates. The first time we log on a given date, check the date the slot
+      // currently holds (recorded in the index slot): if it differs, the file
+      // is stale — clear it and record the new date. m_lastLogDate caches this
+      // within a session so the index is not re-read every minute.
+      const uint8_t mday = time.getMonthDay();
+      const String fileName = String(mday) + ".txt";
+      const String today = time.dateString();
+      if (m_lastLogDate != today) {
+        if (eeprom.fileDate(mday) != today) {
+          eeprom.resetDayFile(fileName, mday);
+          eeprom.setFileDate(mday, today);
+        }
+        m_lastLogDate = today;
+      }
+
       // Compact format to fit more entries in the small EEPROM slots: the
       // date is implied by the per-day file name, so only "HH:MM" is stored,
       // and each default value is written as "<value><code>" (e.g.
@@ -210,8 +227,7 @@ class TeHyBug {
       }
       line += "\n";
 
-      const String fileName = String(time.getMonthDay()) + ".txt";
-      if (eeprom.appendLine(fileName, line, time.getMonthDay())) {
+      if (eeprom.appendLine(fileName, line, mday)) {
         m_lastLogStamp = stamp;
         D_print(F("Data log: "));
         D_print(line);
@@ -235,6 +251,7 @@ class TeHyBug {
     UUID m_uuid;
     bool m_sensorDataGarbageCollect{false};
     String m_lastLogStamp;
+    String m_lastLogDate;
     void setDeviceKey(String key) {
       device.key = key;
       sensorData["key"] = key;
