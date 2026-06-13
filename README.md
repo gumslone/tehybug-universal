@@ -33,8 +33,9 @@ This firmware is compatible with tehybug universal boards (without display) like
 
 To return back to Config mode from the Live mode (or Offline mode):
 1. hit the RESET button
-2. after that push and hold the MODE button untill the LED turns blue
-3. release the MODE button.
+2. in Offline / deep-sleep modes the LED glows white for a few seconds after reset — this is the window to press the MODE button
+3. push and hold the MODE button untill the LED turns blue
+4. release the MODE button.
 
 ## Offline data logging (RTC + EEPROM)
 

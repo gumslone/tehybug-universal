@@ -92,10 +92,41 @@ void turnLedOn() {
   }
 }
 
+// How long to wait for a MODE-button press after a manual reset when the
+// device is configured to sleep/go-offline right after setup. Without this
+// window the button is sampled for a single instant, so the user has to race
+// the boot to catch it before the device deep-sleeps.
+constexpr unsigned long BUTTON_WAKE_WINDOW_MS = 3000;
+
+// True when this boot is an automatic wake from deep sleep, as opposed to a
+// power-on or a manual press of the RESET button.
+bool wokeFromDeepSleep() {
+  return ESP.getResetInfoPtr()->reason == REASON_DEEP_SLEEP_AWAKE;
+}
+
 // Short press toggles config mode, holding for 20 seconds factory-resets.
+//
+// In offline / deep-sleep modes the device sleeps immediately after setup, so
+// a missed press means waiting for the next wake. After a manual reset (not an
+// automatic deep-sleep wake) the MODE button is therefore polled for a few
+// seconds with the LED lit white as a "press now" cue, instead of being
+// sampled only once.
 void checkModeButton() {
-  delay(100);
   pinMode(BUTTON_PIN, INPUT_PULLUP);
+  delay(100);
+
+  const bool sleepsAfterSetup =
+    tehybug.device.offlineMode || tehybug.device.sleepMode;
+  if (sleepsAfterSetup && !wokeFromDeepSleep() &&
+      digitalRead(BUTTON_PIN) == HIGH) {
+    tehybug.pixel.on(255, 255, 255); // white: window to press MODE is open
+    const unsigned long start = millis();
+    while (digitalRead(BUTTON_PIN) == HIGH &&
+           (millis() - start) < BUTTON_WAKE_WINDOW_MS) {
+      delay(10);
+    }
+    tehybug.pixel.off();
+  }
 
   if (digitalRead(BUTTON_PIN) == LOW) {
     const unsigned long pressed = millis();
