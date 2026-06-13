@@ -12,7 +12,9 @@
         <p class="mb-0">When a DS3231 RTC + EEPROM module is attached, the device can store
         timestamped readings locally, with no server or network involved. Entries are written
         to one file per day of month; the oldest day file is recycled once the EEPROM is full.
-        Set the device clock once (below) so timestamps are meaningful.</p>
+        Set the device clock once (below) so timestamps are meaningful. To save space each line
+        stores only the time of day (the date is the file name) and tags each value with a short
+        code &mdash; e.g. <code>07:55 22.6t 48.3h 1013.2p</code>.</p>
     </div>
 </div>
 
@@ -79,6 +81,53 @@
     </div>
 </div>
 
+<!-- Storage capacity & limits -->
+<div class="row">
+    <div class="col-md-12 mb-4">
+        <div class="card border-warning">
+            <div class="card-header bg-warning text-dark">
+                <h4 class="mb-0"><span data-feather="hard-drive"></span> Storage capacity &amp; limits</h4>
+            </div>
+            <div class="card-body">
+                <p>The log lives on the small I&#178;C EEPROM of the RTC module, which is divided
+                into <strong>8 fixed slots &mdash; one file per day of month</strong>. Each slot
+                holds roughly <strong>1&nbsp;KB (about 1006 bytes on the standard module</strong>,
+                the exact size depends on the EEPROM chip).</p>
+                <ul class="small">
+                    <li><strong>At most 8 days are kept.</strong> When a 9th day starts, the oldest day file is recycled (erased) to make room.</li>
+                    <li><strong>A day file that fills up stops accepting entries</strong> for the rest of that day; logging resumes in the next day's file. Pick a frequency so a full day fits.</li>
+                    <li><strong>Fewer fields &amp; a longer frequency = more coverage.</strong> Use the <em>Logged Fields</em> template above to store only what you need.</li>
+                </ul>
+                <p class="small mb-2">Rough capacity per ~1&nbsp;KB day file with the compact format:</p>
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Logged fields</th>
+                                <th>~Bytes per entry</th>
+                                <th>Entries per day file</th>
+                                <th>Frequency to cover a full 24&nbsp;h</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>1 (e.g. <code>%temp%</code>)</td><td>~13</td><td>~77</td><td>~20&nbsp;min (1200&nbsp;s)</td></tr>
+                            <tr><td>2 (e.g. <code>%temp% %humi%</code>)</td><td>~19</td><td>~52</td><td>~28&nbsp;min (1680&nbsp;s)</td></tr>
+                            <tr><td>3 (default-style)</td><td>~25</td><td>~40</td><td>~36&nbsp;min (2160&nbsp;s)</td></tr>
+                            <tr><td>4</td><td>~31</td><td>~32</td><td>~45&nbsp;min (2700&nbsp;s)</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="alert alert-info small mb-0">
+                    <strong><span data-feather="info"></span> Example:</strong> logging temperature + humidity
+                    every 30&nbsp;minutes stores ~48 readings per day &mdash; just under one day file, so the
+                    last 8 days stay available. Logging every minute fills a day file in well under an hour,
+                    after which the rest of that day is not recorded.
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <?php require __DIR__ . '/inc/save_modal.php'; ?>
 
 <!-- Stored data reader -->
@@ -99,6 +148,18 @@
                         </button>
                     </p>
                     <p class="small text-muted mb-2">One file per day of month is written; the oldest file is recycled when the EEPROM is full.</p>
+                    <details class="small text-muted mb-2">
+                        <summary>Field code legend (default logging)</summary>
+                        <div class="mt-1">
+                            <code>t</code> temperature &middot; <code>t2</code> temperature 2 &middot;
+                            <code>h</code> humidity &middot; <code>h2</code> humidity 2 &middot;
+                            <code>p</code> pressure (hPa) &middot; <code>al</code> altitude (m) &middot;
+                            <code>l</code> light (lux) &middot; <code>x</code> ADC &middot;
+                            <code>q</code> IAQ &middot; <code>c</code> eCO&#8322; &middot;
+                            <code>v</code> bVOC &middot; <code>a</code> gas resistance (kOhm)
+                        </div>
+                        <div class="mt-1">A custom logging template stores your own text instead.</div>
+                    </details>
                     <div class="table-responsive">
                         <table class="table table-sm">
                             <thead><tr><th>File</th><th>Size</th><th></th></tr></thead>

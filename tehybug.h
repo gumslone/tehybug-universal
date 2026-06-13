@@ -182,24 +182,29 @@ class TeHyBug {
         return;
       }
 
-      // a custom placeholder template (e.g. "%temp% %humi%") logs only the
-      // chosen fields; an empty template falls back to the default set of
-      // measured values (derived ones can be recalculated)
-      String line = stamp + " ";
+      // Compact format to fit more entries in the small EEPROM slots: the
+      // date is implied by the per-day file name, so only "HH:MM" is stored,
+      // and each default value is written as "<value><code>" (e.g.
+      // "22.6t 48.3h 1013.2p") reusing the same one-letter field codes as
+      // the cloud GET URL. A custom placeholder template (e.g. "%temp%
+      // %humi%") instead logs exactly what the user wrote.
+      String line = time.timeOfDay() + " ";
       if (serveData.eeprom.message.length() > 0) {
         line += replacePlaceholders(serveData.eeprom.message);
       } else {
-        static const char *loggedKeys[] = {"temp", "humi", "temp2", "humi2",
-                                           "qfe", "alt", "lux", "adc",
-                                           "iaq", "eco2", "bvoc", "air"};
+        static const struct { const char *key; const char *code; } loggedFields[] = {
+          {"temp", "t"},  {"humi", "h"},  {"temp2", "t2"}, {"humi2", "h2"},
+          {"qfe", "p"},   {"alt", "al"},  {"lux", "l"},    {"adc", "x"},
+          {"iaq", "q"},   {"eco2", "c"},  {"bvoc", "v"},   {"air", "a"}
+        };
         bool first = true;
-        for (const char *key : loggedKeys) {
-          if (sensorData.containsKey(key)) {
+        for (const auto & f : loggedFields) {
+          if (sensorData.containsKey(f.key)) {
             if (!first) {
               line += " ";
             }
             first = false;
-            line += String(key) + "=" + sensorData[key].as<String>();
+            line += sensorData[f.key].as<String>() + f.code;
           }
         }
       }
