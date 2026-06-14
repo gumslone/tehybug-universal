@@ -44,16 +44,22 @@ jobs:
           name: firmware
           path: firmware/tehybug.ino.*.bin
 
-      - name: Commit updated binaries
+      # Prepend a release section to CHANGELOG.md from the commits since the
+      # last tag, and write release-notes.md for the release body.
+      - name: Update changelog
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: ./ci/changelog.sh "${{ steps.version.outputs.tag }}"
+
+      - name: Commit updated binaries and changelog
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add firmware/tehybug.ino.esp8285.bin firmware/tehybug.ino.esp8285_debug.bin firmware/tehybug.ino.generic.bin
+          git add firmware/tehybug.ino.esp8285.bin firmware/tehybug.ino.esp8285_debug.bin firmware/tehybug.ino.generic.bin CHANGELOG.md
           if git diff --cached --quiet; then
-            echo "Binaries unchanged, nothing to commit."
+            echo "Nothing to commit."
           else
-            git commit -m "Build firmware binaries [skip ci]"
+            git commit -m "Build firmware binaries + changelog [skip ci]"
             git push
           fi
 
@@ -67,7 +73,7 @@ jobs:
           git push origin "$TAG"
           gh release create "$TAG" \
             --title "TeHyBug firmware $TAG" \
-            --notes "Automated build of $(git rev-parse --short HEAD)." \
+            --notes-file release-notes.md \
             firmware/tehybug.ino.esp8285.bin \
             firmware/tehybug.ino.esp8285_debug.bin \
             firmware/tehybug.ino.generic.bin
