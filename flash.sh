@@ -22,8 +22,9 @@ set -euo pipefail
 #   ./flash.sh -p /dev/cu.usbserial-110 -b 460800
 #   ./flash.sh -f firmware/tehybug.ino.esp8285_debug.bin
 #
-# Requires: esptool (esptool.py / esptool / `python3 -m esptool`).
-#   Install with:  pip3 install esptool
+# esptool: a pure-python esptool + pyserial are bundled in tools/vendor, so no
+# install is needed — only python3 on PATH. A system esptool (4.x/5.x) is used
+# instead if one is found.
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
@@ -59,15 +60,25 @@ case "$FLASH_MODE" in
   *) echo "Error: flash mode must be dio, qio or dout" >&2; exit 1 ;;
 esac
 
-# Resolve the esptool entry point (mirrors build.sh's pio fallback style).
-if command -v esptool.py >/dev/null 2>&1; then
-  ESPTOOL=(esptool.py)
-elif command -v esptool >/dev/null 2>&1; then
+# Resolve a *working* esptool. Prefer the bundled pure-python esptool in
+# tools/vendor (no install needed); else fall back to a system esptool. Test by
+# actually running it ("version"), not just `command -v`: a broken shebang
+# (e.g. a stale pip esptool.py pointing at a removed python) passes a presence
+# check but fails to execute.
+VENDOR="$SCRIPT_DIR/tools/vendor"
+if [ -f "$VENDOR/esptool.py" ] && command -v python3 >/dev/null 2>&1 \
+   && PYTHONPATH="$VENDOR" python3 "$VENDOR/esptool.py" version >/dev/null 2>&1; then
+  ESPTOOL=(env "PYTHONPATH=$VENDOR" python3 "$VENDOR/esptool.py")
+elif esptool version >/dev/null 2>&1; then
   ESPTOOL=(esptool)
+elif esptool.py version >/dev/null 2>&1; then
+  ESPTOOL=(esptool.py)
 elif python3 -m esptool version >/dev/null 2>&1; then
   ESPTOOL=(python3 -m esptool)
 else
-  echo "Error: esptool not found. Install it with: pip3 install esptool" >&2
+  echo "Error: a working esptool was not found." >&2
+  echo "The bundled esptool (tools/vendor) needs python3 on PATH;" >&2
+  echo "or install one:  brew install esptool   (or: pipx install esptool)" >&2
   exit 1
 fi
 
@@ -91,12 +102,14 @@ fi
 echo "==> Flashing $FIRMWARE"
 echo "    port=$PORT baud=$BAUD mode=$FLASH_MODE erase=$([ "$ERASE" = 1 ] && echo yes || echo no)"
 
-WRITE_ARGS=(--flash_mode "$FLASH_MODE" --flash_size detect)
-[ "$ERASE" = 1 ] && WRITE_ARGS+=(--erase-all)
+# Short flags (-fm/-fs/-e) and the write_flash subcommand work on both esptool
+# 4.x and 5.x. --after is omitted on purpose: its default is a hard reset in
+# both versions (the long value spelling differs: hard_reset vs hard-reset), so
+# the device still reboots straight into the freshly flashed firmware.
+WRITE_ARGS=(-fm "$FLASH_MODE" -fs detect)
+[ "$ERASE" = 1 ] && WRITE_ARGS+=(-e)
 
-# --after hard_reset reboots straight into the freshly flashed firmware
-# (PyFlasher uses no_reset and asks you to replug; hard_reset is friendlier).
-"${ESPTOOL[@]}" --port "$PORT" --baud "$BAUD" --after hard_reset \
+"${ESPTOOL[@]}" --port "$PORT" --baud "$BAUD" \
   write_flash "${WRITE_ARGS[@]}" 0x0 "$FIRMWARE"
 
 echo "==> Done. The device has been reset into the new firmware."
