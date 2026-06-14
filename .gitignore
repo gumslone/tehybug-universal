@@ -7,3 +7,6 @@ tests/build/
 
 # PlatformIO build output
 .pio/
+
+# CI-generated release notes (from ci/changelog.sh)
+release-notes.md
