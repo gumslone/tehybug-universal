@@ -5,6 +5,10 @@ build on every release (see [`ci/changelog.sh`](ci/changelog.sh)). Firmware
 versions are date-based (`YYMMDDHHMM`); see the
 [releases](https://github.com/gumslone/tehybug-universal/releases) for the tags.
 
+## v2606141708 (2026-06-14)
+
+- Maintenance and build updates
+
 ## v2606140640 (2026-06-14)
 
 - Maintenance and build updates
