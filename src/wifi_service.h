@@ -53,10 +53,19 @@ void setupWifi() {
   wifiManager.setDebugOutput(true);
   // Set config save notify callback
   wifiManager.setSaveConfigCallback(saveConfigCallback);
-  wifiManager.setMinimumSignalQuality();
+  // Show every scanned network in the portal. Calling this with no argument
+  // defaults to 8 (%), which silently filters weak APs out of the list; -1
+  // disables the filter so nothing the radio can see is hidden.
+  wifiManager.setMinimumSignalQuality(-1);
   wifiManager.setAPCallback(configModeCallback);
   // Config menu timeout 180 seconds.
   wifiManager.setConfigPortalTimeout(180);
+  // Don't bail in <4s: give each association up to 20s and retry a few times.
+  // The ESP often drops the first association attempt (reason 2 / AUTH_EXPIRE)
+  // and only succeeds on a retry; without this WiFiManager gives up far too
+  // fast and falls into the config portal even for a good, saved network.
+  wifiManager.setConnectTimeout(20);
+  wifiManager.setConnectRetries(3);
   WiFi.hostname(wifiSsid);
   // set custom ip for portal
   wifiManager.setAPStaticIPConfig(apIP, apIP, IPAddress(255, 255, 255, 0));
@@ -66,6 +75,14 @@ void setupWifi() {
   wifiManager.setShowInfoErase(false);
   wifiManager.setMenu(wm_menu);
   wifiManager.setCustomHeadElement("<style>button {background-color: #1FA67A;}</style>");
+
+  // Give the WiFi/SDK background tasks a slice and report the heap we are
+  // entering the scan/portal with — the scan-results page is built in RAM, so
+  // connecting/scanning is most reliable with the heap as free as possible.
+  D_print(F("Free heap before WiFi: "));
+  D_println(ESP.getFreeHeap());
+  yield();
+
   if (!wifiManager.autoConnect(wifiSsid, wifiPassword)) {
     Serial.println(F("Setup: Wifi failed to connect and hit timeout"));
     tehybug.device.configMode = false;
@@ -74,6 +91,7 @@ void setupWifi() {
     startSleep(9000);
     delay(5000);
   }
+  yield();
   D_println(F("Wifi successfully connected!"));
   tehybug.conf.saveConfig();
 }

@@ -16,7 +16,11 @@
 #include <ESP8266mDNS.h>
 #include <FS.h>
 
-#include <PubSubClient.h> // Attention in the lib the #define MQTT_MAX_PACKET_SIZE must be increased to 4000!
+// PubSubClient mallocs MQTT_MAX_PACKET_SIZE at construction (boot, before WiFi).
+// Its default is left small in the lib so config / offline mode don't waste heap
+// on a buffer MQTT never uses; setup() calls mqttClient.setBufferSize(4000) to
+// grow it only when MQTT/HA is actually active.
+#include <PubSubClient.h>
 #include <TickerScheduler.h>
 #include <WebSocketsServer.h>
 
@@ -235,7 +239,14 @@ void setup() {
     setupSensors();
     return;
   }
-  WiFi.mode(WIFI_AP_STA);
+
+  // Let WiFiManager manage the radio mode: it connects in STA and only brings
+  // up AP_STA for the config portal. Forcing WIFI_AP_STA here pins the single
+  // radio to the soft-AP channel, so connecting to a router on another channel
+  // fails with "no <SSID> found". setupNetwork() brings the AP up afterwards.
+  // Sensors, SSL buffers and MQTT are intentionally set up only *after* the
+  // WiFi connect/portal below, to keep the heap free for the scan/portal page.
+  yield();
   setupWifi();
   D_println(wifiSsid);
   // call after wifi setup
