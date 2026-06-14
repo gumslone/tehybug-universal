@@ -4,6 +4,7 @@
 //
 // Build & run:  tests/run.sh   (or see the g++ line there)
 #include "test_framework.h"
+#include <cstring>  // std::strstr
 
 // eeprom.h only forward-declares RtcTime and never calls it; a stub type is
 // enough to satisfy the reference the constructor takes.
@@ -111,16 +112,26 @@ static void test_read_nonexistent() {
   CHECK_EQ_STR(fs.fileDate(9).c_str(), ""); // no index yet
 }
 
-static void test_slot_full_truncates() {
-  CASE("a full slot keeps what fits");
+static void test_slot_full_wraps() {
+  CASE("a full day file wraps to the start");
   TeHyBugEeprom fs = freshFs();
-  // a line far larger than one ~1 KB slot is truncated, not rejected
-  String big;
-  for (int i = 0; i < 5000; i++) big += 'x';
-  CHECK(fs.appendLine("9.txt", big, 9));
-  const unsigned int len = fs.read("9.txt").length();
-  CHECK(len > 900);  // most of the slot is usable
-  CHECK(len < 1100); // but capped at the slot size, not 5000
+  // Fill the ~1 KB slot with many small lines. Once full, appending must keep
+  // succeeding by wrapping: the file is cleared and the new line written at the
+  // top, so the stored size drops back down instead of logging stopping.
+  bool wrapped = false;
+  unsigned int prevLen = 0;
+  for (int i = 0; i < 300; i++) {
+    char line[24];
+    std::snprintf(line, sizeof(line), "L%03d 22.6t\n", i);
+    CHECK(fs.appendLine("9.txt", line, 9)); // never rejected
+    const unsigned int len = fs.read("9.txt").length();
+    if (len < prevLen) wrapped = true;      // size shrank => wrapped to start
+    prevLen = len;
+  }
+  CHECK(wrapped);                            // it wrapped at least once
+  CHECK(fs.read("9.txt").length() < 1100);   // still within one slot
+  // the most recent line survived the wrap
+  CHECK(std::strstr(fs.read("9.txt").c_str(), "L299") != nullptr);
 }
 
 static void test_recycle_picks_oldest_by_wrap() {
@@ -151,7 +162,7 @@ int main() {
   test_month_rollover();
   test_recycle_preserves_index();
   test_read_nonexistent();
-  test_slot_full_truncates();
+  test_slot_full_wraps();
   test_recycle_picks_oldest_by_wrap();
   return SUMMARY();
 }

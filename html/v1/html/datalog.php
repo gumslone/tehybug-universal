@@ -98,7 +98,7 @@
                 month of daily files fits.</p>
                 <ul class="small">
                     <li><strong>Up to a full month is kept</strong> (one file per day of month). When all slots are in use and a new day starts, the oldest day file is recycled (erased) to make room.</li>
-                    <li><strong>A day file that fills up stops accepting entries</strong> for the rest of that day; logging resumes in the next day's file. Pick a frequency so a full day fits.</li>
+                    <li><strong>A day file that fills up wraps to the start</strong> &mdash; it clears and logs again from the top, overwriting that day's earlier entries, so logging never stops (you keep the most recent readings). Pick a frequency so a full day fits to avoid overwriting.</li>
                     <li><strong>Fewer fields &amp; a longer frequency = more coverage.</strong> Use the <em>Logged Fields</em> template above to store only what you need.</li>
                 </ul>
                 <p class="small mb-2">Rough capacity per ~1&nbsp;KB day file with the compact format:</p>
@@ -124,7 +124,7 @@
                     <strong><span data-feather="info"></span> Example:</strong> logging temperature + humidity
                     every 30&nbsp;minutes stores ~48 readings per day &mdash; about one day file, so a full
                     month of days stays available. Logging every minute fills a day file in well under an
-                    hour, after which the rest of that day is not recorded.
+                    hour, after which it wraps and starts overwriting that day's earlier entries.
                 </div>
             </div>
         </div>

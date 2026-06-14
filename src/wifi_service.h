@@ -76,6 +76,11 @@ void setupWifi() {
   wifiManager.setMenu(wm_menu);
   wifiManager.setCustomHeadElement("<style>button {background-color: #1FA67A;}</style>");
 
+  // Only open the blocking AP config portal when config mode is requested
+  // (MODE button / first start). In serving mode a failed connect should
+  // deep-sleep and retry on wake, not park in the portal draining the battery.
+  wifiManager.setEnableConfigPortal(tehybug.device.configMode);
+
   // Give the WiFi/SDK background tasks a slice and report the heap we are
   // entering the scan/portal with — the scan-results page is built in RAM, so
   // connecting/scanning is most reliable with the heap as free as possible.
@@ -84,12 +89,18 @@ void setupWifi() {
   yield();
 
   if (!wifiManager.autoConnect(wifiSsid, wifiPassword)) {
-    Serial.println(F("Setup: Wifi failed to connect and hit timeout"));
+    Serial.println(F("Setup: Wifi failed to connect"));
+    // Serving mode: the 3 connect attempts are done and the portal is disabled,
+    // so deep-sleep and retry the connection on the next wake (rides out a
+    // temporary AP/router outage). The device reboots into setup() on wake.
+    // In config mode the portal was shown instead, so just fall through.
+    if (!tehybug.device.configMode) {
+      D_println(F("Deep sleep 5 min, will retry WiFi on wake"));
+      tehybug.pixel.off();
+      startDeepSleep(5 * 60);  // 5 minutes
+      delay(100);
+    }
     tehybug.device.configMode = false;
-    delay(3000);
-    // Sleep and retry on the next wakeup
-    startSleep(9000);
-    delay(5000);
   }
   yield();
   D_println(F("Wifi successfully connected!"));

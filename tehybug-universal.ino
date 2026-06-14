@@ -49,8 +49,11 @@ const char *wifiPassword = "TeHyBug123";
 
 WiFiClient espClient;
 #if !defined(ARDUINO_ESP8266_GENERIC)
-// https data push; left out of the 1MB mini build to keep OTA possible
-BearSSL::WiFiClientSecure espClient_ssl;
+// https data push; left out of the 1MB mini build to keep OTA possible.
+// Lazily created on first HTTPS use (see getClient) so the multi-KB BearSSL
+// context isn't allocated at boot — it stays off the heap in config / offline /
+// MQTT / http-only operation, leaving more free heap for the WiFi connect.
+BearSSL::WiFiClientSecure *espClient_ssl = nullptr;
 #endif
 HTTPClient httpClient;
 
@@ -252,11 +255,8 @@ void setup() {
   // call after wifi setup
   setupNetwork();
 
-#if !defined(ARDUINO_ESP8266_GENERIC)
-  // reduce buffer size and ignore certificate verification
-  espClient_ssl.setBufferSizes(256, 256);
-  espClient_ssl.setInsecure();
-#endif
+  // The TLS client (espClient_ssl) is set up lazily on first HTTPS push in
+  // getClient(), not here, to keep its buffers off the heap until needed.
 
   // force config when no data serving mode is selected
   if (tehybug.conf.firstStart() || !tehybug.anyServeModeActive()) {
