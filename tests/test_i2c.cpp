@@ -9,11 +9,12 @@ int main() {
   // simulate an RTC + EEPROM module plus a BME680
   Wire.wipe();
   Wire.setPresent({0x50, 0x68, 0x77});
-  i2cScanner::scan();
-  CHECK(i2cScanner::addressExists("0x50")); // EEPROM
-  CHECK(i2cScanner::addressExists("0x68")); // DS3231 RTC
-  CHECK(i2cScanner::addressExists("0x77")); // BME680
-  CHECK(!i2cScanner::addressExists("0x4a")); // MAX44009 absent
-  CHECK(!i2cScanner::addressExists("0x38")); // AHT20 absent
+  i2cScanner::Scanner scanner;
+  scanner.scan();
+  CHECK(scanner.addressExists("0x50")); // EEPROM
+  CHECK(scanner.addressExists("0x68")); // DS3231 RTC
+  CHECK(scanner.addressExists("0x77")); // BME680
+  CHECK(!scanner.addressExists("0x4a")); // MAX44009 absent
+  CHECK(!scanner.addressExists("0x38")); // AHT20 absent
   return SUMMARY();
 }

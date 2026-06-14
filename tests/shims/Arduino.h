@@ -53,6 +53,7 @@ class String {
   unsigned int length() const { return (unsigned int)m_s.size(); }
   const char *c_str() const { return m_s.c_str(); }
   void reserve(unsigned int n) { m_s.reserve(n); }
+  void clear() { m_s.clear(); }
   char operator[](int i) const { return m_s[(size_t)i]; }
 
   int indexOf(char c, int from = 0) const {

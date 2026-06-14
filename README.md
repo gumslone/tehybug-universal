@@ -36,7 +36,7 @@ To return back to Config mode from the Live mode (or Offline mode):
 2. right after the device boots, push and hold the MODE button untill the LED turns blue
 3. release the MODE button.
 
-In Offline mode you have a few seconds after boot to press MODE; in the other modes press it as the device boots.
+In Offline mode you have a 1-second window right after each boot to press MODE; in the other modes press it as the device boots.
 
 ## Offline data logging (RTC + EEPROM)
 
@@ -89,8 +89,23 @@ The prebuilt binaries in [`firmware/`](firmware/) are rebuilt automatically on e
 ## How to program/flash the board (advanced users only)
 To flash firmware use the `firmware/tehybug.ino.esp8285.bin` file.
 For flashing and programming you can use ARDUINO IDE, select there generic ESP8285 board.
-Also you can use the [ESPTool](https://github.com/espressif/esptool) to flash binaries to the board or other tools which are described at: https://nodemcu.readthedocs.io/en/latest/flash/
+Also you can use the [ESPTool](https://github.com/espressif/esptool) to flash binaries to the board or other tools (e.g. [NodeMCU PyFlasher](https://github.com/marcelstoer/nodemcu-pyflasher)) which are described at: https://nodemcu.readthedocs.io/en/latest/flash/
 
+### Using `flash.sh` (esptool wrapper)
+[`flash.sh`](flash.sh) wraps esptool with the same options as NodeMCU PyFlasher
+(port, firmware, baud, flash mode, erase). It auto-detects the USB-serial port
+and defaults to the ESP8285 build:
+
+```sh
+pip3 install esptool          # one-time
+./flash.sh                    # flash firmware/tehybug.ino.esp8285.bin to the auto-found port
+./flash.sh -e                 # erase all flash first ("yes, wipes all data")
+./flash.sh -p /dev/cu.usbserial-110 -b 460800
+./flash.sh -l                 # list detected serial ports
+./flash.sh -h                 # all options
+```
+
+### Using esptool directly
 Replace /dev/cu.usbserial-1410 with your usb2serial port.
 
 ```esptool.py --port=/dev/cu.usbserial-1410  write_flash 0x00000 desired_tehybug_firmware.bin```
@@ -118,11 +133,13 @@ Demo web configuration page: https://tehybug.com/tehybug/v1/html/demo.html
 - Follow the instructions on the configuration page.
 
 ## Factory reset
-To delete the all the configs and reset wifi configuration.
+To delete all the configs, reset the wifi configuration and erase the on-device data log (the RTC + EEPROM module, if attached).
 
 1. hit the RESET button
-2. after that push and hold the MODE button for 20 seconnds untill the LED turns red
+2. after that push and hold the MODE button for 20 seconds untill the LED turns red
 3. release the MODE button.
+
+The EEPROM data log is wiped only after the MODE button is released (it shares the I²C line with the button).
 
 ## Repository layout
 
@@ -133,6 +150,7 @@ To delete the all the configs and reset wifi configuration.
 - [`html/`](html/) — the PHP/JS/CSS configuration web UI (hosted at tehybug.com)
 - [`tests/`](tests/) — native host tests + clang-tidy static analysis
 - [`build.sh`](build.sh) / [`platformio.ini`](platformio.ini) — the two build paths
+- [`flash.sh`](flash.sh) — esptool wrapper to flash a built binary over serial
 
 ## Building from source
 

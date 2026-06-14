@@ -24,6 +24,7 @@ class TeHyBugEeprom {
     String fileDate(uint8_t) { return String(); }
     void setFileDate(uint8_t, const String &) {}
     bool resetDayFile(const String &, uint8_t) { return false; }
+    void format() {}
 };
 #else
 #include <EepromFS.h>
@@ -61,6 +62,14 @@ class TeHyBugEeprom{
 
   bool mounted() {
     return m_mounted;
+  }
+
+  // Erase all logged data by re-creating the filesystem (used by factory
+  // reset). Re-mounts afterwards so logging can resume without a reboot.
+  void format() {
+    D_println("Formatting EEPROM data log...");
+    m_efs.format(SLOTS);
+    m_mounted = m_efs.begin() > 0;
   }
 
   void readdir() {

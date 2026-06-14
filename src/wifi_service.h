@@ -49,6 +49,7 @@ void saveConfigCallback() {
 
 void setupWifi() {
   D_println("Setup WIFI");
+
   wifiManager.setDebugOutput(true);
   // Set config save notify callback
   wifiManager.setSaveConfigCallback(saveConfigCallback);
@@ -130,8 +131,7 @@ void firstStart()
   // test mode for first start
   if(SPIFFS.begin() && !tehybug.conf.configExists())
   {
-    findI2Csensors();
-    if(i2cScanner::devicesFound > 0)
+    if (findI2Csensors() > 0)
     {
       // show green color when sensors are found on first start
       // required for testing the mini board after flashing
