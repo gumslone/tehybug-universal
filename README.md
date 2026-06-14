@@ -36,7 +36,7 @@ To return back to Config mode from the Live mode (or Offline mode):
 2. right after the device boots, push and hold the MODE button untill the LED turns blue
 3. release the MODE button.
 
-In Offline mode you have a few seconds after boot to press MODE; in the other modes press it as the device boots.
+In Offline mode you have a 1-second window right after each boot to press MODE; in the other modes press it as the device boots.
 
 ## Offline data logging (RTC + EEPROM)
 
@@ -45,7 +45,7 @@ With a DS3231 RTC + I²C EEPROM module attached, TeHyBug can store timestamped r
 - **One file per day, a full month retained.** A file per day of month is written. The 32 KB EEPROM (FT24C256A) is split into 32 slots of ~1 KB each, so every day of the month gets its own file; when no free slot is left the oldest day file is recycled.
 - **Pick what to log.** Store the default measured set, or a custom placeholder template (e.g. `%temp% %humi%`) to keep only the fields you care about.
 - **Compact format.** To fit more into the small slots (~1 KB each) the date is omitted — it is implied by the file name — and each value is tagged with a short code, e.g. `07:55 22.6t 48.3h 1013.2p`. This roughly doubles the entries per day file versus a verbose `key=value` line.
-- **Own log interval.** The log frequency is independent of the data-serving intervals; in offline mode it also sets the deep-sleep interval. A day file holds a limited number of entries, so pick an interval that fits a full day — the Data Log page shows a capacity table and, once a day file is full, the rest of that day is not recorded.
+- **Own log interval.** The log frequency is independent of the data-serving intervals; in offline mode it also sets the deep-sleep interval. A day file holds a limited number of entries, so pick an interval that fits a full day — the Data Log page shows a capacity table. When a day file fills up it wraps: it clears and starts again from the top, overwriting that day's earlier entries (so logging never stops; you keep the most recent readings).
 - **Offline mode.** Enabling offline mode logs with WiFi completely off. The web interface is unavailable while offline; to read the data, press RESET then hold MODE until the LED turns blue to re-enter Config mode.
 
 > Available in the ESP8285 build (TeHyBug universal and Mini) when an RTC + EEPROM module is attached. The slim generic (1MB) build for old / first-generation boards omits the RTC/EEPROM driver entirely.
@@ -89,8 +89,41 @@ The prebuilt binaries in [`firmware/`](firmware/) are rebuilt automatically on e
 ## How to program/flash the board (advanced users only)
 To flash firmware use the `firmware/tehybug.ino.esp8285.bin` file.
 For flashing and programming you can use ARDUINO IDE, select there generic ESP8285 board.
-Also you can use the [ESPTool](https://github.com/espressif/esptool) to flash binaries to the board or other tools which are described at: https://nodemcu.readthedocs.io/en/latest/flash/
+Also you can use the [ESPTool](https://github.com/espressif/esptool) to flash binaries to the board or other tools (e.g. [NodeMCU PyFlasher](https://github.com/marcelstoer/nodemcu-pyflasher)) which are described at: https://nodemcu.readthedocs.io/en/latest/flash/
 
+### Using `flash.sh` (esptool wrapper)
+[`flash.sh`](flash.sh) wraps esptool with the same options as NodeMCU PyFlasher
+(port, firmware, baud, flash mode, erase). It auto-detects the USB-serial port
+and defaults to the ESP8285 build:
+
+A pure-python esptool + pyserial are bundled in [`tools/vendor`](tools/vendor),
+so no install is needed — just `python3`. (A system esptool is used instead if
+one is found.)
+
+```sh
+./flash.sh                    # flash firmware/tehybug.ino.esp8285.bin to the auto-found port
+./flash.sh -e                 # erase all flash first ("yes, wipes all data")
+./flash.sh -p /dev/cu.usbserial-110 -b 460800
+./flash.sh -l                 # list detected serial ports
+./flash.sh -h                 # all options
+```
+
+### GUI: `flashUI.sh`
+Prefer a window? [`flashUI.sh`](flashUI.sh) launches a small Tkinter GUI
+([tools/flashui.py](tools/flashui.py)) that combines the flasher options (port, firmware,
+baud, flash mode, erase) **and a built-in serial monitor** — one window instead
+of separate PyFlasher + CoolTerm, so you never hit the "port busy" clash. After
+a successful flash it auto-opens the monitor to show the boot log.
+
+```sh
+brew install python-tk@3.10   # tkinter, one-time (any python-tk works)
+./flashUI.sh
+```
+
+esptool is bundled (`tools/vendor`), so flashing needs no install. The serial
+monitor reads the port directly via `stty`, so pyserial isn't needed either.
+
+### Using esptool directly
 Replace /dev/cu.usbserial-1410 with your usb2serial port.
 
 ```esptool.py --port=/dev/cu.usbserial-1410  write_flash 0x00000 desired_tehybug_firmware.bin```
@@ -118,11 +151,13 @@ Demo web configuration page: https://tehybug.com/tehybug/v1/html/demo.html
 - Follow the instructions on the configuration page.
 
 ## Factory reset
-To delete the all the configs and reset wifi configuration.
+To delete all the configs, reset the wifi configuration and erase the on-device data log (the RTC + EEPROM module, if attached).
 
 1. hit the RESET button
-2. after that push and hold the MODE button for 20 seconnds untill the LED turns red
+2. after that push and hold the MODE button for 20 seconds untill the LED turns red
 3. release the MODE button.
+
+The EEPROM data log is wiped only after the MODE button is released (it shares the I²C line with the button).
 
 ## Repository layout
 
@@ -133,6 +168,9 @@ To delete the all the configs and reset wifi configuration.
 - [`html/`](html/) — the PHP/JS/CSS configuration web UI (hosted at tehybug.com)
 - [`tests/`](tests/) — native host tests + clang-tidy static analysis
 - [`build.sh`](build.sh) / [`platformio.ini`](platformio.ini) — the two build paths
+- [`flash.sh`](flash.sh) — esptool wrapper to flash a built binary over serial
+- [`flashUI.sh`](flashUI.sh) / [`tools/flashui.py`](tools/flashui.py) — GUI flasher + serial monitor
+- [`tools/vendor/`](tools/vendor) — bundled pure-python esptool + pyserial (so flashing needs no install)
 
 ## Building from source
 

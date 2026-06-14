@@ -30,3 +30,6 @@ versions are date-based (`YYMMDDHHMM`); see the
 - A day file reused in a new month no longer mixes dates.
 - The dashboard sensor table is no longer cleared right after connecting.
 - The offline fallback page now shows the device IP address.
+- Factory reset now also erases the on-device data log (RTC + EEPROM module).
+- Saving the Data Log page no longer drops the device out of config mode.
+- The blue LED now reliably indicates config mode on every boot.

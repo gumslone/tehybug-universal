@@ -53,7 +53,7 @@
                 </div>
                 <p class="small">In offline mode the device never connects to WiFi. It wakes on the log frequency, measures, appends one entry to the EEPROM log and deep-sleeps again &mdash; the lowest possible power draw and no network needed.</p>
                 <div class="alert alert-warning small mb-0">
-                    <strong><span data-feather="alert-triangle"></span> Reading the log:</strong> the web interface is unavailable while offline. To read the stored data, press and release <strong>RESET</strong> (do <strong>not</strong> hold MODE during reset &mdash; that boots the ESP into flash mode), then within a few seconds press and hold <strong>MODE</strong> until the LED turns <strong>blue</strong> to re-enter config mode (WiFi on), and come back to this page.
+                    <strong><span data-feather="alert-triangle"></span> Reading the log:</strong> the web interface is unavailable while offline. To read the stored data, press and release <strong>RESET</strong> (do <strong>not</strong> hold MODE during reset &mdash; that boots the ESP into flash mode), then within about 1 second press and hold <strong>MODE</strong> until the LED turns <strong>blue</strong> to re-enter config mode (WiFi on), and come back to this page.
                 </div>
                 <div id="offline_exclusive" class="alert alert-info small mt-3 mb-0" style="display:none;">
                     <strong><span data-feather="info"></span> Offline mode is exclusive:</strong> saving it switches off every other mode (MQTT, Home Assistant, HTTP GET/POST, deep/light sleep and config mode) and turns EEPROM logging on.
@@ -76,7 +76,10 @@
         <input type="checkbox" class="form-check-input" id="httpPostActive">
         <input type="checkbox" class="form-check-input" id="sleepModeActive">
         <input type="checkbox" class="form-check-input" id="lightSleepModeActive">
-        <input type="checkbox" class="form-check-input" id="configModeActive">
+        <!-- Default checked so a plain save keeps the device in config mode
+             (its normal state while the web UI is reachable); enabling offline
+             mode below unchecks it to drop out of config mode. -->
+        <input type="checkbox" class="form-check-input" id="configModeActive" checked>
         <input type="checkbox" class="form-check-input dont-change" id="reboot" checked>
     </div>
 </div>
@@ -95,7 +98,7 @@
                 month of daily files fits.</p>
                 <ul class="small">
                     <li><strong>Up to a full month is kept</strong> (one file per day of month). When all slots are in use and a new day starts, the oldest day file is recycled (erased) to make room.</li>
-                    <li><strong>A day file that fills up stops accepting entries</strong> for the rest of that day; logging resumes in the next day's file. Pick a frequency so a full day fits.</li>
+                    <li><strong>A day file that fills up wraps to the start</strong> &mdash; it clears and logs again from the top, overwriting that day's earlier entries, so logging never stops (you keep the most recent readings). Pick a frequency so a full day fits to avoid overwriting.</li>
                     <li><strong>Fewer fields &amp; a longer frequency = more coverage.</strong> Use the <em>Logged Fields</em> template above to store only what you need.</li>
                 </ul>
                 <p class="small mb-2">Rough capacity per ~1&nbsp;KB day file with the compact format:</p>
@@ -121,7 +124,7 @@
                     <strong><span data-feather="info"></span> Example:</strong> logging temperature + humidity
                     every 30&nbsp;minutes stores ~48 readings per day &mdash; about one day file, so a full
                     month of days stays available. Logging every minute fills a day file in well under an
-                    hour, after which the rest of that day is not recorded.
+                    hour, after which it wraps and starts overwriting that day's earlier entries.
                 </div>
             </div>
         </div>

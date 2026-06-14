@@ -22,8 +22,11 @@
 #endif
 
 // MQTT_MAX_PACKET_SIZE : Maximum packet size. Override with setBufferSize().
+// Kept at the upstream default (256) so the buffer malloc'd in the constructor
+// at boot stays small; TeHyBug calls setBufferSize(4000) at runtime only when
+// MQTT/HA is active, so config / offline mode don't waste ~4 KB of heap.
 #ifndef MQTT_MAX_PACKET_SIZE
-#define MQTT_MAX_PACKET_SIZE 4000
+#define MQTT_MAX_PACKET_SIZE 256
 #endif
 
 // MQTT_KEEPALIVE : keepAlive interval in Seconds. Override with setKeepAlive()

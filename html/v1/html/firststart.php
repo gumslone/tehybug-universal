@@ -158,7 +158,7 @@
                 <div id="collapseOne" class="accordion-collapse collapse" data-bs-parent="#troubleshootingAccordion">
                     <div class="accordion-body">
                         <ul>
-                            <li>Factory reset: press and release RESET, then hold MODE for ~20 seconds until the LED turns red (do not hold MODE while pressing RESET — see the MODE-button note below)</li>
+                            <li>Factory reset: press and release RESET, then hold MODE for ~20 seconds until the LED turns red (do not hold MODE while pressing RESET — see the MODE-button note below). This also erases the on-device data log.</li>
                             <li>Connect to TeHyBug WiFi network (password: TeHyBug123)</li>
                             <li>Reconfigure WiFi credentials at http://192.168.4.1/</li>
                         </ul>
@@ -284,7 +284,7 @@
                         <ul>
                             <li><strong>Do not hold MODE while pressing RESET.</strong> The MODE button is on GPIO0, so holding it down during reset puts the chip into firmware-flash (UART download) mode and the firmware never starts.</li>
                             <li>Correct order: press and release RESET first, <em>then</em> press the MODE button.</li>
-                            <li>In Offline / deep-sleep modes you have a few seconds after the device boots to press MODE; in other modes press it as the device boots.</li>
+                            <li>In Offline / deep-sleep modes you have a 1-second window right after the device boots to press MODE; in other modes press it as the device boots.</li>
                             <li>If the device seems stuck, just press RESET again (without touching MODE) to boot normally.</li>
                         </ul>
                     </div>

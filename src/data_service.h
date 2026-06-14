@@ -13,7 +13,14 @@ WiFiClient & getClient(const String & url)
 {
 #if !defined(ARDUINO_ESP8266_GENERIC)
   if (url.startsWith("https")) {
-    return espClient_ssl;
+    // Create the BearSSL client on first use and keep it for the session, so
+    // its buffers only cost heap once HTTPS is actually needed.
+    if (!espClient_ssl) {
+      espClient_ssl = new BearSSL::WiFiClientSecure();
+      espClient_ssl->setBufferSizes(256, 256);  // shrink TLS buffers
+      espClient_ssl->setInsecure();             // skip cert verification
+    }
+    return *espClient_ssl;
   }
 #endif
   // the generic (1MB) build has no TLS client: https targets fail with a

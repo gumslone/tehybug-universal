@@ -24,6 +24,7 @@ class TeHyBugEeprom {
     String fileDate(uint8_t) { return String(); }
     void setFileDate(uint8_t, const String &) {}
     bool resetDayFile(const String &, uint8_t) { return false; }
+    void format() {}
 };
 #else
 #include <EepromFS.h>
@@ -63,6 +64,14 @@ class TeHyBugEeprom{
     return m_mounted;
   }
 
+  // Erase all logged data by re-creating the filesystem (used by factory
+  // reset). Re-mounts afterwards so logging can resume without a reboot.
+  void format() {
+    D_println("Formatting EEPROM data log...");
+    m_efs.format(SLOTS);
+    m_mounted = m_efs.begin() > 0;
+  }
+
   void readdir() {
     m_efs.dirp=0;
     while (uint8_t f=m_efs.readdir()) {
@@ -93,7 +102,10 @@ class TeHyBugEeprom{
   }
 
   // appends a line to the day file, dropping the oldest file when the
-  // filesystem is full; returns false when nothing could be written
+  // filesystem is full. When the day file itself fills up it wraps: the file is
+  // cleared and the line is written at the start, so logging keeps going
+  // (overwriting the day's earlier entries) instead of stopping. Returns false
+  // only when nothing could be written at all.
   bool appendLine(const String & name, const String & line, uint8_t currentMday) {
     if (!m_mounted) {
       return false;
@@ -108,16 +120,23 @@ class TeHyBugEeprom{
       D_println("EEPROM append error");
       return false;
     }
-    bool written = false;
+    bool full = false;
     for (size_t i = 0; i < line.length(); i++) {
       if (!m_efs.fputc(line[i], f)) {
-        break; // slot full: keep what fits, the rest of the day is dropped
+        full = true; // slot is full mid-write
+        break;
       }
-      written = true;
     }
     m_efs.fflush(f);
     m_efs.fclose(f);
-    return written;
+
+    if (full) {
+      // Day file full: wrap to the start. Clear it and write this line at the
+      // top (truncating discards the partial write above too).
+      D_println("Day file full, wrapping to start");
+      return writeFile(name.c_str(), line);
+    }
+    return true;
   }
 
   // JSON array of the stored day files, each tagged with its calendar date
@@ -215,18 +234,23 @@ class TeHyBugEeprom{
     return String();
   }
 
-  // overwrite a whole file (fopen "w" truncates to the bytes written)
-  void writeFile(const char *name, const String &content) {
+  // overwrite a whole file (fopen "w" truncates to the bytes written);
+  // returns true when all content was written
+  bool writeFile(const char *name, const String &content) {
     uint8_t f = m_efs.fopen(name, "w");
     if (!f) {
-      return; // the index slot is excluded from recycling, so this is rare
+      return false; // the index slot is excluded from recycling, so this is rare
     }
+    bool ok = true;
     for (size_t i = 0; i < content.length(); i++) {
       if (!m_efs.fputc(content[i], f)) {
+        ok = false;
         break;
       }
     }
+    m_efs.fflush(f);
     m_efs.fclose(f);
+    return ok;
   }
 
   // removes the day file furthest in the past relative to currentMday

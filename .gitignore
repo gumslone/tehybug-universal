@@ -10,3 +10,7 @@ tests/build/
 
 # CI-generated release notes (from ci/changelog.sh)
 release-notes.md
+
+# Python bytecode (e.g. from the bundled tools/vendor esptool)
+__pycache__/
+*.pyc

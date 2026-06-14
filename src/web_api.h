@@ -222,6 +222,25 @@ void handleSetTime() {
 void handleFactoryReset() {
   tehybug.pixel.on(255, 0, 0);
   D_println("Factory reset!");
+#if !defined(ARDUINO_ESP8266_GENERIC)
+  // Wipe the logged data on the external EEPROM too. Factory reset is triggered
+  // by a 20s MODE-button hold, and the button shares GPIO0 with the I2C SDA
+  // line — so wait for it to be released (with a timeout) before driving I2C,
+  // then detect and format the EEPROM (setupSensors() hasn't mounted it yet on
+  // this path).
+  pinMode(BUTTON_PIN, INPUT_PULLUP);
+  const unsigned long releaseStart = millis();
+  while (digitalRead(BUTTON_PIN) == LOW && (millis() - releaseStart) < 5000) {
+    delay(10);
+  }
+  Wire.begin(I2C_SDA, I2C_SCL);
+  i2cScanner::Scanner scanner;
+  scanner.scan();
+  if (scanner.addressExists("0x50")) {
+    tehybug.peripherals.eeprom = true;
+    tehybug.eeprom.format();
+  }
+#endif
   SPIFFS.format();
   wifiManager.resetSettings();
   yield();

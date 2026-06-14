@@ -49,13 +49,23 @@ void saveConfigCallback() {
 
 void setupWifi() {
   D_println("Setup WIFI");
+
   wifiManager.setDebugOutput(true);
   // Set config save notify callback
   wifiManager.setSaveConfigCallback(saveConfigCallback);
-  wifiManager.setMinimumSignalQuality();
+  // Show every scanned network in the portal. Calling this with no argument
+  // defaults to 8 (%), which silently filters weak APs out of the list; -1
+  // disables the filter so nothing the radio can see is hidden.
+  wifiManager.setMinimumSignalQuality(-1);
   wifiManager.setAPCallback(configModeCallback);
   // Config menu timeout 180 seconds.
   wifiManager.setConfigPortalTimeout(180);
+  // Don't bail in <4s: give each association up to 20s and retry a few times.
+  // The ESP often drops the first association attempt (reason 2 / AUTH_EXPIRE)
+  // and only succeeds on a retry; without this WiFiManager gives up far too
+  // fast and falls into the config portal even for a good, saved network.
+  wifiManager.setConnectTimeout(20);
+  wifiManager.setConnectRetries(3);
   WiFi.hostname(wifiSsid);
   // set custom ip for portal
   wifiManager.setAPStaticIPConfig(apIP, apIP, IPAddress(255, 255, 255, 0));
@@ -65,14 +75,34 @@ void setupWifi() {
   wifiManager.setShowInfoErase(false);
   wifiManager.setMenu(wm_menu);
   wifiManager.setCustomHeadElement("<style>button {background-color: #1FA67A;}</style>");
+
+  // Only open the blocking AP config portal when config mode is requested
+  // (MODE button / first start). In serving mode a failed connect should
+  // deep-sleep and retry on wake, not park in the portal draining the battery.
+  wifiManager.setEnableConfigPortal(tehybug.device.configMode);
+
+  // Give the WiFi/SDK background tasks a slice and report the heap we are
+  // entering the scan/portal with — the scan-results page is built in RAM, so
+  // connecting/scanning is most reliable with the heap as free as possible.
+  D_print(F("Free heap before WiFi: "));
+  D_println(ESP.getFreeHeap());
+  yield();
+
   if (!wifiManager.autoConnect(wifiSsid, wifiPassword)) {
-    Serial.println(F("Setup: Wifi failed to connect and hit timeout"));
+    Serial.println(F("Setup: Wifi failed to connect"));
+    // Serving mode: the 3 connect attempts are done and the portal is disabled,
+    // so deep-sleep and retry the connection on the next wake (rides out a
+    // temporary AP/router outage). The device reboots into setup() on wake.
+    // In config mode the portal was shown instead, so just fall through.
+    if (!tehybug.device.configMode) {
+      D_println(F("Deep sleep 5 min, will retry WiFi on wake"));
+      tehybug.pixel.off();
+      startDeepSleep(5 * 60);  // 5 minutes
+      delay(100);
+    }
     tehybug.device.configMode = false;
-    delay(3000);
-    // Sleep and retry on the next wakeup
-    startSleep(9000);
-    delay(5000);
   }
+  yield();
   D_println(F("Wifi successfully connected!"));
   tehybug.conf.saveConfig();
 }
@@ -130,8 +160,7 @@ void firstStart()
   // test mode for first start
   if(SPIFFS.begin() && !tehybug.conf.configExists())
   {
-    findI2Csensors();
-    if(i2cScanner::devicesFound > 0)
+    if (findI2Csensors() > 0)
     {
       // show green color when sensors are found on first start
       // required for testing the mini board after flashing

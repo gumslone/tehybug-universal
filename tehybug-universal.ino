@@ -16,7 +16,11 @@
 #include <ESP8266mDNS.h>
 #include <FS.h>
 
-#include <PubSubClient.h> // Attention in the lib the #define MQTT_MAX_PACKET_SIZE must be increased to 4000!
+// PubSubClient mallocs MQTT_MAX_PACKET_SIZE at construction (boot, before WiFi).
+// Its default is left small in the lib so config / offline mode don't waste heap
+// on a buffer MQTT never uses; setup() calls mqttClient.setBufferSize(4000) to
+// grow it only when MQTT/HA is actually active.
+#include <PubSubClient.h>
 #include <TickerScheduler.h>
 #include <WebSocketsServer.h>
 
@@ -45,8 +49,11 @@ const char *wifiPassword = "TeHyBug123";
 
 WiFiClient espClient;
 #if !defined(ARDUINO_ESP8266_GENERIC)
-// https data push; left out of the 1MB mini build to keep OTA possible
-BearSSL::WiFiClientSecure espClient_ssl;
+// https data push; left out of the 1MB mini build to keep OTA possible.
+// Lazily created on first HTTPS use (see getClient) so the multi-KB BearSSL
+// context isn't allocated at boot — it stays off the heap in config / offline /
+// MQTT / http-only operation, leaving more free heap for the WiFi connect.
+BearSSL::WiFiClientSecure *espClient_ssl = nullptr;
 #endif
 HTTPClient httpClient;
 
@@ -84,7 +91,10 @@ void toggleConfigMode() {
   yield();
 }
 
-void turnLedOn() {
+// Drive the signal LED to match config mode: blue while configuring, off in
+// any serving / sleep mode. Call this after any change to configMode so the
+// LED always reflects the current state.
+void updateConfigLed() {
   if (tehybug.device.configMode) {
     tehybug.pixel.on();
   } else {
@@ -92,31 +102,24 @@ void turnLedOn() {
   }
 }
 
-// How long to wait for a MODE-button press after a manual reset in offline
-// mode. Without this window the button is sampled for a single instant, so
-// the user has to race the boot to catch it before the device deep-sleeps.
-constexpr unsigned long BUTTON_WAKE_WINDOW_MS = 3000;
-
-// True when this boot is an automatic wake from deep sleep, as opposed to a
-// power-on or a manual press of the RESET button.
-bool wokeFromDeepSleep() {
-  return ESP.getResetInfoPtr()->reason == REASON_DEEP_SLEEP_AWAKE;
-}
+// How long to poll the MODE button on each offline-mode boot. Offline mode
+// deep-sleeps right after setup, and the ESP can't tell a manual reset from a
+// timer wake (both report a deep-sleep wake), so on every wake we give a short
+// window to catch a MODE press rather than sampling the pin once.
+constexpr unsigned long BUTTON_WAKE_WINDOW_MS = 1000;
 
 // Short press toggles config mode, holding for 20 seconds factory-resets.
 //
-// Offline mode brings up no WiFi and deep-sleeps right after setup, so the
-// MODE button is the only way back to config mode. After a manual reset (not
-// an automatic deep-sleep wake) the button is polled for a few seconds rather
-// than sampled once. This is limited to offline mode and gives no LED cue:
-// otherwise the indication would trigger on every restart, including
-// live/deep-sleep serving mode, where WiFi is available on each wake anyway.
+// Offline mode brings up no WiFi and deep-sleeps right after setup, so the MODE
+// button is the only way back to config mode. On every offline-mode boot the
+// button is polled for BUTTON_WAKE_WINDOW_MS so a press shortly after a reset is
+// caught. Limited to offline mode, so live / deep-sleep serving boots are
+// unaffected.
 void checkModeButton() {
   pinMode(BUTTON_PIN, INPUT_PULLUP);
   delay(100);
 
-  if (tehybug.device.offlineMode && !wokeFromDeepSleep() &&
-      digitalRead(BUTTON_PIN) == HIGH) {
+  if (tehybug.device.offlineMode && digitalRead(BUTTON_PIN) == HIGH) {
     const unsigned long start = millis();
     while (digitalRead(BUTTON_PIN) == HIGH &&
            (millis() - start) < BUTTON_WAKE_WINDOW_MS) {
@@ -134,7 +137,7 @@ void checkModeButton() {
         {
           toggled = true;
           toggleConfigMode();
-          turnLedOn();
+          updateConfigLed();
         }
         delay(10);
         if((millis() - pressed) >= 20000)
@@ -145,7 +148,7 @@ void checkModeButton() {
     }
   }
 
-  turnLedOn();
+  updateConfigLed();
 }
 
 /* Periodic data serving (non-sleep mode) */
@@ -191,12 +194,12 @@ void setupServeTickers() {
 void detectDataLogModule() {
 #if !defined(ARDUINO_ESP8266_GENERIC)
   Wire.begin(I2C_SDA, I2C_SCL);
-  i2cScanner::scan();
-  i2cScanner::scan();
-  if (i2cScanner::addressExists("0x50")) {
+  i2cScanner::Scanner scanner;
+  scanner.scan();
+  if (scanner.addressExists("0x50")) {
     tehybug.peripherals.eeprom = true;
   }
-  if (i2cScanner::addressExists("0x68")) {
+  if (scanner.addressExists("0x68")) {
     tehybug.peripherals.ds3231 = true;
   }
 #endif
@@ -240,16 +243,20 @@ void setup() {
     return;
   }
 
+  // Let WiFiManager manage the radio mode: it connects in STA and only brings
+  // up AP_STA for the config portal. Forcing WIFI_AP_STA here pins the single
+  // radio to the soft-AP channel, so connecting to a router on another channel
+  // fails with "no <SSID> found". setupNetwork() brings the AP up afterwards.
+  // Sensors, SSL buffers and MQTT are intentionally set up only *after* the
+  // WiFi connect/portal below, to keep the heap free for the scan/portal page.
+  yield();
   setupWifi();
   D_println(wifiSsid);
   // call after wifi setup
   setupNetwork();
 
-#if !defined(ARDUINO_ESP8266_GENERIC)
-  // reduce buffer size and ignore certificate verification
-  espClient_ssl.setBufferSizes(256, 256);
-  espClient_ssl.setInsecure();
-#endif
+  // The TLS client (espClient_ssl) is set up lazily on first HTTPS push in
+  // getClient(), not here, to keep its buffers off the heap until needed.
 
   // force config when no data serving mode is selected
   if (tehybug.conf.firstStart() || !tehybug.anyServeModeActive()) {
@@ -290,6 +297,13 @@ void setup() {
   if (!tehybug.device.configMode && !tehybug.sleepEnabled()) {
     setupServeTickers();
   }
+
+  // Reflect the final config-mode decision on the LED: blue on in config mode,
+  // off otherwise. configMode can be turned on above (firstStart / no serving
+  // mode) after checkModeButton() already set the LED, and the WiFiManager
+  // config-mode callback only fires when the AP portal opens — so set it here
+  // unconditionally to cover a normal boot straight into config mode.
+  updateConfigLed();
 }
 
 void loop() {
@@ -323,14 +337,14 @@ void loop() {
   {
     tehybug.tickerStop = false;
     ticker.disableAll();
-    tehybug.pixel.on();
+    updateConfigLed();
   }
 
   if (tehybug.tickerStart && !tehybug.device.configMode)
   {
     tehybug.tickerStart = false;
     ticker.enableAll();
-    tehybug.pixel.off();
+    updateConfigLed();
   }
   // update ticker for the non-deep-sleep mode
   ticker.update();
