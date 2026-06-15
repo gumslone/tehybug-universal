@@ -92,37 +92,40 @@ To flash firmware use the `firmware/tehybug.ino.esp8285.bin` file.
 For flashing and programming you can use ARDUINO IDE, select there generic ESP8285 board.
 Also you can use the [ESPTool](https://github.com/espressif/esptool) to flash binaries to the board or other tools (e.g. [NodeMCU PyFlasher](https://github.com/marcelstoer/nodemcu-pyflasher)) which are described at: https://nodemcu.readthedocs.io/en/latest/flash/
 
-### Using `flash.sh` (esptool wrapper)
-[`flash.sh`](flash.sh) wraps esptool with the same options as NodeMCU PyFlasher
-(port, firmware, baud, flash mode, erase). It auto-detects the USB-serial port
-and defaults to the ESP8285 build:
-
-A pure-python esptool + pyserial are bundled in [`tools/vendor`](tools/vendor),
-so no install is needed — just `python3`. (A system esptool is used instead if
-one is found.)
+Flashing is handled by **[BugZapper](https://github.com/gumslone/bugzapper)**, a
+standalone flasher (GUI + CLI) included here as a git submodule at
+[`tools/bugzapper`](tools/bugzapper). A pure-python esptool + pyserial are
+bundled in it, so **no install is needed — just `python3`** (a system esptool is
+used instead if found). Clone with submodules, or fetch it after cloning:
 
 ```sh
-./flash.sh                    # flash firmware/tehybug.ino.esp8285.bin to the auto-found port
+git clone --recurse-submodules <repo>     # or, in an existing clone:
+git submodule update --init
+```
+
+`flash.sh` and `bugzapper.sh` at the repo root are thin wrappers that run
+BugZapper against this repo's `firmware/` folder with TeHyBug branding.
+
+### CLI: `flash.sh`
+```sh
+./flash.sh                    # flash the first firmware/*.bin to the auto-found port
 ./flash.sh -e                 # erase all flash first ("yes, wipes all data")
 ./flash.sh -p /dev/cu.usbserial-110 -b 460800
-./flash.sh -l                 # list detected serial ports
+./flash.sh -f firmware/tehybug.ino.esp8285_debug.bin
 ./flash.sh -h                 # all options
 ```
 
 ### GUI: BugZapper (`bugzapper.sh`)
-Prefer a window? [`bugzapper.sh`](bugzapper.sh) launches **TeHyBug BugZapper**, a small Tkinter GUI
-([tools/flashui.py](tools/flashui.py)) that combines the flasher options (port, firmware,
-baud, flash mode, erase) **and a built-in serial monitor** — one window instead
-of separate PyFlasher + CoolTerm, so you never hit the "port busy" clash. After
-a successful flash it auto-opens the monitor to show the boot log.
+Prefer a window? [`bugzapper.sh`](bugzapper.sh) launches **TeHyBug BugZapper** — a
+single window with the flasher options (port, firmware, baud, flash mode, erase)
+**and a built-in serial monitor** (ANSI colors, live baud switching, send-to-serial,
+save/log-to-file), so you never hit the separate-PyFlasher-+-CoolTerm "port busy"
+clash. After a flash it reopens the monitor to show the boot log.
 
 ```sh
 brew install python-tk@3.10   # tkinter, one-time (any python-tk works)
 ./bugzapper.sh
 ```
-
-esptool is bundled (`tools/vendor`), so flashing needs no install. The serial
-monitor reads the port directly via `stty`, so pyserial isn't needed either.
 
 ### Using esptool directly
 Replace /dev/cu.usbserial-1410 with your usb2serial port.
@@ -169,9 +172,8 @@ The EEPROM data log is wiped only after the MODE button is released (it shares t
 - [`html/`](html/) — the PHP/JS/CSS configuration web UI (hosted at tehybug.com)
 - [`tests/`](tests/) — native host tests + clang-tidy static analysis
 - [`build.sh`](build.sh) / [`platformio.ini`](platformio.ini) — the two build paths
-- [`flash.sh`](flash.sh) — esptool wrapper to flash a built binary over serial
-- [`bugzapper.sh`](bugzapper.sh) / [`tools/flashui.py`](tools/flashui.py) — GUI flasher + serial monitor
-- [`tools/vendor/`](tools/vendor) — bundled pure-python esptool + pyserial (so flashing needs no install)
+- [`flash.sh`](flash.sh) / [`bugzapper.sh`](bugzapper.sh) — wrappers that run the BugZapper flasher (CLI / GUI) against this repo's firmware
+- [`tools/bugzapper/`](tools/bugzapper) — the [BugZapper](https://github.com/gumslone/bugzapper) flasher, included as a git submodule (bundles esptool + pyserial)
 
 ## Building from source
 
