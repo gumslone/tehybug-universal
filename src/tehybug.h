@@ -146,6 +146,28 @@ class TeHyBug {
       return mode_logic::dataLogAvailable(peripherals);
     }
 
+    // Wipe the data log when the configured period (hourly vs monthly) differs
+    // from what the stored data was written with, so switching period starts
+    // clean instead of leaving the other layout's files behind. The period is
+    // recorded in a reserved index key. A device with no marker yet (fresh, or
+    // upgraded from before this option existed) just adopts the current period
+    // without wiping, so existing logs survive a firmware update. Call once
+    // after the EEPROM is mounted.
+    void syncDataLogMode() {
+      if (!eeprom.mounted()) {
+        return;
+      }
+      const String want = serveData.eeprom.hourly ? "hour" : "month";
+      const String have = eeprom.fileDate(DATALOG_MODE_KEY);
+      if (have.length() == 0) {
+        eeprom.setFileDate(DATALOG_MODE_KEY, want);  // first run: adopt, keep data
+      } else if (have != want) {
+        D_println(F("Data log period changed, wiping EEPROM"));
+        eeprom.format();                             // clear every slot
+        eeprom.setFileDate(DATALOG_MODE_KEY, want);
+      }
+    }
+
     // appends the current measurements with a timestamp to the EEPROM
     // day file; at most one entry per minute (the timestamp resolution)
     void logSensorData() {
@@ -161,21 +183,30 @@ class TeHyBug {
         return;
       }
 
-      // Day files are named only by day of month, so a slot reused in a new
-      // month (e.g. "13.txt" from June 13 to July 13) would otherwise mix
-      // dates. The first time we log on a given date, check the date the slot
-      // currently holds (recorded in the index slot): if it differs, the file
-      // is stale — clear it and record the new date. m_lastLogDate caches this
-      // within a session so the index is not re-read every minute.
-      const uint8_t mday = time.getMonthDay();
-      const String fileName = String(mday) + ".txt";
-      const String today = time.dateString();
-      if (m_lastLogDate != today) {
-        if (eeprom.fileDate(mday) != today) {
-          eeprom.resetDayFile(fileName, mday);
-          eeprom.setFileDate(mday, today);
+      // Slots are named by day-of-month (month mode: 31 files, a rolling month)
+      // or by hour-of-day (hourly mode: 24 files, a rolling 24 h). Either way a
+      // slot is reused when its day/hour comes round again, so it could still
+      // hold the previous period's data. Each slot records the period it
+      // currently holds in the index ("YYYY-MM-DD" or "YYYY-MM-DD HH"); the
+      // first time we log into a given period, if the slot's label differs the
+      // file is stale — clear it and record the new label. m_lastLogSlot caches
+      // this within a session so the index is not re-read every write.
+      uint8_t slot;
+      String label;
+      if (serveData.eeprom.hourly) {
+        slot = time.getHours();                                  // 0-23
+        label = time.dateString() + " " + IntFormat(slot);       // "YYYY-MM-DD HH"
+      } else {
+        slot = time.getMonthDay();                               // 1-31
+        label = time.dateString();                               // "YYYY-MM-DD"
+      }
+      const String fileName = String(slot) + ".txt";
+      if (m_lastLogSlot != label) {
+        if (eeprom.fileDate(slot) != label) {
+          eeprom.resetDayFile(fileName, slot);
+          eeprom.setFileDate(slot, label);
         }
-        m_lastLogDate = today;
+        m_lastLogSlot = label;
       }
 
       // Compact format to fit more entries in the small EEPROM slots: the
@@ -206,7 +237,7 @@ class TeHyBug {
       }
       line += "\n";
 
-      if (eeprom.appendLine(fileName, line, mday)) {
+      if (eeprom.appendLine(fileName, line, slot)) {
         m_lastLogStamp = stamp;
         D_print(F("Data log: "));
         D_print(line);
@@ -230,7 +261,10 @@ class TeHyBug {
     UUID m_uuid;
     bool m_sensorDataGarbageCollect{false};
     String m_lastLogStamp;
-    String m_lastLogDate;
+    String m_lastLogSlot;
+    // Reserved index key (not a valid day-of-month 1-31 or hour-of-day 0-23)
+    // that records which period the logged data was written with.
+    static constexpr uint8_t DATALOG_MODE_KEY = 200;
     void setDeviceKey(String key) {
       device.key = key;
       sensorData["key"] = key;

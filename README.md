@@ -43,6 +43,7 @@ In Offline mode you have a 1-second window right after each boot to press MODE; 
 With a DS3231 RTC + I²C EEPROM module attached, TeHyBug can store timestamped readings on the device itself — no server, broker or network required. Configure and read the log on the **Data Log** page of the web interface.
 
 - **One file per day, a full month retained.** A file per day of month is written. The 32 KB EEPROM (FT24C256A) is split into 32 slots of ~1 KB each, so every day of the month gets its own file; when no free slot is left the oldest day file is recycled.
+- **Log period (month or day).** The default keeps a rolling month (one file per day of month). Switch to **per-hour** logging on the Data Log page for a rolling 24 hours at finer detail (one file per hour of day, reused the next day). Changing the period wipes the log automatically so it starts clean in the new layout.
 - **Pick what to log.** Store the default measured set, or a custom placeholder template (e.g. `%temp% %humi%`) to keep only the fields you care about.
 - **Compact format.** To fit more into the small slots (~1 KB each) the date is omitted — it is implied by the file name — and each value is tagged with a short code, e.g. `07:55 22.6t 48.3h 1013.2p`. This roughly doubles the entries per day file versus a verbose `key=value` line.
 - **Own log interval.** The log frequency is independent of the data-serving intervals; in offline mode it also sets the deep-sleep interval. A day file holds a limited number of entries, so pick an interval that fits a full day — the Data Log page shows a capacity table. When a day file fills up it wraps: it clears and starts again from the top, overwriting that day's earlier entries (so logging never stops; you keep the most recent readings).
@@ -108,8 +109,8 @@ one is found.)
 ./flash.sh -h                 # all options
 ```
 
-### GUI: `flashUI.sh`
-Prefer a window? [`flashUI.sh`](flashUI.sh) launches a small Tkinter GUI
+### GUI: BugZapper (`bugzapper.sh`)
+Prefer a window? [`bugzapper.sh`](bugzapper.sh) launches **TeHyBug BugZapper**, a small Tkinter GUI
 ([tools/flashui.py](tools/flashui.py)) that combines the flasher options (port, firmware,
 baud, flash mode, erase) **and a built-in serial monitor** — one window instead
 of separate PyFlasher + CoolTerm, so you never hit the "port busy" clash. After
@@ -117,7 +118,7 @@ a successful flash it auto-opens the monitor to show the boot log.
 
 ```sh
 brew install python-tk@3.10   # tkinter, one-time (any python-tk works)
-./flashUI.sh
+./bugzapper.sh
 ```
 
 esptool is bundled (`tools/vendor`), so flashing needs no install. The serial
@@ -169,7 +170,7 @@ The EEPROM data log is wiped only after the MODE button is released (it shares t
 - [`tests/`](tests/) — native host tests + clang-tidy static analysis
 - [`build.sh`](build.sh) / [`platformio.ini`](platformio.ini) — the two build paths
 - [`flash.sh`](flash.sh) — esptool wrapper to flash a built binary over serial
-- [`flashUI.sh`](flashUI.sh) / [`tools/flashui.py`](tools/flashui.py) — GUI flasher + serial monitor
+- [`bugzapper.sh`](bugzapper.sh) / [`tools/flashui.py`](tools/flashui.py) — GUI flasher + serial monitor
 - [`tools/vendor/`](tools/vendor) — bundled pure-python esptool + pyserial (so flashing needs no install)
 
 ## Building from source

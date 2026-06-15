@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Launches the TeHyBug Flasher GUI (tools/flashui.py): a single window to pick the
+# Launches TeHyBug BugZapper (tools/flashui.py): a single window to pick the
 # serial port / firmware / baud / flash mode / erase, flash the board, and watch
 # the serial output — replacing separate PyFlasher + CoolTerm windows.
 #
-# Usage: ./flashUI.sh
+# Usage: ./bugzapper.sh
 #
 # Requires: a python3 with tkinter.
 #   tkinter:  brew install python-tk@3.10   (any python-tk works)

@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""TeHyBug Flasher — a small Tkinter GUI to flash the firmware and watch the
+"""TeHyBug BugZapper — a small Tkinter GUI to flash the firmware and watch the
 serial output, so you don't need separate PyFlasher + CoolTerm windows.
 
-Launched by flashUI.sh (which picks a python3 that has tkinter). Flashing uses
-esptool; the serial monitor uses stty + cat, so no pyserial is required.
+Launched by bugzapper.sh (which picks a python3 that has tkinter). Flashing uses
+the bundled esptool; the serial monitor opens the port directly (stty + fd
+read), so no pyserial is required.
 """
 import glob
 import os
@@ -88,7 +89,7 @@ def resolve_esptool():
 class FlasherApp:
     def __init__(self, root):
         self.root = root
-        root.title("TeHyBug Flasher")
+        root.title("TeHyBug BugZapper")
         root.minsize(720, 520)
         self._set_icon()
 

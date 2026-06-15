@@ -33,6 +33,11 @@
                     <input type="number" class="form-control" id="eepromLogFrequency" min="60" value="60">
                     <small class="text-muted">How often a line is written. In offline mode this is also the deep-sleep interval between wakeups. Timestamps have one-minute resolution, so 60 s or more is recommended.</small>
                 </div>
+                <div class="form-group form-check mb-3">
+                    <input type="checkbox" class="form-check-input" id="eepromLogHourly">
+                    <label class="form-check-label" for="eepromLogHourly">Log per hour (rolling 24&nbsp;hours) instead of per day (rolling month)</label>
+                    <small class="d-block text-muted"><strong>Unchecked (default):</strong> one file per day of month &mdash; 31 files, ~1 month of history at day resolution. <strong>Checked:</strong> one file per hour of day &mdash; 24 files, the last 24&nbsp;hours at hour resolution (each hour's file is reused the next day). Changing this <strong>wipes the existing log</strong> automatically so it starts clean in the new layout.</small>
+                </div>
                 <div class="form-group mb-3">
                     <label for="eepromLogMessage" class="form-label">Logged Fields (placeholder template)</label>
                     <input type="text" class="form-control" id="eepromLogMessage" placeholder="leave empty for all measured fields">
