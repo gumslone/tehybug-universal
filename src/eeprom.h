@@ -128,6 +128,12 @@ class TeHyBugEeprom{
       }
     }
     m_efs.fflush(f);
+    // debug-only: watch the day file grow toward the slot limit (~1006 B)
+    D_print("EEPROM log ");
+    D_print(name);
+    D_print(": ");
+    D_print(m_efs.filesize(f));
+    D_println(full ? " B (FULL)" : " B");
     m_efs.fclose(f);
 
     if (full) {

@@ -474,6 +474,7 @@ void setupSensors() {
 #endif
   if (tehybug.peripherals.eeprom) {
     tehybug.eeprom.setup();
+    tehybug.syncDataLogMode();  // wipe the log if the period (hourly/monthly) changed
   }
   if (tehybug.peripherals.ds3231) {
     tehybug.time.setup();

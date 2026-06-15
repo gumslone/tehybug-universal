@@ -82,10 +82,17 @@ struct HaDataServ {
 // (e.g. "%temp% %humi%") expanded per entry; empty means log the default
 // measured-value set. `frequency` is the seconds between log writes and,
 // in offline mode, the deep-sleep interval.
+//
+// `hourly` chooses the slot granularity:
+//   false (default) - one file per day of month (31 files): a rolling month.
+//   true            - one file per hour of day (24 files): a rolling 24 hours
+//                     at finer detail. Each slot is reused when its hour/day
+//                     comes round again.
 struct EepromDataServ {
   bool active{false};
   int frequency{60};
   String message;
+  bool hourly{false};
 };
 struct DataServ {
   HttpGetDataServ get{};
