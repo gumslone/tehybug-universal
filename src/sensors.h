@@ -61,12 +61,18 @@ void read_bmx280() {
 }
 
 #if !defined(ARDUINO_ESP8266_GENERIC)
-void checkIaqSensorStatus(void) {
+// Checks the BSEC / BME680 driver status. On a hard error the sensor is
+// disabled and false is returned — the device keeps running (WiFi, config mode,
+// the other sensors) instead of hanging. It used to spin in `for(;;) delay(1)`,
+// which feeds the watchdog, so a single sensor fault bricked the device with no
+// reset and no way back to config mode.
+bool checkIaqSensorStatus(void) {
+  bool ok = true;
+
   if (bme680.status != BSEC_OK) {
     if (bme680.status < BSEC_OK) {
       D_println("BSEC error code : " + String(bme680.status));
-      for (;;)
-        delay(1); /* Halt in case of failure */
+      ok = false;
     } else {
       D_println("BSEC warning code : " + String(bme680.status));
     }
@@ -75,12 +81,17 @@ void checkIaqSensorStatus(void) {
   if (bme680.bme680Status != BME680_OK) {
     if (bme680.bme680Status < BME680_OK) {
       D_println("BME680 error code : " + String(bme680.bme680Status));
-      for (;;)
-        delay(1); /* Halt in case of failure */
+      ok = false;
     } else {
       D_println("BME680 warning code : " + String(bme680.bme680Status));
     }
   }
+
+  if (!ok) {
+    D_println("BME680 disabled after error");
+    tehybug.sensor.bme680 = false;
+  }
+  return ok;
 }
 
 void loadBME680State(void) {
@@ -189,9 +200,16 @@ void read_dht_custom(DHTesp &sensor, const String &temp, const String &humi) {
     tehybug.addTempHumi(temp, prev.temperature, humi, prev.humidity);
     return;
   }
-  // keep reading until two consecutive samples agree within 0.5 °C
-  for (int i = 0; i < 10; i++) {
+  // Keep reading until two consecutive samples agree within 0.5 °C. Capped at
+  // DHT_MAX_SAMPLES: each pass waits a full sampling period (2 s on a DHT22),
+  // and this runs inside a ticker callback — 10 passes meant up to 20 s with no
+  // server.handleClient(), no webSocket.loop() and no mqttClient.loop(), which
+  // outlasts the 10 s MQTT keep-alive.
+  constexpr int DHT_MAX_SAMPLES = 3;
+  bool recorded = false;
+  for (int i = 0; i < DHT_MAX_SAMPLES; i++) {
     delay(sensor.getMinimumSamplingPeriod());
+    yield();
     TempAndHumidity tehy = sensor.getTempAndHumidity();
     // Check if any reads failed and exit early (to try again).
     if (isnan(tehy.temperature) || isnan(tehy.humidity)) {
@@ -206,8 +224,14 @@ void read_dht_custom(DHTesp &sensor, const String &temp, const String &humi) {
         continue;
       }
       tehybug.addTempHumi(temp, tehy.temperature, humi, tehy.humidity);
+      recorded = true;
       break;
     }
+  }
+  // Never leave the reading out entirely: if the samples never settled, report
+  // the last valid one rather than silently dropping the sensor this cycle.
+  if (!recorded && !isnan(prev.temperature) && !isnan(prev.humidity)) {
+    tehybug.addTempHumi(temp, prev.temperature, humi, prev.humidity);
   }
 }
 
@@ -353,6 +377,10 @@ uint8_t findI2Csensors() {
     tehybug.peripherals.ds3231 = true;
   }
 #endif
+  // Must return: firstStart() branches on this to show the green "sensors
+  // found" LED. Falling off the end is undefined behaviour and made that
+  // check read a garbage value.
+  return scanner.devicesFound();
 }
 
 void setupBmx280() {

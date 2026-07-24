@@ -93,8 +93,11 @@ class TeHyBug {
       String key = device.key;
       if (key.length() != 36) {
         key = generateDeviceKey();
-        setDeviceKey(key);
       }
+      // Always publish it into sensorData: when the key came from the stored
+      // config this was skipped, so the "key" placeholder resolved to nothing
+      // in every pushed payload.
+      setDeviceKey(key);
       D_print(F("key: "));
       D_println(key);
     }
@@ -133,6 +136,10 @@ class TeHyBug {
 
     bool anyServeModeActive() {
       return mode_logic::anyServeModeActive(serveData);
+    }
+
+    bool anyScenarioActive() {
+      return mode_logic::anyScenarioActive(scenarios);
     }
 
     // EEPROM-only mode: no WiFi, measure + log + deep-sleep. Needs the

@@ -28,6 +28,17 @@ inline bool dataLogAvailable(const Peripherals &p) {
   return p.eeprom && p.ds3231;
 }
 
+// any automation scenario configured; used to decide whether live (non-sleep)
+// mode needs a ticker to evaluate them
+inline bool anyScenarioActive(const Scenarios &sc) {
+  for (uint8_t i = 0; i < Scenarios::count; i++) {
+    if (sc.items[i].active) {
+      return true;
+    }
+  }
+  return false;
+}
+
 // Smallest configured reporting interval of the active network services, used
 // to pick the BME680 sample rate; defaults to 60s when nothing is active. HA
 // reports on the MQTT interval; the EEPROM log interval is intentionally not

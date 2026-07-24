@@ -82,6 +82,25 @@ static void test_min_data_frequency() {
   CHECK(minDataFrequency(z) == 60);
 }
 
+static void test_any_scenario_active() {
+  CASE("anyScenarioActive");
+  Scenarios none;
+  CHECK(!anyScenarioActive(none)); // default: nothing configured
+
+  // each slot on its own must be detected, so live mode starts the ticker
+  for (uint8_t i = 0; i < Scenarios::count; i++) {
+    Scenarios sc;
+    sc.items[i].active = true;
+    CHECK(anyScenarioActive(sc));
+  }
+
+  Scenarios all;
+  for (uint8_t i = 0; i < Scenarios::count; i++) {
+    all.items[i].active = true;
+  }
+  CHECK(anyScenarioActive(all));
+}
+
 int main() {
   std::printf("Running mode_logic tests...\n");
   test_sleep_enabled();
@@ -89,5 +108,6 @@ int main() {
   test_any_serve_mode_active();
   test_data_log_available();
   test_min_data_frequency();
+  test_any_scenario_active();
   return SUMMARY();
 }

@@ -13,19 +13,42 @@
 
 const IPAddress apIP(192, 168, 4, 1);
 
+// Give the radio time to actually associate between attempts, and cap how many
+// consecutive failures trigger a reboot.
+constexpr unsigned long WIFI_RETRY_INTERVAL_MS = 10000;
+constexpr uint8_t WIFI_MAX_ATTEMPTS = 6;
+
+// One reconnect attempt per call, rate-limited. The old version spun in
+// `while (!connected) { WiFi.reconnect(); yield(); }` and restarted the device
+// on the 10th iteration — all ten fired within microseconds, far quicker than
+// an association can complete, so any brief drop rebooted the device instead of
+// reconnecting. It also blocked loop() for the whole time.
 void connectToWiFi()
 {
-  int tryCount = 0;
-  while ( WiFi.status() != WL_CONNECTED )
-  {
-    tryCount++;
-    WiFi.reconnect();
-    yield();
-    if ( tryCount == 10 )
-    {
-      ESP.restart();
-    }
+  static unsigned long lastAttempt = 0;
+  static bool attempted = false;
+  static uint8_t attempts = 0;
+
+  if (WiFi.status() == WL_CONNECTED) {
+    attempts = 0;
+    return;
   }
+
+  const unsigned long now = millis();
+  // unsigned subtraction, so this stays correct across the millis() rollover
+  if (attempted && (now - lastAttempt) < WIFI_RETRY_INTERVAL_MS) {
+    return;
+  }
+  lastAttempt = now;
+  attempted = true;
+
+  if (++attempts > WIFI_MAX_ATTEMPTS) {
+    D_println(F("WiFi reconnect failed repeatedly, restarting"));
+    ESP.restart();
+  }
+  D_print(F("WiFi reconnect attempt "));
+  D_println(attempts);
+  WiFi.reconnect();
 }
 
 void checkWifi()

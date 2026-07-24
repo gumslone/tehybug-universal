@@ -259,6 +259,9 @@ class TeHyBugConfig {
 
       setData(json, "rc_active", m_device.remoteControl.active);
       setData(json, "rc_url", m_device.remoteControl.url);
+      // saveConfig() writes "key", so it must be read back here too — without
+      // this the stored device key was ignored and regenerated on every boot.
+      setData(json, "key", m_device.key);
     }
 
     template<typename T>

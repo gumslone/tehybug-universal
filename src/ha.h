@@ -2,6 +2,7 @@
 #include <ArduinoJson.h>
 #include <PubSubClient.h>
 #include <ESP8266WiFi.h>
+#include "debug.h"
 #include "common_functions.h"
 
 #define AVAILABILITY_ONLINE "online"
@@ -78,8 +79,9 @@ void setupHandle() {
 
 void publishState(PubSubClient & mqttClient, DynamicJsonDocument & sensorData) {
   DynamicJsonDocument wifiJson(192);
-  DynamicJsonDocument stateJson(512);
-  char payload[256];
+  // Was 512 with a 256-byte stack buffer: a normal two-sensor set overflows
+  // both, so Home Assistant received silently truncated (invalid) JSON.
+  DynamicJsonDocument stateJson(1024);
 
   wifiJson["ssid"] = WiFi.SSID();
   wifiJson["ip"] = WiFi.localIP().toString();
@@ -98,8 +100,19 @@ void publishState(PubSubClient & mqttClient, DynamicJsonDocument & sensorData) {
       stateJson[k] = keyValue.value().as<double>();
   }
 
-  serializeJson(stateJson, payload);
-  mqttClient.publish(&MQTT_TOPIC_STATE[0], &payload[0], true);
+  if (stateJson.overflowed()) {
+    D_println(F("HA state JSON overflowed, publishing anyway"));
+  }
+  // Stream the payload straight to the broker (PubSubClient is a Print), so it
+  // is never copied into a fixed buffer that could truncate it, and it is not
+  // limited by the client's own buffer size.
+  const size_t len = measureJson(stateJson);
+  if (mqttClient.beginPublish(&MQTT_TOPIC_STATE[0], len, true)) {
+    serializeJson(stateJson, mqttClient);
+    mqttClient.endPublish();
+  } else {
+    D_println(F("HA state publish failed to start"));
+  }
   stateJson.clear();
   wifiJson.clear();
 }

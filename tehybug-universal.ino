@@ -63,7 +63,8 @@ ESP8266WebServer server(80);
 WebSocketsServer webSocket = WebSocketsServer(81);
 ESP8266HTTPUpdateServer httpUpdater;
 
-TickerScheduler ticker(5);
+// 5 data-serving slots (get/post/mqtt/ha/eeprom) + 1 for scenario evaluation
+TickerScheduler ticker(6);
 
 /* Modules (function definitions, include order matters) */
 
@@ -183,6 +184,14 @@ void setupServeTickers() {
     // the EEPROM log is written inside read_sensors(); a bare tick (no
     // network send) is enough to drive it on its own frequency
     addServeTicker(slot++, tehybug.serveData.eeprom.frequency, [] {});
+  }
+  if (tehybug.anyScenarioActive()) {
+    // Scenarios are evaluated in loop() only on the sleep-mode path, so in live
+    // mode they never ran. Give them their own tick against fresh readings, on
+    // the shortest configured reporting interval. One dedicated ticker (rather
+    // than evaluating inside every service tick) keeps a scenario from firing
+    // repeatedly when several services are active.
+    addServeTicker(slot++, tehybug.minDataFrequency(), serve_scenario);
   }
 }
 
