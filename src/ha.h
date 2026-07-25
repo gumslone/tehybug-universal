@@ -21,8 +21,16 @@ void setupHandle() {
            identifier);
 }
 
+// Home Assistant MQTT discovery + state.
+//
+// Compiled out of the generic (1MB) build for old / first-generation boards:
+// it costs ~6 KB of flash, and that build sits just under the size at which it
+// can still update itself over the air. Keeping OTA working there matters more
+// than HA support, so these become no-ops (like the RTC/EEPROM and https
+// features that build already omits). The ESP8285 builds are unaffected.
+
  void publishAutoConfig(PubSubClient & mqttClient, const String & version, DynamicJsonDocument & sensorData) {
-  
+#if !defined(ARDUINO_ESP8266_GENERIC)
   char mqttPayload[1024];
   DynamicJsonDocument device(256);
   DynamicJsonDocument autoconfPayload(1024);
@@ -75,9 +83,11 @@ void setupHandle() {
   }
   device.clear();
   identifiersDoc.clear();
+#endif
 }
 
 void publishState(PubSubClient & mqttClient, DynamicJsonDocument & sensorData) {
+#if !defined(ARDUINO_ESP8266_GENERIC)
   DynamicJsonDocument wifiJson(192);
   // Was 512 with a 256-byte stack buffer: a normal two-sensor set overflows
   // both, so Home Assistant received silently truncated (invalid) JSON.
@@ -103,18 +113,20 @@ void publishState(PubSubClient & mqttClient, DynamicJsonDocument & sensorData) {
   if (stateJson.overflowed()) {
     D_println(F("HA state JSON overflowed, publishing anyway"));
   }
-  // Stream the payload straight to the broker (PubSubClient is a Print), so it
-  // is never copied into a fixed buffer that could truncate it, and it is not
-  // limited by the client's own buffer size.
-  const size_t len = measureJson(stateJson);
-  if (mqttClient.beginPublish(&MQTT_TOPIC_STATE[0], len, true)) {
-    serializeJson(stateJson, mqttClient);
-    mqttClient.endPublish();
-  } else {
-    D_println(F("HA state publish failed to start"));
+  // Serialize into a String, which grows to fit — the old fixed 256-byte buffer
+  // silently truncated a normal sensor set into invalid JSON. A String (rather
+  // than streaming to the client as a Print) reuses the serializer instantiation
+  // the config/websocket paths already pull in, which matters because the 1MB
+  // generic build is close to its OTA size ceiling.
+  String payload;
+  payload.reserve(measureJson(stateJson) + 1);
+  serializeJson(stateJson, payload);
+  if (!mqttClient.publish(&MQTT_TOPIC_STATE[0], payload.c_str(), true)) {
+    D_println(F("HA state publish failed"));
   }
   stateJson.clear();
   wifiJson.clear();
+#endif
 }
 
 }

@@ -85,7 +85,7 @@ The prebuilt binaries in [`firmware/`](firmware/) are rebuilt automatically on e
 | --- | --- | --- |
 | `firmware/tehybug.ino.esp8285.bin` | TeHyBug universal (v2) and Mini TeHyBug (ESP8285) | recommended |
 | `firmware/tehybug.ino.esp8285_debug.bin` | TeHyBug universal / Mini (ESP8285) | serial debug output enabled |
-| `firmware/tehybug.ino.generic.bin` | Old / first-generation TeHyBug boards (esp-01 based, generic ESP8266, 1MB flash) | slimmed to fit 1MB and stay OTA-updatable; no BME680, no RTC/EEPROM data log, no https data push (plain http works) |
+| `firmware/tehybug.ino.generic.bin` | Old / first-generation TeHyBug boards (esp-01 based, generic ESP8266, 1MB flash) | slimmed to fit 1MB and stay OTA-updatable; no BME680, no RTC/EEPROM data log, no Home Assistant discovery, no https data push (plain http works). Plain MQTT, http GET/POST and scenarios all work |
 
 ## How to program/flash the board (advanced users only)
 To flash firmware use the `firmware/tehybug.ino.esp8285.bin` file.

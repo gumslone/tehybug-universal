@@ -13,7 +13,14 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
+      # Full history + tags: ci/changelog.sh derives the release notes from the
+      # commits since the previous v* tag. With the default shallow checkout it
+      # saw no tags and a single (merge) commit, so every release section fell
+      # back to "Maintenance and build updates".
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
 
       - uses: arduino/setup-arduino-cli@v2
 
@@ -37,6 +44,11 @@ jobs:
         run: |
           ./build.sh all
           ./build.sh esp8285 debug
+
+      # Fails if a binary grows past the size at which it can still update
+      # itself over the air — the 1MB generic build has very little headroom.
+      - name: Check firmware size limits
+        run: ./ci/check-size.sh
 
       - name: Upload firmware artifacts
         uses: actions/upload-artifact@v4
