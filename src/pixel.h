@@ -39,6 +39,11 @@ public:
 
   void off() {
     D_println("Led off");
+    // on() configures the pin, but off() is reached on paths where on() never
+    // ran (a boot straight into a serving mode, sleep). Writing to a pin still
+    // in INPUT mode only toggles its pullup, so the LED was not actually driven
+    // off there.
+    pinMode(SIGNAL_LED_PIN, OUTPUT);
     if (SIGNAL_LED_PIN == 1) {
       digitalWrite(SIGNAL_LED_PIN, HIGH); // off
     } else {

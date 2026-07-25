@@ -176,17 +176,26 @@ class TeHyBugConfig {
       }
     }
 
+    // The stored file is already the JSON we serve, so hand it back as-is.
+    //
+    // This used to parse it into a 3072-byte DynamicJsonDocument and
+    // re-serialize that into a String, i.e. hold the document, the file buffer
+    // and the output at once — on every websocket connect (sendConfig) and
+    // every GET /api/config, purely to reformat bytes we wrote ourselves.
     String getConfig() {
-      String json = "{}";
       File configFile = SPIFFS.open("/config.json", "r");
-
-      if (configFile) {
-        DynamicJsonDocument root(3072);
-        if (DeserializationError::Ok == deserializeJson(root, configFile)) {
-          json = "";
-          serializeJson(root, json);
-        }
-        configFile.close();
+      if (!configFile) {
+        return "{}";
+      }
+      String json;
+      json.reserve(configFile.size() + 1);
+      while (configFile.available()) {
+        json += (char)configFile.read();
+      }
+      configFile.close();
+      // an empty or truncated file must not be sent as invalid JSON
+      if (json.length() == 0 || json[0] != '{') {
+        return "{}";
       }
       return json;
     }

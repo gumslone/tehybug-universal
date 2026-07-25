@@ -357,6 +357,12 @@ uint8_t findI2Csensors() {
   scanner.scan();
   scanner.scan();
 
+  // 0x77 is ambiguous: a BME680 and a BMP280/BME280 both answer there, so both
+  // flags are set here on purpose and setupBmx280() resolves it by probing —
+  // it reads the chip ID and clears bme680 for a known BMx280, or clears bmx
+  // when the BMx280 driver fails to start (which means it really is a BME680).
+  // The assignment re-points the driver at 0x77 (bmp280 is the same type
+  // constructed with that address).
   if (scanner.addressExists(0x77)) {
     bmx280 = bmp280;
     tehybug.sensor.bmx = true;

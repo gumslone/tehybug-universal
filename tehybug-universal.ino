@@ -115,6 +115,14 @@ void updateConfigLed() {
 constexpr unsigned long BUTTON_WINDOW_LIVE_MS = 1000;
 constexpr unsigned long BUTTON_WINDOW_SLEEP_MS = 1000;
 
+// How long the MODE button must be held to trigger a factory reset. Long
+// enough that it cannot be hit by the short press that toggles config mode.
+constexpr unsigned long FACTORY_RESET_HOLD_MS = 20000;
+
+// Idle pause at the end of each live-mode loop. Keeps the loop from spinning
+// flat out (which costs power) while staying far below any service interval.
+constexpr unsigned long LIVE_LOOP_IDLE_MS = 150;
+
 // Short press toggles config mode, holding for 20 seconds factory-resets.
 //
 // Without WiFi (offline mode) or with the web server off (live mode), the MODE
@@ -156,7 +164,7 @@ void checkModeButton() {
           updateConfigLed();
         }
         delay(10);
-        if((millis() - pressed) >= 20000)
+        if((millis() - pressed) >= FACTORY_RESET_HOLD_MS)
         {
           handleFactoryReset();
         }
@@ -238,12 +246,13 @@ void detectDataLogModule() {
 /* Setup & loop */
 
 void setup() {
+  // Serial first: firstStart() scans the I2C bus and logs what it finds, so
+  // starting it afterwards threw that output away in debug builds. (There is no
+  // wait for the port here — ESP8266's HardwareSerial is always truthy, so the
+  // usual `while (!Serial)` loop is a no-op.)
+  Serial.begin(115200);
   firstStart();
   snprintf(wifiSsid, sizeof(wifiSsid), "TEHYBUG-%X", ESP.getChipId());
-  Serial.begin(115200);
-  while (!Serial) {
-    delay(10);
-  }
 
   // load the config before deciding on WiFi: offline mode (stored in the
   // config) must be known before any radio is brought up
@@ -405,7 +414,7 @@ void loop() {
       // avoids being disconnected by the broker
       mqttClient.loop();
     }
-    delay(150); // reduce power consumption
+    delay(LIVE_LOOP_IDLE_MS); // reduce power consumption
   }
   yield();
   tehybug.finalizeLoop();
