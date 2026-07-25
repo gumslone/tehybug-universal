@@ -90,12 +90,26 @@ class TeHyBugEeprom{
   // reset). Re-mounts afterwards so logging can resume without a reboot.
   void format() {
     D_println("Formatting EEPROM data log...");
+    // begin() first: it is what detects the chip capacity, and format() sizes
+    // its slots from that. The factory reset (20 s MODE-button hold) formats
+    // from a fresh object before setupSensors() has mounted anything, so the
+    // capacity was still zero there — the slot size came out as garbage and
+    // every slot header was cleared at a meaningless offset, leaving the old
+    // day files intact. A factory reset that keeps the log is the one outcome
+    // it must not have.
+    m_efs.begin();
+    if (m_efs.esize() == 0) {
+      m_mounted = false; // nothing answering on the bus, nothing to format
+      return;
+    }
     m_efs.format(SLOTS);
     m_mounted = m_efs.begin() > 0;
     // format() zeroes the header, so the capacity marker has to be re-stamped
     // or the next boot would read "laid out for an unknown chip" and reformat
     // again — wiping the log on every single boot.
-    markSize(sizeCode(m_efs.esize()));
+    if (m_mounted) {
+      markSize(sizeCode(m_efs.esize()));
+    }
   }
 
   void readdir() {

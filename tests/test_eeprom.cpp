@@ -119,6 +119,38 @@ static void test_legacy_filesystem_keeps_its_data() {
   CHECK(peekRaw(2) == 2); // marker adopted, so this check is not repeated
 }
 
+static void test_factory_reset_from_unmounted() {
+  CASE("factory reset erases the log without a prior mount");
+  {
+    TeHyBugEeprom fs = freshFsAt(FakeWire::SIZE_64K);
+    CHECK(fs.appendLine("13.txt", "07:55 22.6t\n", 13));
+    CHECK(fs.appendLine("14.txt", "08:55 21.0t\n", 14));
+    fs.setFileDate(13, "2026-07-13");
+    CHECK_EQ_STR(fs.read("13.txt").c_str(), "07:55 22.6t\n"); // also flushes
+  }
+
+  // handleFactoryReset() formats from a fresh object: on the 20 s button-hold
+  // path setupSensors() has not mounted the EEPROM, so the capacity is still
+  // unknown and format() has to detect it before it can size the slots.
+  TeHyBugEeprom reset(g_rtc);
+  reset.format();
+  CHECK(reset.mounted());
+  CHECK_EQ_STR(reset.read("13.txt").c_str(), "");
+  CHECK_EQ_STR(reset.read("14.txt").c_str(), "");
+  CHECK_EQ_STR(reset.fileDate(13).c_str(), "");
+  const std::string listing(reset.listFilesJson().c_str());
+  CHECK(listing.find("13.txt") == std::string::npos);
+  CHECK(listing.find("14.txt") == std::string::npos);
+
+  // the wiped filesystem is usable straight away, and stays wiped across a
+  // reboot rather than being reformatted again by the capacity check
+  CHECK(reset.appendLine("13.txt", "09:00 20.0t\n", 13));
+  TeHyBugEeprom after(g_rtc);
+  after.setup();
+  CHECK(after.mounted());
+  CHECK_EQ_STR(after.read("13.txt").c_str(), "09:00 20.0t\n");
+}
+
 static void test_format_and_capacity() {
   CASE("format/capacity");
   TeHyBugEeprom fs = freshFs();
@@ -298,6 +330,7 @@ int main() {
   test_detects_chip_capacity();
   test_capacity_change_reformats_once();
   test_legacy_filesystem_keeps_its_data();
+  test_factory_reset_from_unmounted();
   test_format_and_capacity();
   test_append_and_read();
   test_date_index_roundtrip();
