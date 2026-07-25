@@ -18,6 +18,10 @@ const IPAddress apIP(192, 168, 4, 1);
 constexpr unsigned long WIFI_RETRY_INTERVAL_MS = 10000;
 constexpr uint8_t WIFI_MAX_ATTEMPTS = 6;
 
+// How long a serving-mode device sleeps before retrying a failed WiFi connect.
+// Long enough to ride out a router reboot without draining the battery.
+constexpr int WIFI_RETRY_SLEEP_S = 300;
+
 // One reconnect attempt per call, rate-limited. The old version spun in
 // `while (!connected) { WiFi.reconnect(); yield(); }` and restarted the device
 // on the 10th iteration — all ten fired within microseconds, far quicker than
@@ -113,17 +117,35 @@ void setupWifi() {
 
   if (!wifiManager.autoConnect(wifiSsid, wifiPassword)) {
     Serial.println(F("Setup: Wifi failed to connect"));
-    // Serving mode: the 3 connect attempts are done and the portal is disabled,
-    // so deep-sleep and retry the connection on the next wake (rides out a
-    // temporary AP/router outage). The device reboots into setup() on wake.
-    // In config mode the portal was shown instead, so just fall through.
-    if (!tehybug.device.configMode) {
-      D_println(F("Deep sleep 5 min, will retry WiFi on wake"));
-      tehybug.pixel.off();
-      startDeepSleep(5 * 60);  // 5 minutes
-      delay(100);
+    yield();
+
+    // Never leave config mode just because the connection failed.
+    //
+    // This used to clear configMode unconditionally here. When the config
+    // portal timed out — the one case where configMode is still true — the
+    // device therefore dropped out of config mode *and* had no link: no
+    // portal, no station, "Starting live mode" with the IP unset, and every
+    // request failing with -1 until the battery ran out, unreachable.
+    //
+    // In config mode the soft-AP stays up, so leaving the flag alone keeps the
+    // device reachable at 192.168.4.1 to fix the credentials.
+    if (tehybug.device.configMode) {
+      D_println(F("Staying in config mode; reachable on the soft-AP"));
+      return;
     }
-    tehybug.device.configMode = false;
+
+    // A serving mode cannot do anything without a link, so sleep and retry on
+    // the next boot rather than burning power failing every request.
+    D_println(F("No WiFi in a serving mode, deep sleep and retry"));
+    tehybug.pixel.off();
+    startDeepSleep(WIFI_RETRY_SLEEP_S);
+    delay(100);
+    // Only reached if the board cannot deep-sleep (GPIO16 not wired to RST):
+    // fall back to config mode so it stays reachable instead of serving into
+    // a dead network.
+    D_println(F("Deep sleep unavailable, falling back to config mode"));
+    tehybug.device.configMode = true;
+    return;
   }
   yield();
   D_println(F("Wifi successfully connected!"));

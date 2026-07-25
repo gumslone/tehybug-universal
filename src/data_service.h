@@ -48,17 +48,26 @@ void httpPost() {
 // — MQTT never fired if HTTP GET was also enabled. Every block also burned a
 // fixed delay(1000), up to 4 s of blocking per pass.
 void serve_data() {
-  if (tehybug.serveData.get.active) {
+  // Nothing can be sent without an association. Skipping is both faster and
+  // clearer than watching every request fail with -1 ("connection failed"),
+  // which is what a dropped link looked like in the log. The sleep below still
+  // runs, so the device rests and tries again on the next wake.
+  const bool linked = (WiFi.status() == WL_CONNECTED);
+  if (!linked) {
+    D_println(F("No WiFi link, skipping this round"));
+  }
+
+  if (linked && tehybug.serveData.get.active) {
     httpGet();
   }
-  if (tehybug.serveData.post.active) {
+  if (linked && tehybug.serveData.post.active) {
     httpPost();
   }
-  if (tehybug.serveData.mqtt.active) {
+  if (linked && tehybug.serveData.mqtt.active) {
     mqttSendData();
   }
   // HA reports on the MQTT interval
-  if (tehybug.serveData.ha.active) {
+  if (linked && tehybug.serveData.ha.active) {
     haSendData();
   }
 
