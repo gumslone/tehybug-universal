@@ -12,6 +12,7 @@
 void mqttSendData();
 void haSendData();
 void mqttReconnect();
+bool mqttEnsureConnected(unsigned long budgetMs);
 
 void updateMqttClient() {
   if (tehybug.serveData.mqtt.active || tehybug.serveData.ha.active) {
@@ -220,6 +221,11 @@ void mqttSendData() {
 // Wait between connection attempts. Not a delay(): see mqttReconnect().
 constexpr unsigned long MQTT_RETRY_INTERVAL_MS = 5000;
 
+// Sleep modes get one pass per wake, so they retry within a budget instead of
+// waiting for a next loop iteration that never comes.
+constexpr unsigned long MQTT_WAKE_CONNECT_BUDGET_MS = 6000;
+constexpr unsigned long MQTT_WAKE_RETRY_GAP_MS = 400;
+
 // Subscribe to the remote-control topics. Without this the mqttCallback above
 // could never fire — nothing ever subscribed, so getInfo/getConfig/setConfig
 // over MQTT was dead. Only the three control topics are subscribed (not a
@@ -252,22 +258,9 @@ void mqttSubscribeControl() {
 // This used to loop internally with delay(5000) up to maxRetries — up to ~50 s
 // of blocking inside a ticker callback, which stalled the web server, the
 // websockets and the WiFi stack (and outlasted the 10 s MQTT keep-alive).
-void mqttReconnect() {
-  if (mqttClient.connected()) {
-    return; // Already connected
-  }
-
+// One connection attempt, no rate limiting. Returns true if it came up.
+bool mqttAttemptConnect() {
   MqttDataServ &mqtt = tehybug.serveData.mqtt;
-
-  static unsigned long lastAttempt = 0;
-  static bool attempted = false;
-  const unsigned long now = millis();
-  // unsigned subtraction, so this stays correct across the millis() rollover
-  if (attempted && (now - lastAttempt) < MQTT_RETRY_INTERVAL_MS) {
-    return;
-  }
-  lastAttempt = now;
-  attempted = true;
 
   Log(F("MqttReconnect"), F("Attempting connection..."));
 
@@ -297,7 +290,7 @@ void mqttReconnect() {
     } else {
       mqttSendData();
     }
-    return;
+    return true;
   }
 
   mqtt.retryCounter++;
@@ -312,4 +305,53 @@ void mqttReconnect() {
       ESP.restart();
     }
   }
+  return false;
+}
+
+// Live mode: one attempt per call, rate-limited, because loop() comes back
+// around and will try again.
+void mqttReconnect() {
+  if (mqttClient.connected()) {
+    return; // Already connected
+  }
+
+  static unsigned long lastAttempt = 0;
+  static bool attempted = false;
+  const unsigned long now = millis();
+  // unsigned subtraction, so this stays correct across the millis() rollover
+  if (attempted && (now - lastAttempt) < MQTT_RETRY_INTERVAL_MS) {
+    return;
+  }
+  lastAttempt = now;
+  attempted = true;
+
+  mqttAttemptConnect();
+}
+
+// Sleep modes: keep trying within a budget, because there is no next loop
+// iteration — the device sends once and sleeps, so a single failed attempt
+// silently drops that cycle's reading.
+//
+// The first attempt after a wake fails routinely: the stack is rebuilt from
+// scratch on a deep-sleep boot and can reuse the source port of the previous
+// session while the broker still holds that connection in TIME_WAIT, so the
+// SYN goes nowhere (PubSubClient reports rc=-2, a plain TCP failure, even
+// though the broker is reachable). A second attempt gets a different port and
+// succeeds, which is why every other wake appeared to fail.
+bool mqttEnsureConnected(unsigned long budgetMs) {
+  const unsigned long start = millis();
+  uint8_t attempt = 0;
+  while (!mqttClient.connected() && (millis() - start) < budgetMs) {
+    attempt++;
+    if (mqttAttemptConnect()) {
+      if (attempt > 1) {
+        D_print(F("MQTT connected on attempt "));
+        D_println(attempt);
+      }
+      return true;
+    }
+    delay(MQTT_WAKE_RETRY_GAP_MS);
+    yield();
+  }
+  return mqttClient.connected();
 }

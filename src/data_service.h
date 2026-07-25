@@ -57,6 +57,14 @@ void serve_data() {
     D_println(F("No WiFi link, skipping this round"));
   }
 
+  // Sleep modes send once and then sleep, so make the broker connection here
+  // with a retry budget rather than relying on a next loop iteration.
+  if (linked &&
+      (tehybug.serveData.mqtt.active || tehybug.serveData.ha.active) &&
+      !mqttClient.connected()) {
+    mqttEnsureConnected(MQTT_WAKE_CONNECT_BUDGET_MS);
+  }
+
   if (linked && tehybug.serveData.get.active) {
     httpGet();
   }
