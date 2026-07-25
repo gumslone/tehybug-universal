@@ -86,19 +86,7 @@ void serve_data() {
   // Sleep on the shortest configured interval, so adding a second service can
   // no longer starve the first. The EEPROM log is written on every wake (inside
   // read_sensors), so it only needs to be considered when it is the shortest.
-  int freq = 0;
-  if (tehybug.anyServeModeActive()) {
-    if (tehybug.serveData.get.active || tehybug.serveData.post.active ||
-        tehybug.serveData.mqtt.active || tehybug.serveData.ha.active) {
-      freq = tehybug.minDataFrequency();
-    }
-    if (tehybug.serveData.eeprom.active) {
-      const int logFreq = tehybug.serveData.eeprom.frequency;
-      if (freq == 0 || logFreq < freq) {
-        freq = logFreq;
-      }
-    }
-  }
+  const int freq = tehybug.wakeIntervalSeconds();
   if (freq <= 0) {
     return;
   }

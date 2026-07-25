@@ -151,6 +151,25 @@ class TeHyBug {
       return mode_logic::anyScenarioActive(scenarios);
     }
 
+    // How long the device sleeps between wakes: the shortest configured
+    // interval, so adding a second service cannot starve the first. Note the
+    // EEPROM log counts — a 10 s log interval means 10 s wakes even if every
+    // network service reports hourly. 0 when nothing is configured.
+    int wakeIntervalSeconds() {
+      int freq = 0;
+      if (serveData.get.active || serveData.post.active ||
+          serveData.mqtt.active || serveData.ha.active) {
+        freq = minDataFrequency();
+      }
+      if (serveData.eeprom.active) {
+        const int logFreq = serveData.eeprom.frequency;
+        if (freq == 0 || logFreq < freq) {
+          freq = logFreq;
+        }
+      }
+      return freq;
+    }
+
     /* Operating mode — resolved in one place (mode_logic.h) from the stored
        config and the hardware present, instead of re-deriving it from boolean
        combinations at every call site. */

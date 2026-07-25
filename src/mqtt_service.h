@@ -74,7 +74,10 @@ struct HaDiscoveryMemo {
   uint32_t wakes;
 };
 constexpr uint32_t HA_DISCOVERY_MAGIC = 0x48414443;  // 'HADC'
-constexpr uint32_t HA_DISCOVERY_MAX_WAKES = 96;      // ~24 h at 15 min
+// Safety refresh window. Counted in seconds rather than wakes: at a 15 minute
+// interval 96 wakes is a day, but at a 60 minute interval it would be four,
+// and at a 10 second log interval a quarter of an hour.
+constexpr uint32_t HA_DISCOVERY_REFRESH_S = 24UL * 60UL * 60UL;
 constexpr uint32_t HA_DISCOVERY_RTC_SLOT = 64;       // dword offset, user area
 
 // FNV-1a over the sensor keys plus the firmware version: a new sensor, or a
@@ -94,6 +97,16 @@ uint32_t haDiscoveryFingerprint() {
   return h;
 }
 
+// Wakes that fit in the refresh window, given how often this device wakes.
+uint32_t haDiscoveryMaxWakes() {
+  const int interval = tehybug.wakeIntervalSeconds();
+  if (interval <= 0) {
+    return 1;
+  }
+  const uint32_t wakes = HA_DISCOVERY_REFRESH_S / (uint32_t)interval;
+  return wakes < 1 ? 1 : wakes;
+}
+
 // True when discovery has to go out on this boot.
 bool haDiscoveryNeeded() {
   HaDiscoveryMemo memo{};
@@ -102,7 +115,7 @@ bool haDiscoveryNeeded() {
   if (ESP.rtcUserMemoryRead(HA_DISCOVERY_RTC_SLOT, (uint32_t *)&memo,
                             sizeof(memo)) &&
       memo.magic == HA_DISCOVERY_MAGIC && memo.fingerprint == fingerprint &&
-      memo.wakes < HA_DISCOVERY_MAX_WAKES) {
+      memo.wakes < haDiscoveryMaxWakes()) {
     memo.wakes++;
     ESP.rtcUserMemoryWrite(HA_DISCOVERY_RTC_SLOT, (uint32_t *)&memo,
                            sizeof(memo));
