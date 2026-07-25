@@ -105,9 +105,14 @@ void serve_data() {
   }
   D_println();
 
-  // one settle window before sleeping, so the last send drains, instead of one
-  // per service
-  delay(1000);
+  // One settle window before sleeping, so the last send drains, instead of one
+  // per service. With no link nothing was sent and there is nothing to drain,
+  // so skip it — that is a full second of radio-on time saved on every wake
+  // that the network was unreachable, which is exactly when the device can
+  // least afford it.
+  if (linked) {
+    delay(1000);
+  }
   startSleep(freq);
 }
 

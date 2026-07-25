@@ -134,7 +134,18 @@ void checkModeButton() {
   delay(100);
 
   // Already in config mode? Nothing to switch to, so don't delay the boot.
-  if (!tehybug.device.configMode && digitalRead(BUTTON_PIN) == HIGH) {
+  //
+  // Nor on a deep-sleep wake. The window exists so that a press shortly after a
+  // reset has somewhere to land, but a sleeping node is only awake a few
+  // seconds an hour — nobody can time a press into one of those, so in practice
+  // the button is pressed after a RESET. Paying the window on every wake cost
+  // ~1.1 s of radio-on time per cycle, which against a ~24 uA sleep floor is
+  // roughly half the energy budget of a short wake. A button already held down
+  // is still honoured below; only the waiting is skipped.
+  const bool fromDeepSleep =
+      ESP.getResetInfoPtr()->reason == REASON_DEEP_SLEEP_AWAKE;
+  if (!fromDeepSleep && !tehybug.device.configMode &&
+      digitalRead(BUTTON_PIN) == HIGH) {
     const bool wakesOften = tehybug.sleepEnabled() || tehybug.device.offlineMode;
     const unsigned long window =
         wakesOften ? BUTTON_WINDOW_SLEEP_MS : BUTTON_WINDOW_LIVE_MS;
@@ -260,6 +271,18 @@ void setup() {
   // a held MODE button forces config mode (WiFi on) even from offline mode
   checkModeButton();
 
+  // An offline wake sleeps with the radio left uninitialised (RF_DISABLED
+  // below) — that is most of what makes offline mode cheap. If the MODE button
+  // just asked for config mode we now need that radio, and it cannot be brought
+  // up on this boot without a reset. configMode was persisted by
+  // toggleConfigMode(), so the restart comes straight back into it. One extra
+  // boot on a deliberate, user-initiated event is the right place to spend it.
+  if (tehybug.device.configMode && tehybug.device.offlineMode &&
+      ESP.getResetInfoPtr()->reason == REASON_DEEP_SLEEP_AWAKE) {
+    D_println(F("Config mode from an offline wake, restarting for the radio"));
+    ESP.restart();
+  }
+
   // Offline mode is gated on the EEPROM being present, which is otherwise only
   // detected later in setupSensors(). Probe the RTC+EEPROM module now (only
   // when offline mode is configured) so the decision below is correct instead
@@ -359,7 +382,10 @@ void loop() {
       read_sensors();
       yield();
       tehybug.pixel.off();
-      startDeepSleep(tehybug.serveData.eeprom.frequency);
+      // Offline mode never transmits, so do not power and calibrate the radio
+      // on the next wake just to switch it off again in setup(). The MODE
+      // button escape is handled by the restart guard in setup().
+      startDeepSleep(tehybug.serveData.eeprom.frequency, RF_DISABLED);
       return;
 
     case mode_logic::DeviceMode::Config:

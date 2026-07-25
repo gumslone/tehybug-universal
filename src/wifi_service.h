@@ -242,7 +242,16 @@ bool tryFastConnect() {
     WiFi.config(0U, 0U, 0U);
   }
 
+  // This begin() hands back the very credentials the SDK already has stored, so
+  // with the core's default persistence it rewrites the same bytes to flash on
+  // every single wake — flash wear and awake time for nothing. Suppress it for
+  // this call only: WiFiManager still needs persistence on when it saves newly
+  // entered credentials, and the SDK's own stored copy (which the auto-connect
+  // above depends on) is left exactly as it was.
+  const bool wasPersistent = WiFi.getPersistent();
+  WiFi.persistent(false);
   WiFi.begin(ssid.c_str(), psk.c_str(), h.channel, h.bssid, true);
+  WiFi.persistent(wasPersistent);
 
   const unsigned long start = millis();
   while (WiFi.status() != WL_CONNECTED &&

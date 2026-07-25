@@ -110,9 +110,14 @@ void startModemSleep(int freq)
   // WiFi automatically wakes when needed
 }
 
-void startDeepSleep(int freq) {
+// wakeMode defaults to RF_DEFAULT because the serving modes need the radio on
+// the next boot. Offline mode passes RF_DISABLED: it never transmits, so
+// powering and calibrating the radio on wake only to switch it off again in
+// setup() is pure cost. Callers that disable RF must make sure anything needing
+// the radio on that boot resets first — see the guard in setup().
+void startDeepSleep(int freq, RFMode wakeMode = RF_DEFAULT) {
   D_println("Going to deep sleep...");
-  ESP.deepSleep(freq * 1000000ULL);
+  ESP.deepSleep(freq * 1000000ULL, wakeMode);
   yield();
 }
 
