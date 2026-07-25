@@ -36,7 +36,7 @@ To return back to Config mode from the Live mode (or Offline mode):
 2. right after the device boots, push and hold the MODE button untill the LED turns blue
 3. release the MODE button.
 
-In Offline mode you have a 1-second window right after each boot to press MODE; in the other modes press it as the device boots.
+After the device boots, the LED lights **orange** while it waits for the MODE button: **5 seconds** in live mode, **2 seconds** in the deep-sleep and offline modes (which run this on every wake-up, so it stays short there). Press MODE while the orange LED is on.
 
 ## Offline data logging (RTC + EEPROM)
 

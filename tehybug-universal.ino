@@ -107,25 +107,44 @@ void updateConfigLed() {
 // deep-sleeps right after setup, and the ESP can't tell a manual reset from a
 // timer wake (both report a deep-sleep wake), so on every wake we give a short
 // window to catch a MODE press rather than sampling the pin once.
-constexpr unsigned long BUTTON_WAKE_WINDOW_MS = 1000;
+// How long to wait for a MODE-button press after boot.
+//
+// The button cannot be held down during reset — GPIO0 low at reset puts the ESP
+// into flash mode — so it has to be pressed just *after* the device boots,
+// which means the firmware has to wait for it rather than sample the pin once.
+//
+// Live (non-sleep) modes only boot on a manual reset or power-up, so waiting
+// costs nothing there and the window is generous. Sleep and offline modes run
+// this on every wake-up, where it is battery time, so theirs stays short.
+constexpr unsigned long BUTTON_WINDOW_LIVE_MS = 5000;
+constexpr unsigned long BUTTON_WINDOW_SLEEP_MS = 2000;
 
 // Short press toggles config mode, holding for 20 seconds factory-resets.
 //
-// Offline mode brings up no WiFi and deep-sleeps right after setup, so the MODE
-// button is the only way back to config mode. On every offline-mode boot the
-// button is polled for BUTTON_WAKE_WINDOW_MS so a press shortly after a reset is
-// caught. Limited to offline mode, so live / deep-sleep serving boots are
-// unaffected.
+// Without WiFi (offline mode) or with the web server off (live mode), the MODE
+// button is the only way back into config mode. The window used to apply to
+// offline mode only, leaving live and deep-sleep boots with just the 100 ms
+// settle delay — so the press had to land in a fraction of a second.
 void checkModeButton() {
   pinMode(BUTTON_PIN, INPUT_PULLUP);
   delay(100);
 
-  if (tehybug.device.offlineMode && digitalRead(BUTTON_PIN) == HIGH) {
+  // Already in config mode? Nothing to switch to, so don't delay the boot.
+  if (!tehybug.device.configMode && digitalRead(BUTTON_PIN) == HIGH) {
+    const bool wakesOften = tehybug.sleepEnabled() || tehybug.device.offlineMode;
+    const unsigned long window =
+        wakesOften ? BUTTON_WINDOW_SLEEP_MS : BUTTON_WINDOW_LIVE_MS;
+    D_print(F("MODE button window (ms): "));
+    D_println(window);
+    // Light the LED while the window is open so it is visible when to press,
+    // in a colour that is neither config blue nor factory-reset red.
+    tehybug.pixel.on(255, 140, 0, 30);
     const unsigned long start = millis();
     while (digitalRead(BUTTON_PIN) == HIGH &&
-           (millis() - start) < BUTTON_WAKE_WINDOW_MS) {
+           (millis() - start) < window) {
       delay(10);
     }
+    tehybug.pixel.off();
   }
 
   if (digitalRead(BUTTON_PIN) == LOW) {

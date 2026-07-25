@@ -58,7 +58,7 @@
                 </div>
                 <p class="small">In offline mode the device never connects to WiFi. It wakes on the log frequency, measures, appends one entry to the EEPROM log and deep-sleeps again &mdash; the lowest possible power draw and no network needed.</p>
                 <div class="alert alert-warning small mb-0">
-                    <strong><span data-feather="alert-triangle"></span> Reading the log:</strong> the web interface is unavailable while offline. To read the stored data, press and release <strong>RESET</strong> (do <strong>not</strong> hold MODE during reset &mdash; that boots the ESP into flash mode), then within about 1 second press and hold <strong>MODE</strong> until the LED turns <strong>blue</strong> to re-enter config mode (WiFi on), and come back to this page.
+                    <strong><span data-feather="alert-triangle"></span> Reading the log:</strong> the web interface is unavailable while offline. To read the stored data, press and release <strong>RESET</strong> (do <strong>not</strong> hold MODE during reset &mdash; that boots the ESP into flash mode), then while the LED glows <strong>orange</strong> (about 2 seconds in offline mode) press and hold <strong>MODE</strong> until the LED turns <strong>blue</strong> to re-enter config mode (WiFi on), and come back to this page.
                 </div>
                 <div id="offline_exclusive" class="alert alert-info small mt-3 mb-0" style="display:none;">
                     <strong><span data-feather="info"></span> Offline mode is exclusive:</strong> saving it switches off every other mode (MQTT, Home Assistant, HTTP GET/POST, deep/light sleep and config mode) and turns EEPROM logging on.
