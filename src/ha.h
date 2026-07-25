@@ -88,6 +88,22 @@ void setupHandle() {
 #endif
 }
 
+// Removes a sensor's entity from Home Assistant.
+//
+// Discovery messages are retained per topic, so publishing a new set never
+// clears the old one: unplug a sensor and its entity lingers in HA forever,
+// showing the last value it ever reported. An empty retained payload on the
+// same config topic is how HA is told to drop it.
+void removeAutoConfig(PubSubClient & mqttClient, const String & key) {
+#if !defined(ARDUINO_ESP8266_GENERIC)
+  const String topic = "homeassistant/sensor/" + String(identifier) + "/" +
+                       String(identifier) + "_" + key + "/config";
+  mqttClient.publish(topic.c_str(), "", true);
+  D_print(F("HA entity removed: "));
+  D_println(key);
+#endif
+}
+
 void publishState(PubSubClient & mqttClient, DynamicJsonDocument & sensorData) {
 #if !defined(ARDUINO_ESP8266_GENERIC)
   DynamicJsonDocument wifiJson(192);
