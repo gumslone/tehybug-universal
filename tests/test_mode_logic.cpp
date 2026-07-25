@@ -149,8 +149,54 @@ static void test_current_mode() {
   CHECK_EQ_STR(modeName(DeviceMode::Live), "live");
 }
 
+static void test_wake_interval() {
+  CASE("wakeInterval picks the shortest configured interval");
+  DataServ s;
+  CHECK(wakeInterval(s) == 0); // nothing configured -> no scheduled sleep
+
+  // a network service alone: its own interval
+  s.mqtt.active = true;
+  s.mqtt.frequency = 3600;
+  CHECK(wakeInterval(s) == 3600);
+
+  // the EEPROM log alone: the log interval
+  DataServ e;
+  e.eeprom.active = true;
+  e.eeprom.frequency = 900;
+  CHECK(wakeInterval(e) == 900);
+
+  // The surprise this exists to document: a short log interval decides how
+  // often the device wakes, however rarely the network services report. An
+  // hourly MQTT report with a 10 s log is 10 s wakes, not hourly ones — on
+  // battery that is the difference between months and days.
+  DataServ both;
+  both.ha.active = true;
+  both.mqtt.frequency = 3600;
+  both.eeprom.active = true;
+  both.eeprom.frequency = 10;
+  CHECK(wakeInterval(both) == 10);
+
+  // and the other way round, the log does not stretch a shorter report
+  both.eeprom.frequency = 7200;
+  CHECK(wakeInterval(both) == 3600);
+
+  // HA reports on the MQTT interval, so it counts as a network service
+  DataServ ha;
+  ha.ha.active = true;
+  ha.mqtt.frequency = 1800;
+  CHECK(wakeInterval(ha) == 1800);
+
+  // an inactive log is ignored even with a tiny frequency
+  DataServ off;
+  off.get.active = true;
+  off.get.frequency = 600;
+  off.eeprom.frequency = 5; // not active
+  CHECK(wakeInterval(off) == 600);
+}
+
 int main() {
   std::printf("Running mode_logic tests...\n");
+  test_wake_interval();
   test_current_mode();
   test_sleep_enabled();
   test_offline_enabled();

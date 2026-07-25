@@ -115,4 +115,25 @@ inline int minDataFrequency(const DataServ &s) {
   return minFreq;
 }
 
+// How long a sleeping device rests between wakes: the shortest configured
+// interval, so adding a second service cannot starve the first.
+//
+// The EEPROM log counts, and this is the part that surprises: a 10 s log
+// interval means 10 s wakes even when every network service reports hourly,
+// which on battery is the difference between months and days. Returns 0 when
+// nothing is configured, meaning "do not sleep on a schedule".
+inline int wakeInterval(const DataServ &s) {
+  int freq = 0;
+  if (s.get.active || s.post.active || s.mqtt.active || s.ha.active) {
+    freq = minDataFrequency(s);
+  }
+  if (s.eeprom.active) {
+    const int logFreq = s.eeprom.frequency;
+    if (freq == 0 || logFreq < freq) {
+      freq = logFreq;
+    }
+  }
+  return freq;
+}
+
 } // namespace mode_logic
