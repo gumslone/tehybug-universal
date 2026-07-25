@@ -162,8 +162,23 @@ bool tryFastConnect() {
   }
 
   WiFi.mode(WIFI_STA);
-  WiFi.config(IPAddress(h.ip), IPAddress(h.gw), IPAddress(h.mask),
-              IPAddress(h.dns));
+
+  // Reusing the cached address skips DHCP, but only when the whole set is
+  // coherent. A zero or stale DNS entry would otherwise be applied as a static
+  // config and every hostname lookup would fail — an MQTT broker given by name
+  // then fails to connect (rc=-2) even though the link is up. Skipping the scan
+  // is the larger saving anyway, so fall back to DHCP rather than risk that.
+  const bool addressUsable =
+      h.ip != 0 && h.gw != 0 && h.mask != 0 && h.dns != 0 &&
+      ((h.ip & h.mask) == (h.gw & h.mask));
+  if (addressUsable) {
+    WiFi.config(IPAddress(h.ip), IPAddress(h.gw), IPAddress(h.mask),
+                IPAddress(h.dns));
+  } else {
+    D_println(F("Cached address incomplete, keeping DHCP"));
+    WiFi.config(0U, 0U, 0U);
+  }
+
   WiFi.begin(ssid.c_str(), psk.c_str(), h.channel, h.bssid, true);
 
   const unsigned long start = millis();
@@ -175,6 +190,16 @@ bool tryFastConnect() {
   if (WiFi.status() == WL_CONNECTED) {
     D_print(F("WiFi fast reconnect ok, ms: "));
     D_println(millis() - start);
+    // Printed because a hostname (an MQTT broker, tehybug.com) is only
+    // reachable if the DNS server came through as well.
+    D_print(F("  ip "));
+    D_print(WiFi.localIP());
+    D_print(F("  dns "));
+    D_println(WiFi.dnsIP());
+    if (WiFi.dnsIP() == IPAddress(0, 0, 0, 0)) {
+      D_println(F("  no DNS: dropping the cached address, DHCP on next boot"));
+      clearWifiHint();
+    }
     return true;
   }
 
