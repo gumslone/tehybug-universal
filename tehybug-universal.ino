@@ -140,15 +140,11 @@ void checkModeButton() {
         wakesOften ? BUTTON_WINDOW_SLEEP_MS : BUTTON_WINDOW_LIVE_MS;
     D_print(F("MODE button window (ms): "));
     D_println(window);
-    // Light the LED while the window is open so it is visible when to press,
-    // in a colour that is neither config blue nor factory-reset red.
-    tehybug.pixel.on(255, 140, 0, 30);
     const unsigned long start = millis();
     while (digitalRead(BUTTON_PIN) == HIGH &&
            (millis() - start) < window) {
       delay(10);
     }
-    tehybug.pixel.off();
   }
 
   if (digitalRead(BUTTON_PIN) == LOW) {
