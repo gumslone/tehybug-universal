@@ -151,6 +151,20 @@ void saveWifiHint() {
 }
 
 bool tryFastConnect() {
+  // Never disturb a link that is already up.
+  //
+  // The SDK auto-connects from its own stored config while the sketch is still
+  // booting, so by the time setup() runs the association and DHCP are often
+  // already done. Re-applying a static address and calling WiFi.begin() again
+  // tears that association down — but WiFi.status() still reports the old one
+  // as connected, so this returned "ok" in ~120 ms with the stack actually
+  // mid-reassociation, and every socket afterwards failed (MQTT rc=-2) for the
+  // rest of that boot. That is also free speed: the SDK already did the work.
+  if (WiFi.status() == WL_CONNECTED) {
+    D_println(F("WiFi already up from the SDK auto-connect"));
+    return true;
+  }
+
   WifiHint h;
   if (!loadWifiHint(h)) {
     return false; // cold boot, or nothing cached yet

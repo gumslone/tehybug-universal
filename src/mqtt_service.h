@@ -285,11 +285,9 @@ bool mqttAttemptConnect() {
     // a fresh session (and any broker restart behind it) needs discovery again
     haConfigPublished = false;
 
-    if (tehybug.serveData.ha.active) {
-      haSendData();
-    } else {
-      mqttSendData();
-    }
+    // Deliberately no send here: the caller (serve_data on the sleep path, the
+    // ticker in live mode) publishes right after. Sending on connect as well
+    // published every value twice.
     return true;
   }
 
@@ -341,7 +339,12 @@ void mqttReconnect() {
 bool mqttEnsureConnected(unsigned long budgetMs) {
   const unsigned long start = millis();
   uint8_t attempt = 0;
+  MqttDataServ &mqtt = tehybug.serveData.mqtt;
   while (!mqttClient.connected() && (millis() - start) < budgetMs) {
+    if (mqtt.retryCounter >= mqtt.maxRetries) {
+      Log(F("MqttReconnect"), F("Giving up for this cycle"));
+      break;
+    }
     attempt++;
     if (mqttAttemptConnect()) {
       if (attempt > 1) {
