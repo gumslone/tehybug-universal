@@ -277,8 +277,22 @@ bool mqttAttemptConnect() {
 
   Log(F("MqttReconnect"), F("Attempting connection..."));
 
-  const char *availabilityTopic =
-      tehybug.serveData.ha.active ? ha::MQTT_TOPIC_AVAILABILITY : "state";
+  // Home Assistant keeps its availability beside its state
+  // (TEHYBUG/<id>/status next to TEHYBUG/<id>/state). Plain MQTT used a bare
+  // literal "state" at the broker root: not namespaced to the device, so two
+  // TeHyBugs overwrote each other's status, unrelated to the master topic the
+  // user configured, and misleadingly named for something carrying
+  // online/offline. Hang it off the master topic instead, matching how "info"
+  // and "config" are already appended.
+  static String plainAvailability;
+  if (!tehybug.serveData.ha.active) {
+    plainAvailability = tehybug.serveData.mqtt.topic.length() > 0
+                            ? tehybug.serveData.mqtt.topic + "status"
+                            : String(wifiSsid) + "/status";
+  }
+  const char *availabilityTopic = tehybug.serveData.ha.active
+                                      ? ha::MQTT_TOPIC_AVAILABILITY
+                                      : plainAvailability.c_str();
 
   bool connected = false;
   if (mqtt.user.length() > 0 && mqtt.password.length() > 0) {
