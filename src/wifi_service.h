@@ -95,6 +95,10 @@ constexpr uint32_t WIFI_HINT_RTC_SLOT = 40;
 constexpr uint32_t WIFI_HINT_MAGIC = 0x57494649;  // 'WIFI'
 constexpr unsigned long WIFI_HINT_TIMEOUT_MS = 4000;
 
+// How long to let the SDK's own auto-connect finish before taking over. It
+// starts at boot and normally associates well inside this.
+constexpr unsigned long WIFI_SDK_GRACE_MS = 1500;
+
 struct WifiHint {
   uint32_t magic;
   uint32_t crc;
@@ -163,6 +167,27 @@ bool tryFastConnect() {
   if (WiFi.status() == WL_CONNECTED) {
     D_println(F("WiFi already up from the SDK auto-connect"));
     return true;
+  }
+
+  // Let an association that is already in flight finish.
+  //
+  // The SDK keeps its own copy of the last AP, including the channel, and
+  // starts reconnecting the moment the chip boots — usually landing within a
+  // few hundred milliseconds, before setup() even gets here. Calling begin()
+  // on top of that restarts the association from scratch, which is the same
+  // mistake as re-associating an established link, just harder to catch. Only
+  // fall back to the cached hint if the SDK has not managed it.
+  if (WiFi.SSID().length() > 0) {
+    const unsigned long graceStart = millis();
+    while (WiFi.status() != WL_CONNECTED &&
+           (millis() - graceStart) < WIFI_SDK_GRACE_MS) {
+      delay(10);
+    }
+    if (WiFi.status() == WL_CONNECTED) {
+      D_print(F("WiFi up via the SDK auto-connect, ms: "));
+      D_println(millis() - graceStart);
+      return true;
+    }
   }
 
   WifiHint h;
