@@ -116,6 +116,23 @@ void startDeepSleep(int freq) {
   yield();
 }
 
+// Below this interval it costs less to stay associated than to drop the link
+// and pay for a re-association on the next wake.
+//
+// Rough ESP8266 figures: re-associating draws ~80 mA, modem sleep (association
+// kept, radio napping between beacons) ~15 mA, forced light sleep (association
+// dropped) ~1 mA. Per cycle of length T with a re-association taking R:
+//     stay connected : 15*T
+//     light sleep    : 1*T + 80*R
+// so light sleep only wins once T is roughly 5.6*R. At R ~= 5 s that is ~28 s,
+// which is where this 30 s comes from. On a network that associates in 2-3 s
+// the crossover drops to ~11-17 s and this could be lowered — the debug build
+// prints the measured value ("WiFi back after light sleep, ms").
+constexpr int STAY_CONNECTED_BELOW_S = 30;
+
+// Under this the radio never really gets to sleep between reads, so just wait.
+constexpr int MODEM_SLEEP_MIN_S = 10;
+
 void startSleep(int freq)
 {
   tehybug.pixel.off();
@@ -125,14 +142,16 @@ void startSleep(int freq)
   }
   if(tehybug.device.lightSleepMode)
   {
-    if(freq >= 30)
+    if(freq >= STAY_CONNECTED_BELOW_S)
     {
+      // long enough that dropping the link and re-associating still wins
       startLightSleep(freq);
     }
-    else if(freq >= 10)
+    else if(freq >= MODEM_SLEEP_MIN_S)
     {
-      // Modem sleep - WiFi radio sleeps, connection maintained
-      // Good for BME680 calibration and 10-30s intervals
+      // Modem sleep - WiFi radio sleeps, connection maintained.
+      // Cheaper than reconnecting at this interval, and it keeps BME680
+      // calibration running.
       startModemSleep(freq);
     }
     else
