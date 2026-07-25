@@ -357,31 +357,31 @@ uint8_t findI2Csensors() {
   scanner.scan();
   scanner.scan();
 
-  if (scanner.addressExists("0x77")) {
+  if (scanner.addressExists(0x77)) {
     bmx280 = bmp280;
     tehybug.sensor.bmx = true;
-  } else if (scanner.addressExists("0x76")) {
+  } else if (scanner.addressExists(0x76)) {
     tehybug.sensor.bmx = true;
   }
-  if (scanner.addressExists("0x5c")) {
+  if (scanner.addressExists(0x5c)) {
     tehybug.sensor.am2320 = true;
   }
 #if !defined(ARDUINO_ESP8266_GENERIC)
-  if (scanner.addressExists("0x77")) {
+  if (scanner.addressExists(0x77)) {
     tehybug.sensor.bme680 = true;
   }
 #endif
-  if (scanner.addressExists("0x4a")) {
+  if (scanner.addressExists(0x4a)) {
     tehybug.sensor.max44009 = true;
   }
-  if (scanner.addressExists("0x38")) {
+  if (scanner.addressExists(0x38)) {
     tehybug.sensor.aht20 = true;
   }
 #if !defined(ARDUINO_ESP8266_GENERIC)
-  if (scanner.addressExists("0x50")) {
+  if (scanner.addressExists(0x50)) {
     tehybug.peripherals.eeprom = true;
   }
-  if (scanner.addressExists("0x68")) {
+  if (scanner.addressExists(0x68)) {
     tehybug.peripherals.ds3231 = true;
   }
 #endif

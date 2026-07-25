@@ -226,10 +226,10 @@ void detectDataLogModule() {
   Wire.begin(I2C_SDA, I2C_SCL);
   i2cScanner::Scanner scanner;
   scanner.scan();
-  if (scanner.addressExists("0x50")) {
+  if (scanner.addressExists(0x50)) {
     tehybug.peripherals.eeprom = true;
   }
-  if (scanner.addressExists("0x68")) {
+  if (scanner.addressExists(0x68)) {
     tehybug.peripherals.ds3231 = true;
   }
 #endif
