@@ -151,6 +151,27 @@ class TeHyBug {
       return mode_logic::anyScenarioActive(scenarios);
     }
 
+    /* Operating mode — resolved in one place (mode_logic.h) from the stored
+       config and the hardware present, instead of re-deriving it from boolean
+       combinations at every call site. */
+
+    mode_logic::DeviceMode mode() {
+      return mode_logic::currentMode(device, peripherals);
+    }
+    const char *modeName() {
+      return mode_logic::modeName(mode());
+    }
+    bool inConfigMode()  { return mode() == mode_logic::DeviceMode::Config; }
+    bool inOfflineMode() { return mode() == mode_logic::DeviceMode::Offline; }
+    bool inSleepMode()   { return mode() == mode_logic::DeviceMode::Sleep; }
+    bool inLiveMode()    { return mode() == mode_logic::DeviceMode::Live; }
+
+    // Config mode is the one mode that is switched directly (MODE button,
+    // remote control, first start); the others follow from the configuration.
+    void setConfigMode(bool on) {
+      device.configMode = on;
+    }
+
     // EEPROM-only mode: no WiFi, measure + log + deep-sleep. Needs the
     // EEPROM peripheral present (the generic 1MB build has no EEPROM driver).
     bool offlineEnabled() {

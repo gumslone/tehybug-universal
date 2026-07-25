@@ -101,8 +101,47 @@ static void test_any_scenario_active() {
   CHECK(anyScenarioActive(all));
 }
 
+static void test_current_mode() {
+  CASE("currentMode precedence");
+  Device d;
+  Peripherals p;
+
+  // nothing configured: config mode is the default state
+  CHECK(currentMode(d, p) == DeviceMode::Config);
+
+  d.configMode = false;
+  CHECK(currentMode(d, p) == DeviceMode::Live);
+
+  d.sleepMode = true;
+  CHECK(currentMode(d, p) == DeviceMode::Sleep);
+  d.sleepMode = false;
+  d.lightSleepMode = true;
+  CHECK(currentMode(d, p) == DeviceMode::Sleep); // light sleep counts too
+  d.lightSleepMode = false;
+
+  // offline only engages when the EEPROM is actually present
+  d.offlineMode = true;
+  CHECK(currentMode(d, p) == DeviceMode::Live); // no EEPROM -> not offline
+  p.eeprom = true;
+  CHECK(currentMode(d, p) == DeviceMode::Offline);
+
+  // offline outranks sleep ...
+  d.sleepMode = true;
+  CHECK(currentMode(d, p) == DeviceMode::Offline);
+
+  // ... and config outranks everything, so the MODE button always gets back in
+  d.configMode = true;
+  CHECK(currentMode(d, p) == DeviceMode::Config);
+
+  CHECK_EQ_STR(modeName(DeviceMode::Config), "config");
+  CHECK_EQ_STR(modeName(DeviceMode::Offline), "offline");
+  CHECK_EQ_STR(modeName(DeviceMode::Sleep), "sleep");
+  CHECK_EQ_STR(modeName(DeviceMode::Live), "live");
+}
+
 int main() {
   std::printf("Running mode_logic tests...\n");
+  test_current_mode();
   test_sleep_enabled();
   test_offline_enabled();
   test_any_serve_mode_active();

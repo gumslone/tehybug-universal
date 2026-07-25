@@ -6,6 +6,10 @@
 #include <ESP8266WiFi.h>
 #include "debug.h"
 
+// How long to wait for the WiFi association to come back after a light sleep
+// before giving up on this round (the next wake tries again).
+constexpr unsigned long LIGHT_SLEEP_RECONNECT_TIMEOUT_MS = 8000;
+
 void wakeupCallback()
 {
   D_println("Light sleep callback...");
@@ -45,8 +49,32 @@ void startLightSleep(int freq)
 
   D_println("Woke from light sleep, reconnecting WiFi...");
 
-  // WiFi will reconnect via checkWifi() in main loop
-  // MQTT will reconnect via mqttReconnect()
+  // Wait for the link to come back before returning to the caller, which
+  // serves data immediately.
+  //
+  // This used to just note that "checkWifi() in the main loop" would
+  // reconnect — but that call sits in the live-mode-only branch of loop(), so
+  // in light sleep nothing ever reconnected and every request after the first
+  // wake failed on a dead link (HTTP -1, "connection failed"). MQTT still
+  // reconnects on its own via mqttReconnect().
+  const unsigned long start = millis();
+  bool retried = false;
+  while (WiFi.status() != WL_CONNECTED &&
+         (millis() - start) < LIGHT_SLEEP_RECONNECT_TIMEOUT_MS) {
+    // the SDK usually re-associates by itself; nudge it once if it has not
+    if (!retried && (millis() - start) > 1000) {
+      retried = true;
+      WiFi.reconnect();
+    }
+    delay(50);
+  }
+
+  if (WiFi.status() == WL_CONNECTED) {
+    D_print(F("WiFi back after light sleep, ms: "));
+    D_println(millis() - start);
+  } else {
+    D_println(F("WiFi did not return after light sleep; skipping this round"));
+  }
 }
 
 void startModemSleep(int freq)

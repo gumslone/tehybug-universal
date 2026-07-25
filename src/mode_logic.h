@@ -28,6 +28,45 @@ inline bool dataLogAvailable(const Peripherals &p) {
   return p.eeprom && p.ds3231;
 }
 
+// The mode the device is actually operating in, resolved from the stored
+// config plus the hardware present. Having one resolver keeps the precedence
+// in a single place — it used to be spelled out as ad-hoc boolean combinations
+// ("!configMode && !sleepEnabled()", "offlineMode && !configMode", ...) at
+// every call site, which is easy to get subtly wrong.
+//
+// Precedence, highest first:
+//   Config  - the web UI is up. Wins over everything: the MODE button, a first
+//             start and "no serving mode selected" all force it.
+//   Offline - no WiFi at all: measure, append to the EEPROM log, deep-sleep.
+//             Only reachable when the EEPROM is actually present.
+//   Sleep   - measure, serve, then deep/light sleep.
+//   Live    - stay awake and serve on tickers.
+enum class DeviceMode : uint8_t { Config, Offline, Sleep, Live };
+
+inline DeviceMode currentMode(const Device &d, const Peripherals &p) {
+  if (d.configMode) {
+    return DeviceMode::Config;
+  }
+  if (offlineEnabled(d, p)) {
+    return DeviceMode::Offline;
+  }
+  if (sleepEnabled(d)) {
+    return DeviceMode::Sleep;
+  }
+  return DeviceMode::Live;
+}
+
+// for logs and the device-info payload
+inline const char *modeName(DeviceMode m) {
+  switch (m) {
+    case DeviceMode::Config:  return "config";
+    case DeviceMode::Offline: return "offline";
+    case DeviceMode::Sleep:   return "sleep";
+    case DeviceMode::Live:    return "live";
+  }
+  return "unknown";
+}
+
 // any automation scenario configured; used to decide whether live (non-sleep)
 // mode needs a ticker to evaluate them
 inline bool anyScenarioActive(const Scenarios &sc) {

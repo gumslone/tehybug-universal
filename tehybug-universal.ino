@@ -103,10 +103,6 @@ void updateConfigLed() {
   }
 }
 
-// How long to poll the MODE button on each offline-mode boot. Offline mode
-// deep-sleeps right after setup, and the ESP can't tell a manual reset from a
-// timer wake (both report a deep-sleep wake), so on every wake we give a short
-// window to catch a MODE press rather than sampling the pin once.
 // How long to wait for a MODE-button press after boot.
 //
 // The button cannot be held down during reset — GPIO0 low at reset puts the ESP
@@ -117,7 +113,7 @@ void updateConfigLed() {
 // costs nothing there and the window is generous. Sleep and offline modes run
 // this on every wake-up, where it is battery time, so theirs stays short.
 constexpr unsigned long BUTTON_WINDOW_LIVE_MS = 5000;
-constexpr unsigned long BUTTON_WINDOW_SLEEP_MS = 2000;
+constexpr unsigned long BUTTON_WINDOW_SLEEP_MS = 1000;
 
 // Short press toggles config mode, holding for 20 seconds factory-resets.
 //
@@ -348,40 +344,48 @@ void setup() {
 }
 
 void loop() {
-  // offline mode: measure, append to the EEPROM log, deep-sleep. No WiFi,
-  // no web server and no online scenarios. The deep sleep resets the
-  // device, so this restarts setup() on the next wakeup.
-  if (tehybug.offlineEnabled() && !tehybug.device.configMode) {
-    read_sensors();
-    yield();
-    tehybug.pixel.off();
-    startDeepSleep(tehybug.serveData.eeprom.frequency);
-    return;
-  }
-  // config mode
-  if (tehybug.device.configMode) {
-    MDNS.update();
-    server.handleClient();
-    yield();
-    webSocket.loop();
-  }
-  // sleep mode: measure, act, serve, sleep
-  else if (tehybug.sleepEnabled()) {
-    read_sensors();
-    yield();
-    serve_scenario();
-    yield();
-    serve_data();
+  // One decision, resolved in mode_logic.h, instead of re-deriving the mode
+  // from boolean combinations here.
+  switch (tehybug.mode()) {
+    case mode_logic::DeviceMode::Offline:
+      // measure, append to the EEPROM log, deep-sleep. No WiFi, no web server
+      // and no online scenarios. The deep sleep resets the device, so this
+      // restarts setup() on the next wakeup.
+      read_sensors();
+      yield();
+      tehybug.pixel.off();
+      startDeepSleep(tehybug.serveData.eeprom.frequency);
+      return;
+
+    case mode_logic::DeviceMode::Config:
+      MDNS.update();
+      server.handleClient();
+      yield();
+      webSocket.loop();
+      break;
+
+    case mode_logic::DeviceMode::Sleep:
+      // measure, act, serve, sleep
+      read_sensors();
+      yield();
+      serve_scenario();
+      yield();
+      serve_data();
+      break;
+
+    case mode_logic::DeviceMode::Live:
+      // served by the tickers below
+      break;
   }
 
-  if (tehybug.tickerStop && tehybug.device.configMode)
+  if (tehybug.tickerStop && tehybug.inConfigMode())
   {
     tehybug.tickerStop = false;
     ticker.disableAll();
     updateConfigLed();
   }
 
-  if (tehybug.tickerStart && !tehybug.device.configMode)
+  if (tehybug.tickerStart && !tehybug.inConfigMode())
   {
     tehybug.tickerStart = false;
     ticker.enableAll();
@@ -390,7 +394,7 @@ void loop() {
   // update ticker for the non-deep-sleep mode
   ticker.update();
 
-  if (!tehybug.device.configMode && !tehybug.sleepEnabled()) {
+  if (tehybug.inLiveMode()) {
     // reconnect if connection lost
     checkWifi();
     if(tehybug.serveData.mqtt.active || tehybug.serveData.ha.active) {
