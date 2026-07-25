@@ -20,6 +20,14 @@ constexpr unsigned long FPM_MAX_SLEEP_MS = 260UL * 1000UL;
 constexpr unsigned long FPM_SHORT_RETURN_MS = 50;
 constexpr uint8_t FPM_MAX_SHORT_RETURNS = 5;
 
+// The SDK needs a moment after the association is torn down before it will
+// accept a forced sleep; without this the first call answers -1.
+constexpr unsigned long FPM_SETTLE_MS = 20;
+// A refusal is usually "not ready yet", so back off briefly and ask again
+// rather than abandoning the sleep and burning the whole interval awake.
+constexpr unsigned long FPM_RETRY_MS = 50;
+constexpr uint8_t FPM_MAX_REFUSALS = 10;
+
 void wakeupCallback()
 {
   D_println("Light sleep callback...");
@@ -47,11 +55,21 @@ void startLightSleep(int freq)
   // without touching the saved credentials.
   wifi_station_disconnect();
 
-  // Enter light sleep
-  wifi_set_opmode(NULL_MODE);
+  // Enter light sleep.
+  //
+  // _current, not wifi_set_opmode(): the persistent form writes the mode to
+  // flash on every single sleep, which is both flash wear and time, and the
+  // mode is meant to last only until the wake below restores it.
+  wifi_set_opmode_current(NULL_MODE);
   wifi_fpm_set_sleep_type(LIGHT_SLEEP_T);
   wifi_fpm_open();
   wifi_fpm_set_wakeup_cb(wakeupCallback);
+
+  // Let the teardown settle before asking to sleep. wifi_fpm_do_sleep() answers
+  // -1 while the association is still coming down — observed on hardware as
+  // "fpm_do_sleep refused, rc: -1" on the very first call, with the identical
+  // argument accepted on other boots. The retry loop below covers the rest.
+  delay(FPM_SETTLE_MS);
 
   // The SDK's forced sleep takes microseconds in a uint32 and tops out around
   // 268 s, so a longer interval has to be slept in chunks. (The old code
@@ -71,6 +89,7 @@ void startLightSleep(int freq)
   const unsigned long targetMs = (unsigned long)freq * 1000UL;
   const unsigned long sleepStart = millis();
   uint8_t shortReturns = 0;
+  uint8_t refusals = 0;
   while (millis() - sleepStart < targetMs) {
     const unsigned long leftMs = targetMs - (millis() - sleepStart);
     const uint32_t chunkUs = (leftMs > FPM_MAX_SLEEP_MS)
@@ -79,12 +98,17 @@ void startLightSleep(int freq)
     const unsigned long chunkStart = millis();
     const sint8 rc = wifi_fpm_do_sleep(chunkUs);
     if (rc != 0) {
-      // The SDK will not sleep at all. Waiting out the rest awake is wasteful,
-      // but it keeps the reporting interval honest, which matters more than the
+      // Usually "not ready yet" rather than "never": back off and ask again.
+      if (++refusals < FPM_MAX_REFUSALS) {
+        delay(FPM_RETRY_MS);
+        continue;
+      }
+      // It really will not sleep. Waiting the rest out awake is wasteful, but
+      // it keeps the reporting interval honest, which matters more than the
       // power for a mode the user can switch away from.
       D_print(F("  fpm_do_sleep refused, rc: "));
       D_println(rc);
-      delay(leftMs);
+      delay(targetMs - (millis() - sleepStart));
       break;
     }
     delay(chunkUs / 1000UL + 1UL);
@@ -108,7 +132,7 @@ void startLightSleep(int freq)
 
   // Wake up and restore WiFi
   wifi_fpm_close();
-  wifi_set_opmode(STATION_MODE);
+  wifi_set_opmode_current(STATION_MODE);
   wifi_set_sleep_type(NONE_SLEEP_T);
   wifi_station_connect(); // re-associate with the credentials we kept
 
