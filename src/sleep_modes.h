@@ -51,14 +51,29 @@ void startLightSleep(int freq)
   // 268 s, so a longer interval has to be slept in chunks. (The old code
   // computed `freq * 1000000` in a signed int, which also overflowed above
   // ~2147 s.)
+  const unsigned long sleepStart = millis();
   uint32_t remaining_us = (uint32_t)freq * 1000000UL;
   while (remaining_us > 0) {
     const uint32_t chunk =
         (remaining_us > FPM_MAX_SLEEP_US) ? FPM_MAX_SLEEP_US : remaining_us;
-    wifi_fpm_do_sleep(chunk);
+    const sint8 rc = wifi_fpm_do_sleep(chunk);
     delay(chunk / 1000UL + 1UL);
+    if (rc != 0) {
+      // The SDK refused the sleep; say so rather than silently spinning through
+      // the delay, which looks identical in the log but costs full power.
+      D_print(F("  fpm_do_sleep refused, rc: "));
+      D_println(rc);
+    }
     remaining_us -= chunk;
   }
+  // What the cycle actually cost, against what was asked for. A wake that comes
+  // back far short of the target means the forced sleep is being cut off, and
+  // every service then reports that much more often than it was configured to.
+  const unsigned long sleptMs = millis() - sleepStart;
+  D_print(F("Light sleep asked (ms): "));
+  D_print((unsigned long)freq * 1000UL);
+  D_print(F("  actually slept: "));
+  D_println(sleptMs);
 
   // Wake up and restore WiFi
   wifi_fpm_close();
