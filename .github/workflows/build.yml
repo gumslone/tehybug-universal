@@ -17,7 +17,7 @@ jobs:
       # commits since the previous v* tag. With the default shallow checkout it
       # saw no tags and a single (merge) commit, so every release section fell
       # back to "Maintenance and build updates".
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
           fetch-tags: true
@@ -25,7 +25,7 @@ jobs:
       - uses: arduino/setup-arduino-cli@v2
 
       - name: Cache Arduino toolchain
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.arduino15
           key: arduino-deps-${{ hashFiles('ci/install-deps.sh') }}
@@ -51,7 +51,7 @@ jobs:
         run: ./ci/check-size.sh
 
       - name: Upload firmware artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: firmware
           path: firmware/tehybug.ino.*.bin

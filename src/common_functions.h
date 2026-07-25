@@ -216,7 +216,8 @@ String key2nameBase(const String & key)
 String key2name(const String & rawKey)
 {
   const String base = baseKey(rawKey);
-  const String name = key2nameBase(base);
+  // not const: `return name` can then move instead of copying the String
+  String name = key2nameBase(base);
   if (name.length() > 0 && base != rawKey) {
     return name + " 2";
   }

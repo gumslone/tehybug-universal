@@ -6,7 +6,8 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 TIDY="${CLANG_TIDY:-clang-tidy}"
-INC="-Itests/shims -Itests -Ilibraries/EepromFS-main"
+# keep in sync with tests/run.sh — common_functions.h pulls in ArduinoJson
+INC="-Itests/shims -Itests -Ilibraries/EepromFS-main -Ilibraries/ArduinoJson/src"
 EXTRA=""
 # macOS: Homebrew clang-tidy needs the SDK so libc++ headers resolve
 if [ "$(uname)" = "Darwin" ]; then
