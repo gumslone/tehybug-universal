@@ -58,6 +58,80 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
 bool haConfigPublished = false;
 
 #if !defined(ARDUINO_ESP8266_GENERIC)
+// Deep sleep reboots the chip, so "once per connection" still means once per
+// wake — one retained ~500-byte message per sensor key every cycle, which is
+// radio time on a battery. Because the messages are retained, the broker keeps
+// serving them while the device sleeps, so most of those wakes can skip it.
+//
+// The decision is remembered in RTC user memory: it survives deep sleep but is
+// cleared by a power cycle, so reseating the battery republishes. Discovery is
+// re-sent when the sensor set or the firmware version changes (the
+// fingerprint), and at least every HA_DISCOVERY_MAX_WAKES wakes so a broker
+// that lost its retained store recovers on its own.
+struct HaDiscoveryMemo {
+  uint32_t magic;
+  uint32_t fingerprint;
+  uint32_t wakes;
+};
+constexpr uint32_t HA_DISCOVERY_MAGIC = 0x48414443;  // 'HADC'
+// Safety refresh window. Counted in seconds rather than wakes: at a 15 minute
+// interval 96 wakes is a day, but at a 60 minute interval it would be four,
+// and at a 10 second log interval a quarter of an hour.
+constexpr uint32_t HA_DISCOVERY_REFRESH_S = 24UL * 60UL * 60UL;
+constexpr uint32_t HA_DISCOVERY_RTC_SLOT = 64;       // dword offset, user area
+
+// FNV-1a over the sensor keys plus the firmware version: a new sensor, or a
+// build that renames/re-units one, changes the value and forces a republish.
+uint32_t haDiscoveryFingerprint() {
+  uint32_t h = 2166136261u;
+  const auto mix = [&h](const char *s) {
+    for (; s != nullptr && *s != '\0'; s++) {
+      h ^= (uint8_t)*s;
+      h *= 16777619u;
+    }
+  };
+  for (JsonPair kv : tehybug.sensorData.as<JsonObject>()) {
+    mix(kv.key().c_str());
+  }
+  mix(version.c_str());
+  return h;
+}
+
+// Wakes that fit in the refresh window, given how often this device wakes.
+uint32_t haDiscoveryMaxWakes() {
+  const int interval = tehybug.wakeIntervalSeconds();
+  if (interval <= 0) {
+    return 1;
+  }
+  const uint32_t wakes = HA_DISCOVERY_REFRESH_S / (uint32_t)interval;
+  return wakes < 1 ? 1 : wakes;
+}
+
+// True when discovery has to go out on this boot.
+bool haDiscoveryNeeded() {
+  HaDiscoveryMemo memo{};
+  const uint32_t fingerprint = haDiscoveryFingerprint();
+
+  if (ESP.rtcUserMemoryRead(HA_DISCOVERY_RTC_SLOT, (uint32_t *)&memo,
+                            sizeof(memo)) &&
+      memo.magic == HA_DISCOVERY_MAGIC && memo.fingerprint == fingerprint &&
+      memo.wakes < haDiscoveryMaxWakes()) {
+    memo.wakes++;
+    ESP.rtcUserMemoryWrite(HA_DISCOVERY_RTC_SLOT, (uint32_t *)&memo,
+                           sizeof(memo));
+    D_print(F("HA discovery still retained, skipping (wake "));
+    D_print(memo.wakes);
+    D_println(F(")"));
+    return false;
+  }
+
+  memo.magic = HA_DISCOVERY_MAGIC;
+  memo.fingerprint = fingerprint;
+  memo.wakes = 0;
+  ESP.rtcUserMemoryWrite(HA_DISCOVERY_RTC_SLOT, (uint32_t *)&memo,
+                         sizeof(memo));
+  return true;
+}
 // Publishes discovery for the sensors present now, and retires the entities of
 // any that have gone away.
 //
@@ -114,13 +188,17 @@ void haSyncDiscovery() {
   }
 }
 #else
+bool haDiscoveryNeeded() { return true; }
 void haSyncDiscovery() { }
 #endif
 
 void haSendData() {
   if (mqttClient.connected()) {
     if (!haConfigPublished) {
-      haSyncDiscovery();
+      // consulted once per boot; the flag covers the rest of this session
+      if (haDiscoveryNeeded()) {
+        haSyncDiscovery();
+      }
       haConfigPublished = true;
     }
     ha::publishState(mqttClient, tehybug.sensorData);

@@ -94,11 +94,9 @@ void serve_data() {
   if (tehybug.serveData.mqtt.active || tehybug.serveData.ha.active) {
     mqttClient.disconnect();
   }
-
-  // Say what the device will actually do. "Minimum data frequency" above is
-  // only the network services' shortest interval; the EEPROM log can be
-  // shorter still and then it, not the reporting interval, decides how often
-  // the device wakes — which is easy to set by accident.
+  // Say what the device will actually do: "Minimum data frequency" above is
+  // only the network services' shortest interval, while the EEPROM log can be
+  // shorter still and then it decides how often the device wakes.
   D_print(F("Sleeping for (s): "));
   D_print(freq);
   if (tehybug.serveData.eeprom.active &&
