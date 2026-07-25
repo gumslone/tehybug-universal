@@ -100,10 +100,26 @@ constexpr unsigned long MQTT_RETRY_INTERVAL_MS = 5000;
 // wildcard) so the device does not receive its own info/config publishes back.
 void mqttSubscribeControl() {
   const String &base = tehybug.serveData.mqtt.topic;
+
+  // Only for plain MQTT. The control topics hang off the user's master topic,
+  // which only that mode configures — but the client is also brought up for
+  // Home Assistant, which needs the same broker settings while leaving the
+  // master topic untouched. Subscribing regardless meant an HA-only device
+  // listened on a topic left over from an earlier MQTT setup.
+  if (!tehybug.serveData.mqtt.active) {
+    D_println(F("MQTT control topics skipped: plain MQTT is not active"));
+    return;
+  }
+  if (base.length() == 0) {
+    D_println(F("MQTT control topics skipped: no master topic set"));
+    return;
+  }
+
   mqttClient.subscribe((base + "getInfo").c_str());
   mqttClient.subscribe((base + "getConfig").c_str());
   mqttClient.subscribe((base + "setConfig").c_str());
-  Log(F("MqttReconnect"), String(F("Subscribed to ")) + base + F("get/setConfig, getInfo"));
+  Log(F("MqttReconnect"), String(F("Subscribed to ")) + base +
+      F("{getInfo,getConfig,setConfig}"));
 }
 
 // One connection attempt per call, rate-limited to MQTT_RETRY_INTERVAL_MS.
