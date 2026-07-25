@@ -213,7 +213,12 @@ void handleGetDataLog() {
   const String json = "{\"active\":true,\"timeSet\":" +
                       String(tehybug.time.isTimeSet() ? "true" : "false") +
                       ",\"time\":\"" + tehybug.time.timestamp() +
-                      "\",\"files\":" + tehybug.eeprom.listFilesJson() + "}";
+                      // detected chip capacity and the resulting day-file size,
+                      // so the Data Log page can show which EEPROM was found
+                      // instead of the user having to read the serial log
+                      "\",\"capacity\":" + String(tehybug.eeprom.capacityBytes()) +
+                      ",\"slotBytes\":" + String(tehybug.eeprom.slotBytes()) +
+                      ",\"files\":" + tehybug.eeprom.listFilesJson() + "}";
   server.send(200, "application/json", json);
 }
 

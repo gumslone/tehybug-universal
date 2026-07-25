@@ -17,6 +17,8 @@ class TeHyBugEeprom {
     TeHyBugEeprom(RtcTime &) {}
     void setup() {}
     bool mounted() { return false; }
+    unsigned long capacityBytes() { return 0; }
+    unsigned int slotBytes() { return 0; }
     void readdir() {}
     String read(const char *) { return String(); }
     bool appendLine(const String &, const String &, uint8_t) { return false; }
@@ -71,13 +73,40 @@ class TeHyBugEeprom{
         }
       }
       m_mounted = slots > 0;
-      D_print("EEPROM filesystem mounted, slots: ");
-      D_println(slots);
+      // Report the detected capacity, not just the slot count: the slot count
+      // is 32 on every chip, so it says nothing about which part was found.
+      // This line is how a 64 KB module is confirmed to be detected as one.
+      D_print("EEPROM filesystem mounted: ");
+      D_print(m_efs.esize());
+      D_print(" B chip, ");
+      D_print(slots);
+      D_print(" slots, ");
+      D_print(slotBytes());
+      D_println(" B per day file");
       readdir();
     }
 
   bool mounted() {
     return m_mounted;
+  }
+
+  // Detected chip capacity in bytes; 0 when no EEPROM answered on the bus.
+  unsigned long capacityBytes() {
+    return m_efs.esize();
+  }
+
+  // Usable bytes in one day file: the slot size less the per-file header. This
+  // is what the chip capacity actually buys — ~1007 B on a 32 KB FT24C256A,
+  // ~2031 B on a 64 KB FT24C512A.
+  unsigned int slotBytes() {
+    const unsigned long capacity = capacityBytes();
+    if (capacity <= EFS_HEADERSIZE) {
+      return 0;
+    }
+    const unsigned long slot = (capacity - EFS_HEADERSIZE) / SLOTS;
+    return slot > EFS_FILEHEADERSIZE
+               ? (unsigned int)(slot - EFS_FILEHEADERSIZE)
+               : 0;
   }
 
   // Tell the log how slot numbers wrap so recycling picks the right "oldest"

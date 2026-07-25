@@ -160,6 +160,9 @@
             <div class="card-body">
                 <p id="datalog_status" class="mb-2">Checking for RTC + EEPROM module...</p>
                 <div id="datalog_panel" style="display: none;">
+                    <p class="mb-2" style="display:none;">
+                        Memory chip detected: <strong id="datalog_chip">-</strong>
+                    </p>
                     <p class="mb-2">
                         Device clock: <strong id="datalog_time">-</strong>
                         <button type="button" class="btn btn-sm btn-outline-primary ms-2" onclick="setDeviceClock()">
@@ -232,6 +235,21 @@
             $('#datalog_status').hide();
             $('#datalog_panel').show();
             $('#datalog_time').text(data.timeSet ? data.time : 'not set (set it to start logging!)');
+
+            // Which EEPROM the device found. The slot count is 32 on every
+            // chip, so the capacity is the only thing that tells a 64 KB
+            // module apart from a 32 KB one.
+            if (data.capacity) {
+                const kb = Math.round(data.capacity / 1024);
+                const chip = data.capacity >= 65536 ? 'FT24C512A'
+                           : data.capacity >= 32768 ? 'FT24C256A' : '';
+                $('#datalog_chip')
+                    .text(kb + ' KB' + (chip ? ' (' + chip + ')' : '') +
+                          ' — about ' + data.slotBytes + ' bytes per day file')
+                    .parent().show();
+            } else {
+                $('#datalog_chip').parent().hide();
+            }
 
             const rows = $('#datalog_files');
             rows.html('');
