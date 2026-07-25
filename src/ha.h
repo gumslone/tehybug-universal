@@ -16,9 +16,11 @@ namespace ha {
 void setupHandle() {
   const String deviceName = "TEHYBUG";
   snprintf(identifier, sizeof(identifier), "%s-%X", deviceName.c_str(), ESP.getChipId());
-  snprintf(MQTT_TOPIC_STATE, 63, "%s/%s/state", deviceName.c_str(), identifier);
-  snprintf(MQTT_TOPIC_AVAILABILITY, 63, "%s/%s/status", deviceName.c_str(),
-           identifier);
+  // sizeof, not a hardcoded 63, so these stay correct if the buffers change
+  snprintf(MQTT_TOPIC_STATE, sizeof(MQTT_TOPIC_STATE), "%s/%s/state",
+           deviceName.c_str(), identifier);
+  snprintf(MQTT_TOPIC_AVAILABILITY, sizeof(MQTT_TOPIC_AVAILABILITY),
+           "%s/%s/status", deviceName.c_str(), identifier);
 }
 
 // Home Assistant MQTT discovery + state.

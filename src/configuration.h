@@ -97,8 +97,20 @@ class TeHyBugConfig {
       setIfNotDefault(json, "rc_url", m_device.remoteControl.url, device.remoteControl.url);
 
       File configFile = SPIFFS.open("/config.json", "w");
-      serializeJson(json, configFile);
+      if (!configFile) {
+        // "w" already truncated nothing (the open failed), but the caller must
+        // not be told the settings were stored — this used to be ignored, so a
+        // full or failed filesystem silently lost the configuration.
+        D_println(F("Config save failed: cannot open /config.json"));
+        return;
+      }
+      const size_t written = serializeJson(json, configFile);
       configFile.close();
+      if (written == 0) {
+        D_println(F("Config save failed: nothing written"));
+        return;
+      }
+      m_shouldSaveConfig = false; // stored; nothing pending until the next change
       D_println(F("Config saved"));
     }
 

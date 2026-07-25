@@ -80,7 +80,10 @@ float temp2Imp(const float & value) {
   return (1.8 * value + 32);
 }
 
-// IO scenarios are encoded as "io<pin><level>", e.g. "io121" = pin 12 high
+// IO scenarios are encoded as "io<pin>_<level>" — the form the web UI emits,
+// e.g. "io13_1" = pin 13 high, "io13_0" = pin 13 low. The pin is parsed with
+// atoi, which stops at the underscore, so a single-digit pin ("io5_1") and the
+// older unseparated form ("io121") both still parse.
 bool isIoScenario(const String &type) {
   return type.substring(0, 2) == "io";
 }
@@ -92,8 +95,28 @@ uint8_t ioScenarioLevel(const String &type) {
   return atoi(type.substring(lenz - 1, lenz).c_str());
 }
 
-String key2unit(const String & key)
+/// Maps a second-sensor key back to its base key.
+///
+/// The second sensor and its derived values are the base key with a trailing
+/// "2" (temp2, humi2, hi2, dew2, ah2, cr2, cs2, hi_imp2, dew_imp2), so they can
+/// share the base key's unit, name and icon instead of each needing its own
+/// entry — without this, Home Assistant received empty names and units for
+/// every second-sensor value. "eco2" is a sensor in its own right, not a
+/// variant of "eco", so it is left alone.
+String baseKey(const String & key)
 {
+  if (key == "eco2") {
+    return key;
+  }
+  if (key.length() > 1 && key[key.length() - 1] == '2') {
+    return key.substring(0, key.length() - 1);
+  }
+  return key;
+}
+
+String key2unit(const String & rawKey)
+{
+  const String key = baseKey(rawKey);
   if (key == "temp" || key == "temp2" || key == "dew" || key == "hi")
     return "°C";
   else if (key == "temp_imp" || key == "temp2_imp" || key == "dew_imp" || key == "hi_imp")
@@ -112,7 +135,7 @@ String key2unit(const String & key)
     return "Lux";
   else if (key == "adc")
     return "ADC";
-  else if (key == "co2")
+  else if (key == "co2" || key == "eco2" || key == "bvoc")
     return "ppm";
   else if (key == "cr")
     return "%";
@@ -144,12 +167,12 @@ String cf2name(int cs)
       return "Unknown";
   };
 }
-String key2name(const String & key)
+String key2nameBase(const String & key)
 {
   if (key == "temp" || key == "temp_imp")
     return "Temperature";
   else if (key == "temp2" || key == "temp2_imp")
-    return "Temperature2";
+    return "Temperature 2"; // matches the " 2" suffix key2name() adds
   else if (key == "humi")
     return "Humidity";
   else if (key == "ah")
@@ -185,8 +208,24 @@ String key2name(const String & key)
 
   return "";
 }
-String key2icon(const String & key)
+
+/// Human-readable name for a sensor key, used as the Home Assistant entity
+/// name. Second-sensor values get the base name with a " 2" suffix, so they no
+/// longer arrive unnamed. (The entity's unique_id is unrelated, so this only
+/// affects the display name.)
+String key2name(const String & rawKey)
 {
+  const String base = baseKey(rawKey);
+  const String name = key2nameBase(base);
+  if (name.length() > 0 && base != rawKey) {
+    return name + " 2";
+  }
+  return name;
+}
+
+String key2icon(const String & rawKey)
+{
+  const String key = baseKey(rawKey);
   if (key == "temp" || key == "temp2" || key == "temp_imp" || key == "temp2_imp")
     return "mdi:thermometer";
   else if (key == "humi")
@@ -207,6 +246,8 @@ String key2icon(const String & key)
     return "mdi:resistor";
   else if (key == "co2" || key == "eco2")
     return "mdi:molecule-co2";
+  else if (key == "bvoc")
+    return "mdi:molecule";
   else if (key == "iaq")
     return "mdi:airballoon-outline";
 

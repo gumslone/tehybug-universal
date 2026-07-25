@@ -52,7 +52,9 @@ inline int minDataFrequency(const DataServ &s) {
   consider(s.get.active, s.get.frequency);
   consider(s.post.active, s.post.frequency);
   consider(s.ha.active, s.mqtt.frequency);
-  if (minFreq == INT_MAX || minFreq == 0) {
+  // consider() already requires freq > 0, so INT_MAX is the only "nothing
+  // active" case left
+  if (minFreq == INT_MAX) {
     minFreq = 60;
   }
   return minFreq;

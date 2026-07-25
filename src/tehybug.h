@@ -21,12 +21,22 @@ class TeHyBug {
     DataServ serveData{};
     Scenarios scenarios{};
     DynamicJsonDocument sensorData;
+    // Declaration order is construction order, and each of these binds a
+    // reference to the ones above it: conf takes pixel, time takes conf,
+    // eeprom takes time. pixel used to be declared last, so conf bound a
+    // reference to storage that had not been constructed yet.
+    TeHyBugPixel pixel;
     TeHyBugConfig conf;
     RtcTime time;
     TeHyBugEeprom eeprom;
-    TeHyBugPixel pixel;
 
-    TeHyBug(DHTesp & dht): sensorData(1024), m_dht(dht), conf(calibration, sensor, peripherals, device, serveData, scenarios, pixel), time(conf), eeprom(time) {
+    // initialiser order matches the declarations above (m_dht is declared last)
+    TeHyBug(DHTesp & dht)
+      : sensorData(1024),
+        conf(calibration, sensor, peripherals, device, serveData, scenarios, pixel),
+        time(conf),
+        eeprom(time),
+        m_dht(dht) {
     }
 
     // Expands %key% placeholders from the current sensor readings.
