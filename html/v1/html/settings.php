@@ -4,6 +4,8 @@
     <h1 class="h2">Data Serving Settings</h1>
 </div>
 
+<div class="alert alert-warning" id="modeConflictNote" style="display:none;"></div>
+
 <div class="row">
     <!-- MQTT Section -->
     <div class="col-lg-4 mb-4">
@@ -55,7 +57,17 @@
                     <label class="form-check-label" for="mqttActive">MQTT active</label>
                     <small class="text-muted d-block">Publish readings to the MQTT broker.</small>
                 </div>
-                <input type="checkbox" class="form-check-input dont-change" id="haActive" style="display:none;">
+                <!-- Mirrors of the modes this page can conflict with. They are
+                     deliberately NOT .dont-change: they load the stored state and
+                     are written back unchanged, so saving this page only switches
+                     a mode off when one of the handlers below actually clears it.
+                     haActive used to be .dont-change and permanently unchecked,
+                     which meant every save here silently turned Home Assistant
+                     off, even when nothing on the page had been touched. -->
+                <div style="display:none;">
+                    <input type="checkbox" class="form-check-input" id="haActive">
+                    <input type="checkbox" class="form-check-input" id="offlineModeActive">
+                </div>
             </div>
         </div>
     </div>
@@ -228,4 +240,44 @@ require __DIR__ . '/inc/save_modal.php';
 <script>
     feather.replace();
     connectionStart();
+
+    $(function () {
+        // Modes that cannot run alongside the services on this page.
+        //
+        // Home Assistant shares the single MQTT client with plain MQTT, and the
+        // availability/last-will topic can only be one of the two: with both
+        // active HA's topic wins and plain MQTT never publishes its status. The
+        // device is meant to serve one way at a time, so enabling any service
+        // here switches HA off.
+        //
+        // Offline mode never brings up WiFi at all (measure -> EEPROM log ->
+        // deep sleep), so it outranks every service on this page in the
+        // firmware: leaving it on would make the service silently never send.
+        var conflicts = {
+            haActive: 'Home Assistant',
+            offlineModeActive: 'Offline mode'
+        };
+
+        function clearConflicting() {
+            var turnedOff = [];
+            $.each(conflicts, function (id, label) {
+                if ($('#' + id).prop('checked')) {
+                    $('#' + id).prop('checked', false);
+                    turnedOff.push(label);
+                }
+            });
+            if (turnedOff.length) {
+                $('#modeConflictNote')
+                    .text(turnedOff.join(' and ') + ' will be switched off when you save: '
+                          + 'the device serves data one way at a time.')
+                    .show();
+            }
+        }
+
+        $('#mqttActive, #httpGetActive, #httpPostActive').change(function () {
+            if (this.checked) {
+                clearConflicting();
+            }
+        });
+    });
 </script>
