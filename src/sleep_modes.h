@@ -13,6 +13,12 @@ constexpr unsigned long LIGHT_SLEEP_RECONNECT_TIMEOUT_MS = 8000;
 // The SDK's forced-sleep call takes microseconds in a uint32 and rejects
 // anything much above 268 s, so longer intervals are slept in chunks.
 constexpr uint32_t FPM_MAX_SLEEP_US = 260UL * 1000000UL;
+constexpr unsigned long FPM_MAX_SLEEP_MS = 260UL * 1000UL;
+
+// A sleep that comes back faster than this did not really sleep; after a few of
+// those in a row, stop re-arming it and wait the interval out instead.
+constexpr unsigned long FPM_SHORT_RETURN_MS = 50;
+constexpr uint8_t FPM_MAX_SHORT_RETURNS = 5;
 
 void wakeupCallback()
 {
@@ -51,20 +57,45 @@ void startLightSleep(int freq)
   // 268 s, so a longer interval has to be slept in chunks. (The old code
   // computed `freq * 1000000` in a signed int, which also overflowed above
   // ~2147 s.)
+  // Sleep until the requested time has actually elapsed, rather than trusting a
+  // single delay() to last.
+  //
+  // wifi_fpm_do_sleep() can return 0 (accepted) and still come straight back:
+  // delay() on this core arms a timer and yields exactly once, so anything else
+  // calling esp_schedule() — a WiFi disconnect event still in flight from the
+  // wifi_station_disconnect() above, for instance — releases it early. The old
+  // loop subtracted the whole chunk regardless and exited, so a 60 s sleep could
+  // return in 1 ms ("actually slept: 1") and every service then ran ~60x too
+  // often. Re-issuing the sleep for whatever is left makes an early release cost
+  // nothing.
+  const unsigned long targetMs = (unsigned long)freq * 1000UL;
   const unsigned long sleepStart = millis();
-  uint32_t remaining_us = (uint32_t)freq * 1000000UL;
-  while (remaining_us > 0) {
-    const uint32_t chunk =
-        (remaining_us > FPM_MAX_SLEEP_US) ? FPM_MAX_SLEEP_US : remaining_us;
-    const sint8 rc = wifi_fpm_do_sleep(chunk);
-    delay(chunk / 1000UL + 1UL);
+  uint8_t shortReturns = 0;
+  while (millis() - sleepStart < targetMs) {
+    const unsigned long leftMs = targetMs - (millis() - sleepStart);
+    const uint32_t chunkUs = (leftMs > FPM_MAX_SLEEP_MS)
+                                 ? FPM_MAX_SLEEP_US
+                                 : (uint32_t)leftMs * 1000UL;
+    const unsigned long chunkStart = millis();
+    const sint8 rc = wifi_fpm_do_sleep(chunkUs);
     if (rc != 0) {
-      // The SDK refused the sleep; say so rather than silently spinning through
-      // the delay, which looks identical in the log but costs full power.
+      // The SDK will not sleep at all. Waiting out the rest awake is wasteful,
+      // but it keeps the reporting interval honest, which matters more than the
+      // power for a mode the user can switch away from.
       D_print(F("  fpm_do_sleep refused, rc: "));
       D_println(rc);
+      delay(leftMs);
+      break;
     }
-    remaining_us -= chunk;
+    delay(chunkUs / 1000UL + 1UL);
+    // Give up re-arming if it keeps bouncing straight back, so this cannot spin
+    // at full power for the whole interval.
+    if ((millis() - chunkStart) < FPM_SHORT_RETURN_MS &&
+        ++shortReturns >= FPM_MAX_SHORT_RETURNS) {
+      D_println(F("  light sleep keeps returning early, waiting it out"));
+      delay(targetMs - (millis() - sleepStart));
+      break;
+    }
   }
   // What the cycle actually cost, against what was asked for. A wake that comes
   // back far short of the target means the forced sleep is being cut off, and
