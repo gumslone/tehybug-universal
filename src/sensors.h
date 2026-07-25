@@ -353,7 +353,7 @@ void read_sensors() {
 uint8_t findI2Csensors() {
   Wire.begin(I2C_SDA, I2C_SCL);
   // required to scan twice to find sensors like am2320
-  i2cScanner::Scanner scanner;
+  i2cScanner::Scanner &scanner = i2cScanner::shared();
   scanner.scan();
   scanner.scan();
 

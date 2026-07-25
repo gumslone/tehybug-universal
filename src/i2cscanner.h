@@ -8,6 +8,9 @@ namespace i2cScanner {
 
 class Scanner {
  public:
+  // Probes the bus, at most twice for the lifetime of this scanner. Two passes
+  // are needed because some sensors (the AM2320) only answer after a first
+  // transaction has woken them; a third pass would just cost time.
   void scan() {
     if (scanCount_ >= 2) {
       D_println("I2C scan skipped: max 2 attempts reached");
@@ -76,5 +79,18 @@ class Scanner {
   uint8_t devicesFound_{0};
   uint8_t found_[ADDRESS_COUNT / 8]{};
 };
+
+// The one scanner the firmware uses.
+//
+// The two-pass cap above only limits a single instance, and every call site
+// used to build its own: on an offline-mode boot detectDataLogModule() probed
+// the bus once and findI2Csensors() twice more, so it was scanned three times
+// in a row with identical results. Sharing one instance makes the cap mean what
+// it says — the bus is probed twice per boot, and later callers reuse the
+// result instead of re-probing.
+inline Scanner &shared() {
+  static Scanner instance;
+  return instance;
+}
 
 } // namespace i2cScanner

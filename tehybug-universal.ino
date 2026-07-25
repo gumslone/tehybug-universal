@@ -228,7 +228,7 @@ void setupServeTickers() {
 void detectDataLogModule() {
 #if !defined(ARDUINO_ESP8266_GENERIC)
   Wire.begin(I2C_SDA, I2C_SCL);
-  i2cScanner::Scanner scanner;
+  i2cScanner::Scanner &scanner = i2cScanner::shared();
   scanner.scan();
   if (scanner.addressExists(0x50)) {
     tehybug.peripherals.eeprom = true;
