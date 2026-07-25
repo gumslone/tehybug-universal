@@ -97,39 +97,53 @@
                 <h4 class="mb-0"><span data-feather="hard-drive"></span> Storage capacity &amp; limits</h4>
             </div>
             <div class="card-body">
-                <p>The log lives on the 32&nbsp;KB I&#178;C EEPROM (FT24C256A) of the RTC module,
-                which is divided into <strong>32 slots &mdash; one file per day of month</strong>.
-                Each slot holds roughly <strong>1&nbsp;KB (about 1006 bytes)</strong>, so a full
-                month of daily files fits.</p>
+                <p>The log lives on the I&#178;C EEPROM of the RTC module, which is divided into
+                <strong>32 slots &mdash; one file per day of month</strong>, so a full month of
+                daily files fits. How much each day file holds depends on which chip your module
+                carries &mdash; the device detects this automatically at startup:</p>
+                <ul class="small">
+                    <li><strong>FT24C512A (64&nbsp;KB)</strong> &mdash; current modules. About
+                    <strong>2&nbsp;KB (2031 bytes)</strong> per day file.</li>
+                    <li><strong>FT24C256A (32&nbsp;KB)</strong> &mdash; earlier modules. About
+                    <strong>1&nbsp;KB (1007 bytes)</strong> per day file.</li>
+                </ul>
                 <ul class="small">
                     <li><strong>Up to a full month is kept</strong> (one file per day of month). When all slots are in use and a new day starts, the oldest day file is recycled (erased) to make room.</li>
                     <li><strong>A day file that fills up wraps to the start</strong> &mdash; it clears and logs again from the top, overwriting that day's earlier entries, so logging never stops (you keep the most recent readings). Pick a frequency so a full day fits to avoid overwriting.</li>
                     <li><strong>Fewer fields &amp; a longer frequency = more coverage.</strong> Use the <em>Logged Fields</em> template above to store only what you need.</li>
                 </ul>
-                <p class="small mb-2">Rough capacity per ~1&nbsp;KB day file with the compact format:</p>
+                <p class="small mb-2">Rough capacity per day file with the compact format:</p>
                 <div class="table-responsive">
                     <table class="table table-sm">
                         <thead>
                             <tr>
                                 <th>Logged fields</th>
                                 <th>~Bytes per entry</th>
-                                <th>Entries per day file</th>
-                                <th>Frequency to cover a full 24&nbsp;h</th>
+                                <th>Entries per day file<br><small class="text-muted">64&nbsp;KB / 32&nbsp;KB</small></th>
+                                <th>Frequency to cover a full 24&nbsp;h<br><small class="text-muted">64&nbsp;KB / 32&nbsp;KB</small></th>
                             </tr>
                         </thead>
                         <tbody>
-                            <tr><td>1 (e.g. <code>%temp%</code>)</td><td>~13</td><td>~77</td><td>~20&nbsp;min (1200&nbsp;s)</td></tr>
-                            <tr><td>2 (e.g. <code>%temp% %humi%</code>)</td><td>~19</td><td>~52</td><td>~28&nbsp;min (1680&nbsp;s)</td></tr>
-                            <tr><td>3 (default-style)</td><td>~25</td><td>~40</td><td>~36&nbsp;min (2160&nbsp;s)</td></tr>
-                            <tr><td>4</td><td>~31</td><td>~32</td><td>~45&nbsp;min (2700&nbsp;s)</td></tr>
+                            <tr><td>1 (e.g. <code>%temp%</code>)</td><td>~13</td><td>~156 / ~77</td><td>~9&nbsp;min / ~20&nbsp;min</td></tr>
+                            <tr><td>2 (e.g. <code>%temp% %humi%</code>)</td><td>~19</td><td>~106 / ~52</td><td>~14&nbsp;min / ~28&nbsp;min</td></tr>
+                            <tr><td>3 (default-style)</td><td>~25</td><td>~81 / ~40</td><td>~18&nbsp;min / ~36&nbsp;min</td></tr>
+                            <tr><td>4</td><td>~31</td><td>~65 / ~32</td><td>~22&nbsp;min / ~45&nbsp;min</td></tr>
                         </tbody>
                     </table>
                 </div>
                 <div class="alert alert-info small mb-0">
                     <strong><span data-feather="info"></span> Example:</strong> logging temperature + humidity
-                    every 30&nbsp;minutes stores ~48 readings per day &mdash; about one day file, so a full
-                    month of days stays available. Logging every minute fills a day file in well under an
-                    hour, after which it wraps and starts overwriting that day's earlier entries.
+                    every 30&nbsp;minutes stores ~48 readings per day &mdash; comfortably inside one day file
+                    on either chip, so a full month of days stays available. Logging every minute fills a day
+                    file in well under an hour, after which it wraps and starts overwriting that day's
+                    earlier entries.
+                </div>
+                <div class="alert alert-warning small mb-0 mt-2">
+                    <strong><span data-feather="alert-triangle"></span> After a firmware update:</strong>
+                    if your module has the 64&nbsp;KB chip but was previously logging with firmware that
+                    only recognised 32&nbsp;KB, the day files have to be re-laid out to use the full chip.
+                    The device does this once, automatically, on the first boot after the update &mdash;
+                    <strong>previously logged data is erased</strong>. Download anything you need first.
                 </div>
             </div>
         </div>

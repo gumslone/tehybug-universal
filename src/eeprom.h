@@ -30,12 +30,15 @@ class TeHyBugEeprom {
 #else
 #include <EepromFS.h>
 
-// Slot-based data log on the external I2C EEPROM (FT24C256A, 32 KB, on the
-// DS3231 RTC module). One file per day of month ("<mday>.txt"), so 32 slots
-// of ~1 KB hold a full month of daily logs; when no free slot is left the
-// oldest day file is removed. NOTE: begin() reuses the slot count an
-// already-formatted EEPROM was created with — SLOTS only applies when
-// formatting a blank chip.
+// Slot-based data log on the external I2C EEPROM on the DS3231 RTC module.
+// Current modules carry an FT24C512A (64 KB); earlier ones an FT24C256A
+// (32 KB). The capacity is detected at mount and decides the slot size, so a
+// day file is ~2 KB on the newer modules and ~1 KB on the older ones.
+//
+// One file per day of month ("<mday>.txt"), so 32 slots hold a full month of
+// daily logs; when no free slot is left the oldest day file is removed.
+// NOTE: begin() reuses the slot count an already-formatted EEPROM was created
+// with — SLOTS only applies when formatting a blank chip.
 class TeHyBugEeprom{
   public :
   static constexpr uint8_t SLOTS = 32;
@@ -49,11 +52,23 @@ class TeHyBugEeprom{
 
   void setup(){
       uint8_t slots = m_efs.begin();
+      const uint8_t want = sizeCode(m_efs.esize());
+      if (slots > 0 && !layoutMatches(want)) {
+        // The slot layout is derived from the chip capacity, so a filesystem
+        // written for a different one puts every slot at the wrong offset.
+        D_println("EEPROM capacity changed, reformatting...");
+        slots = 0;
+      }
       if (slots == 0) {
         // unformatted eeprom: create the filesystem once
         D_println("EEPROM unformatted, formatting...");
         m_efs.format(SLOTS);
         slots = m_efs.begin();
+        // only stamp a filesystem that actually mounted: with no EEPROM on the
+        // bus the detection failed and every write here would just NACK
+        if (slots > 0) {
+          markSize(sizeCode(m_efs.esize()));
+        }
       }
       m_mounted = slots > 0;
       D_print("EEPROM filesystem mounted, slots: ");
@@ -77,6 +92,10 @@ class TeHyBugEeprom{
     D_println("Formatting EEPROM data log...");
     m_efs.format(SLOTS);
     m_mounted = m_efs.begin() > 0;
+    // format() zeroes the header, so the capacity marker has to be re-stamped
+    // or the next boot would read "laid out for an unknown chip" and reformat
+    // again — wiping the log on every single boot.
+    markSize(sizeCode(m_efs.esize()));
   }
 
   void readdir() {
@@ -311,6 +330,45 @@ class TeHyBugEeprom{
   bool m_mounted{false};
   // slot numbering wrap: 31 day-of-month slots, or 24 hour-of-day slots
   uint8_t m_slotWrap{31};
+
+  // Which chip capacity the slot layout on this filesystem was written for.
+  // The slot size is (capacity - header) / slots, recomputed from the detected
+  // capacity on every mount, so a filesystem laid out for a different chip puts
+  // every slot at the wrong offset. Byte 2 of the EepromFS header is free
+  // (format() zeroes the header and then writes only the magic and the slot
+  // count), so the capacity is recorded there and checked at mount.
+  static constexpr unsigned int SIZE_MARK_ADDR = 2;
+  static constexpr uint8_t SIZE_CODE_4K = 1;
+  static constexpr uint8_t SIZE_CODE_32K = 2;
+  static constexpr uint8_t SIZE_CODE_64K = 3;
+
+  static uint8_t sizeCode(unsigned long bytes) {
+    if (bytes >= 65536) return SIZE_CODE_64K;
+    if (bytes >= 32768) return SIZE_CODE_32K;
+    return SIZE_CODE_4K;
+  }
+
+  void markSize(uint8_t code) {
+    m_efs.rawwrite(SIZE_MARK_ADDR, code);
+    m_efs.rawflush();
+  }
+
+  // True when the mounted filesystem was laid out for the chip just detected.
+  bool layoutMatches(uint8_t want) {
+    const uint8_t have = m_efs.rawread(SIZE_MARK_ADDR);
+    if (have == want) {
+      return true;
+    }
+    // Filesystems written before this marker existed carry 0. Those were laid
+    // out for 32 KB, which is byte-for-byte the layout a 32 KB part still
+    // computes today, so adopt the marker and keep the logged data. Only a part
+    // that turns out to be larger was really laid out for the wrong capacity.
+    if (have == 0 && want == SIZE_CODE_32K) {
+      markSize(want);
+      return true;
+    }
+    return false;
+  }
 
 };
 #endif

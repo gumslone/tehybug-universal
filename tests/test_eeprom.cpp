@@ -22,6 +22,103 @@ static TeHyBugEeprom freshFs() {
   return fs;
 }
 
+// fresh, formatted filesystem on a wiped chip of a given capacity
+static TeHyBugEeprom freshFsAt(size_t capacity) {
+  Wire.wipe(capacity);
+  TeHyBugEeprom fs(g_rtc);
+  fs.setup();
+  return fs;
+}
+
+// one byte straight to the simulated chip, bypassing EepromFS entirely
+static void pokeRaw(unsigned int addr, uint8_t value) {
+  Wire.beginTransmission(0x50);
+  Wire.write((int)(addr / 256));
+  Wire.write((int)(addr % 256));
+  Wire.write((int)value);
+  Wire.endTransmission();
+}
+
+static uint8_t peekRaw(unsigned int addr) {
+  Wire.beginTransmission(0x50);
+  Wire.write((int)(addr / 256));
+  Wire.write((int)(addr % 256));
+  Wire.endTransmission();
+  Wire.requestFrom(0x50, 1);
+  return (uint8_t)Wire.read();
+}
+
+// largest a day file grows to before the slot fills and it wraps — i.e. the
+// usable size of one slot, which is what the chip capacity decides
+static unsigned int maxDayFileSize(TeHyBugEeprom &fs) {
+  unsigned int best = 0;
+  for (int i = 0; i < 400; i++) {
+    char line[24];
+    std::snprintf(line, sizeof(line), "L%03d 22.6t\n", i);
+    fs.appendLine("9.txt", line, 9);
+    const unsigned int len = fs.read("9.txt").length();
+    if (len > best) best = len;
+  }
+  return best;
+}
+
+static void test_detects_chip_capacity() {
+  CASE("chip capacity decides the day-file size");
+  // FT24C256A: (32768-4)/32 = 1023 per slot, less the 16-byte file header
+  TeHyBugEeprom small = freshFsAt(FakeWire::SIZE_32K);
+  const unsigned int smallMax = maxDayFileSize(small);
+  CHECK(smallMax > 900 && smallMax <= 1007);
+
+  // FT24C512A: (65536-4)/32 = 2047 per slot, so roughly twice as much. The
+  // detection used to answer "32 KB" for this part, leaving half the chip idle.
+  TeHyBugEeprom big = freshFsAt(FakeWire::SIZE_64K);
+  const unsigned int bigMax = maxDayFileSize(big);
+  CHECK(bigMax > 1900 && bigMax <= 2031);
+  CHECK(bigMax > smallMax + 900); // the extra capacity is really being used
+}
+
+static void test_capacity_change_reformats_once() {
+  CASE("a bigger chip re-lays out the log, but only once");
+  TeHyBugEeprom fs = freshFsAt(FakeWire::SIZE_32K);
+  CHECK(fs.appendLine("13.txt", "07:55 22.6t\n", 13));
+  CHECK_EQ_STR(fs.read("13.txt").c_str(), "07:55 22.6t\n"); // also flushes
+
+  // same stored bytes, but the part now reports 64 KB: the slot size doubles,
+  // so every slot offset moves and the old layout cannot be read back
+  Wire.setCapacity(FakeWire::SIZE_64K);
+  TeHyBugEeprom after(g_rtc);
+  after.setup();
+  CHECK(after.mounted());
+  CHECK_EQ_STR(after.read("13.txt").c_str(), ""); // reformatted, log cleared
+  CHECK(after.appendLine("13.txt", "08:00 22.7t\n", 13));
+  CHECK_EQ_STR(after.read("13.txt").c_str(), "08:00 22.7t\n");
+
+  // The reformat must not repeat: format() zeroes the header, so without
+  // re-stamping the capacity marker every boot would wipe the log again.
+  TeHyBugEeprom third(g_rtc);
+  third.setup();
+  CHECK(third.mounted());
+  CHECK_EQ_STR(third.read("13.txt").c_str(), "08:00 22.7t\n");
+}
+
+static void test_legacy_filesystem_keeps_its_data() {
+  CASE("a pre-marker 32 KB filesystem is adopted, not wiped");
+  TeHyBugEeprom fs = freshFsAt(FakeWire::SIZE_32K);
+  CHECK(fs.appendLine("13.txt", "07:55 22.6t\n", 13));
+  CHECK_EQ_STR(fs.read("13.txt").c_str(), "07:55 22.6t\n");
+
+  // firmware from before the capacity marker existed left header byte 2 at 0.
+  // A 32 KB part lays out identically then and now, so the data must survive.
+  pokeRaw(2, 0);
+  CHECK(peekRaw(2) == 0);
+
+  TeHyBugEeprom after(g_rtc);
+  after.setup();
+  CHECK(after.mounted());
+  CHECK_EQ_STR(after.read("13.txt").c_str(), "07:55 22.6t\n");
+  CHECK(peekRaw(2) == 2); // marker adopted, so this check is not repeated
+}
+
 static void test_format_and_capacity() {
   CASE("format/capacity");
   TeHyBugEeprom fs = freshFs();
@@ -198,6 +295,9 @@ static void test_slot_wrap_recycles_by_period() {
 
 int main() {
   std::printf("Running eeprom tests...\n");
+  test_detects_chip_capacity();
+  test_capacity_change_reformats_once();
+  test_legacy_filesystem_keeps_its_data();
   test_format_and_capacity();
   test_append_and_read();
   test_date_index_roundtrip();
