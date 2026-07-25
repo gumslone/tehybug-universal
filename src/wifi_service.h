@@ -10,6 +10,7 @@
 #include <FS.h>
 #include "debug.h"
 #include "fw_version.h"
+#include "wifi_policy.h"
 
 const IPAddress apIP(192, 168, 4, 1);
 
@@ -108,7 +109,8 @@ struct WifiHint {
   uint32_t dns;
   uint8_t bssid[6];
   uint8_t channel;
-  uint8_t reserved;
+  // wakes since the address last came from DHCP (see wifi_policy.h)
+  uint8_t wakesSinceDhcp;
 };
 
 // RTC user memory is not checksummed by the SDK and holds garbage on a cold
@@ -138,9 +140,12 @@ void clearWifiHint() {
 }
 
 // Remember what worked, so the next wake can skip the scan and DHCP.
-void saveWifiHint() {
+// wakesSinceDhcp carries the lease-renewal counter forward; it defaults to 0,
+// which is right for every caller that has just been through DHCP.
+void saveWifiHint(uint8_t wakesSinceDhcp = 0) {
   WifiHint h{};
   h.magic = WIFI_HINT_MAGIC;
+  h.wakesSinceDhcp = wakesSinceDhcp;
   h.ip = (uint32_t)WiFi.localIP();
   h.gw = (uint32_t)WiFi.gatewayIP();
   h.mask = (uint32_t)WiFi.subnetMask();
@@ -155,6 +160,15 @@ void saveWifiHint() {
 }
 
 bool tryFastConnect() {
+  // Loaded before anything else because every success path below has to carry
+  // the lease-renewal counter forward, including the two where the SDK got
+  // there on its own.
+  WifiHint h;
+  const bool haveHint = loadWifiHint(h);
+  if (!haveHint) {
+    h = WifiHint{};
+  }
+
   // Never disturb a link that is already up.
   //
   // The SDK auto-connects from its own stored config while the sketch is still
@@ -166,6 +180,10 @@ bool tryFastConnect() {
   // rest of that boot. That is also free speed: the SDK already did the work.
   if (WiFi.status() == WL_CONNECTED) {
     D_println(F("WiFi already up from the SDK auto-connect"));
+    // Counted as "no DHCP this wake": if the SDK reconnected with a static
+    // config of ours, none ran. If it did run one, the only cost of counting
+    // it anyway is renewing again a little sooner.
+    saveWifiHint(wifi_policy::nextWakeCount(h.wakesSinceDhcp, false));
     return true;
   }
 
@@ -186,12 +204,12 @@ bool tryFastConnect() {
     if (WiFi.status() == WL_CONNECTED) {
       D_print(F("WiFi up via the SDK auto-connect, ms: "));
       D_println(millis() - graceStart);
+      saveWifiHint(wifi_policy::nextWakeCount(h.wakesSinceDhcp, false));
       return true;
     }
   }
 
-  WifiHint h;
-  if (!loadWifiHint(h)) {
+  if (!haveHint) {
     return false; // cold boot, or nothing cached yet
   }
   const String ssid = WiFi.SSID();
@@ -207,14 +225,20 @@ bool tryFastConnect() {
   // config and every hostname lookup would fail — an MQTT broker given by name
   // then fails to connect (rc=-2) even though the link is up. Skipping the scan
   // is the larger saving anyway, so fall back to DHCP rather than risk that.
+  //
+  // Reusing it also means no DHCP exchange, so the lease is never renewed;
+  // wifi_policy takes one wake in DHCP_REFRESH_WAKES through DHCP to keep it
+  // alive. The scan is skipped either way, which is the larger saving.
+  const bool renewing = wifi_policy::renewLease(h.wakesSinceDhcp);
   const bool addressUsable =
-      h.ip != 0 && h.gw != 0 && h.mask != 0 && h.dns != 0 &&
+      !renewing && h.ip != 0 && h.gw != 0 && h.mask != 0 && h.dns != 0 &&
       ((h.ip & h.mask) == (h.gw & h.mask));
   if (addressUsable) {
     WiFi.config(IPAddress(h.ip), IPAddress(h.gw), IPAddress(h.mask),
                 IPAddress(h.dns));
   } else {
-    D_println(F("Cached address incomplete, keeping DHCP"));
+    D_println(renewing ? F("Renewing the DHCP lease this wake")
+                       : F("Cached address incomplete, keeping DHCP"));
     WiFi.config(0U, 0U, 0U);
   }
 
@@ -238,7 +262,11 @@ bool tryFastConnect() {
     if (WiFi.dnsIP() == IPAddress(0, 0, 0, 0)) {
       D_println(F("  no DNS: dropping the cached address, DHCP on next boot"));
       clearWifiHint();
+      return true;
     }
+    // Re-cache: on a renewing wake this stores the freshly leased address and
+    // restarts the count, otherwise it just advances it.
+    saveWifiHint(wifi_policy::nextWakeCount(h.wakesSinceDhcp, renewing));
     return true;
   }
 
