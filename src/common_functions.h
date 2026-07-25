@@ -1,6 +1,54 @@
 #pragma once
 #include <Arduino.h>
+#include <ArduinoJson.h>
 #include "DHTesp.h"
+
+/// Expands %key% placeholders in `text` from `values`.
+///
+/// Scans the text once and looks up only the placeholders it actually contains.
+/// (Doing it the other way round — looping over every key in the document and
+/// calling String::replace for each — costs ~3 heap allocations per key on
+/// every URL, payload and log line, which is expensive on a ~20 KB heap.)
+/// An unknown or unterminated placeholder is left exactly as written.
+/// (JsonObject is a lightweight handle, so it is taken by value as ArduinoJson
+/// intends — a const reference makes its accessors unavailable.)
+inline String expandPlaceholders(const String &text, JsonObject values) {
+  if (text.indexOf('%') < 0) {
+    return text; // nothing to expand
+  }
+  String out;
+  out.reserve(text.length());
+
+  unsigned int pos = 0;
+  while (pos < text.length()) {
+    const int start = text.indexOf('%', pos);
+    if (start < 0) {
+      out += text.substring(pos);
+      break;
+    }
+    const int end = text.indexOf('%', start + 1);
+    if (end < 0) {
+      out += text.substring(pos); // unterminated, copy the rest verbatim
+      break;
+    }
+    out += text.substring(pos, start);
+    const String key = text.substring(start + 1, end);
+    // Look the key up, and read it back, as a C string: ArduinoJson only knows
+    // Arduino's String on-device, so going through const char* keeps this
+    // helper host-testable. Every value in sensorData is stored as a string
+    // (see TeHyBug::addSensorData), so nothing is lost.
+    if (values.containsKey(key.c_str())) {
+      const char *value = values[key.c_str()].as<const char *>();
+      if (value != nullptr) {
+        out += value;
+      }
+    } else {
+      out += text.substring(start, end + 1); // leave it as written
+    }
+    pos = end + 1;
+  }
+  return out;
+}
 
 /// <summary>
 /// Adds a leading 0 to a number if it is smaller than 10

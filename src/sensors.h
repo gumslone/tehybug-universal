@@ -27,7 +27,6 @@ ErriezBMX280 bmp280 = ErriezBMX280(0x77);
 #if !defined(ARDUINO_ESP8266_GENERIC)
 Bsec bme680;
 uint8_t bsecState[BSEC_MAX_STATE_BLOB_SIZE] = {0};
-uint16_t stateUpdateCounter = 0;
 #endif
 
 Max44009 Max44009Lux(0x4A);
@@ -107,18 +106,25 @@ void loadBME680State(void) {
   }
 }
 
+// How often the BSEC calibration blob is persisted. Bosch's reference uses
+// 6 hours; the state only drifts slowly and every save is a SPIFFS write.
+constexpr unsigned long BSEC_STATE_SAVE_PERIOD_MS = 360UL * 60UL * 1000UL;
+
 void saveBME680State(void) {
+  static unsigned long lastSaveMs = 0;
+  static bool saved = false;
+
   bool update = false;
-  if (stateUpdateCounter == 0) {
-    if (bme680.iaqAccuracy >= 3) {
-      update = true;
-      stateUpdateCounter++;
-    }
+  if (!saved) {
+    // first save as soon as the sensor reports a fully calibrated reading
+    update = (bme680.iaqAccuracy >= 3);
   } else {
-    if ((stateUpdateCounter * 10000) < millis()) {
-      update = true;
-      stateUpdateCounter++;
-    }
+    // unsigned subtraction, so this stays correct across the millis() rollover.
+    // The old test was `stateUpdateCounter * 10000 < millis()`, whose threshold
+    // advanced 10 s per save while millis() advanced in real time — so it
+    // rewrote the blob every ~10 seconds, wearing out the flash on a device
+    // meant to run for years (and it broke after the 49-day rollover).
+    update = (millis() - lastSaveMs) >= BSEC_STATE_SAVE_PERIOD_MS;
   }
 
   if (update) {
@@ -129,6 +135,8 @@ void saveBME680State(void) {
     if (file) {
       file.write(bsecState, BSEC_MAX_STATE_BLOB_SIZE);
       file.close();
+      lastSaveMs = millis();
+      saved = true;
       D_println("BME680 state saved to file");
     }
   }

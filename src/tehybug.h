@@ -29,14 +29,13 @@ class TeHyBug {
     TeHyBug(DHTesp & dht): sensorData(1024), m_dht(dht), conf(calibration, sensor, peripherals, device, serveData, scenarios, pixel), time(conf), eeprom(time) {
     }
 
-    String replacePlaceholders(String text) {
+    // Expands %key% placeholders from the current sensor readings.
+    // The text scan lives in common_functions.h so it can be unit-tested; it
+    // replaced a loop over every key in sensorData that ran String::replace
+    // ~25 times per URL, payload and log line.
+    String replacePlaceholders(const String & text) {
       const JsonObject root = sensorData.as<JsonObject>();
-      for (JsonPair keyValue : root) {
-        String k = keyValue.key().c_str();
-        String v = keyValue.value();
-        text.replace("%" + k + "%", v);
-      }
-      return text;
+      return expandPlaceholders(text, root);
     }
 
     void additionalSensorData(const String & key, const float & value) {

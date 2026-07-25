@@ -67,6 +67,38 @@ static void test_comfort_state_name() {
   CHECK_EQ_STR(cf2name(999).c_str(), "Unknown");
 }
 
+static void test_expand_placeholders() {
+  CASE("expandPlaceholders");
+  DynamicJsonDocument doc(256);
+  doc["temp"] = "22.6";
+  doc["humi"] = "48.3";
+  const JsonObject v = doc.as<JsonObject>();
+
+  // the common cases: a URL and a message template
+  CHECK_EQ_STR(expandPlaceholders("t=%temp%&h=%humi%", v).c_str(),
+               "t=22.6&h=48.3");
+  CHECK_EQ_STR(expandPlaceholders("%temp%", v).c_str(), "22.6");
+  CHECK_EQ_STR(expandPlaceholders("%temp% %humi%", v).c_str(), "22.6 48.3");
+
+  // text without placeholders is returned unchanged
+  CHECK_EQ_STR(expandPlaceholders("no placeholders", v).c_str(),
+               "no placeholders");
+  CHECK_EQ_STR(expandPlaceholders("", v).c_str(), "");
+
+  // an unknown key is left exactly as written, not blanked
+  CHECK_EQ_STR(expandPlaceholders("a %nope% b", v).c_str(), "a %nope% b");
+  CHECK_EQ_STR(expandPlaceholders("%temp% %nope%", v).c_str(), "22.6 %nope%");
+
+  // a lone or unterminated % must not eat the rest of the string
+  CHECK_EQ_STR(expandPlaceholders("100% humidity", v).c_str(), "100% humidity");
+  CHECK_EQ_STR(expandPlaceholders("%temp% is 100%", v).c_str(), "22.6 is 100%");
+  CHECK_EQ_STR(expandPlaceholders("%", v).c_str(), "%");
+  CHECK_EQ_STR(expandPlaceholders("%%", v).c_str(), "%%"); // empty key, unknown
+
+  // adjacent placeholders and surrounding text
+  CHECK_EQ_STR(expandPlaceholders("[%temp%%humi%]", v).c_str(), "[22.648.3]");
+}
+
 int main() {
   std::printf("Running common_functions tests...\n");
   test_int_format();
@@ -76,5 +108,6 @@ int main() {
   test_key_to_unit();
   test_key_to_name();
   test_comfort_state_name();
+  test_expand_placeholders();
   return SUMMARY();
 }

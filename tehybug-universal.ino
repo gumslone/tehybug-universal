@@ -18,8 +18,8 @@
 
 // PubSubClient mallocs MQTT_MAX_PACKET_SIZE at construction (boot, before WiFi).
 // Its default is left small in the lib so config / offline mode don't waste heap
-// on a buffer MQTT never uses; setup() calls mqttClient.setBufferSize(4000) to
-// grow it only when MQTT/HA is actually active.
+// on a buffer MQTT never uses; setup() calls mqttClient.setBufferSize() to grow
+// it only when MQTT/HA is actually active.
 #include <PubSubClient.h>
 #include <TickerScheduler.h>
 #include <WebSocketsServer.h>
@@ -286,7 +286,10 @@ void setup() {
     updateMqttClient();
     mqttClient.setKeepAlive(10);
     mqttClient.setCallback(mqttCallback);
-    mqttClient.setBufferSize(4000);
+    // Sized to the largest message this firmware actually builds: a ~1 KB HA
+    // payload plus its topic and the 5-byte header. It was 4000, permanently
+    // mallocing ~2.5 KB more than anything could use out of a ~20 KB heap.
+    mqttClient.setBufferSize(1500);
     if (tehybug.serveData.ha.active)
     {
       ha::setupHandle();

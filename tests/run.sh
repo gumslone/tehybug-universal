@@ -9,7 +9,7 @@ cd "$(dirname "$0")/.."
 CXX="${CXX:-g++}"
 OUT=tests/build
 mkdir -p "$OUT"
-INC="-Itests/shims -Itests -Ilibraries/EepromFS-main"
+INC="-Itests/shims -Itests -Ilibraries/EepromFS-main -Ilibraries/ArduinoJson/src"
 STD="-std=c++17 -Wall -O1"
 
 echo "==> Building"

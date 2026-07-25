@@ -49,9 +49,18 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
   }
 }
 
+// Home Assistant discovery is retained on the broker, so it only has to be
+// published once per connection — it used to go out before every state update,
+// which is one retained ~500-byte publish per sensor key on every reporting
+// interval. Reset on (re)connect in mqttReconnect().
+bool haConfigPublished = false;
+
 void haSendData() {
   if (mqttClient.connected()) {
-    ha::publishAutoConfig(mqttClient, version, tehybug.sensorData);
+    if (!haConfigPublished) {
+      ha::publishAutoConfig(mqttClient, version, tehybug.sensorData);
+      haConfigPublished = true;
+    }
     ha::publishState(mqttClient, tehybug.sensorData);
     Log(F("HomeAssistant"), F("haSendData"));
   } else {
@@ -138,6 +147,8 @@ void mqttReconnect() {
     Log(F("MqttReconnect"), F("Connected!"));
     mqtt.retryCounter = 0;
     mqttSubscribeControl();
+    // a fresh session (and any broker restart behind it) needs discovery again
+    haConfigPublished = false;
 
     if (tehybug.serveData.ha.active) {
       haSendData();
