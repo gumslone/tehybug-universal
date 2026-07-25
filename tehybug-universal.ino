@@ -112,7 +112,7 @@ void updateConfigLed() {
 // Live (non-sleep) modes only boot on a manual reset or power-up, so waiting
 // costs nothing there and the window is generous. Sleep and offline modes run
 // this on every wake-up, where it is battery time, so theirs stays short.
-constexpr unsigned long BUTTON_WINDOW_LIVE_MS = 5000;
+constexpr unsigned long BUTTON_WINDOW_LIVE_MS = 1000;
 constexpr unsigned long BUTTON_WINDOW_SLEEP_MS = 1000;
 
 // Short press toggles config mode, holding for 20 seconds factory-resets.
@@ -364,8 +364,11 @@ void loop() {
       webSocket.loop();
       break;
 
-    case mode_logic::DeviceMode::Sleep:
-      // measure, act, serve, sleep
+    case mode_logic::DeviceMode::DeepSleep:
+    case mode_logic::DeviceMode::LightSleep:
+      // measure, act, serve, sleep. serve_data() picks deep vs light sleep;
+      // after a light sleep execution resumes here on the next iteration with
+      // the WiFi association already re-established.
       read_sensors();
       yield();
       serve_scenario();

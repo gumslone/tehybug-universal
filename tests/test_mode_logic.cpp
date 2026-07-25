@@ -113,11 +113,20 @@ static void test_current_mode() {
   CHECK(currentMode(d, p) == DeviceMode::Live);
 
   d.sleepMode = true;
-  CHECK(currentMode(d, p) == DeviceMode::Sleep);
+  CHECK(currentMode(d, p) == DeviceMode::DeepSleep);
+  CHECK(isSleeping(currentMode(d, p)));
   d.sleepMode = false;
   d.lightSleepMode = true;
-  CHECK(currentMode(d, p) == DeviceMode::Sleep); // light sleep counts too
+  // light sleep is its own mode: execution resumes in loop() and the WiFi
+  // association has to be rebuilt, unlike deep sleep which resets the chip
+  CHECK(currentMode(d, p) == DeviceMode::LightSleep);
+  CHECK(isSleeping(currentMode(d, p)));
+  // with both set, deep sleep wins (matching startSleep's order)
+  d.sleepMode = true;
+  CHECK(currentMode(d, p) == DeviceMode::DeepSleep);
+  d.sleepMode = false;
   d.lightSleepMode = false;
+  CHECK(!isSleeping(currentMode(d, p)));
 
   // offline only engages when the EEPROM is actually present
   d.offlineMode = true;
@@ -135,7 +144,8 @@ static void test_current_mode() {
 
   CHECK_EQ_STR(modeName(DeviceMode::Config), "config");
   CHECK_EQ_STR(modeName(DeviceMode::Offline), "offline");
-  CHECK_EQ_STR(modeName(DeviceMode::Sleep), "sleep");
+  CHECK_EQ_STR(modeName(DeviceMode::DeepSleep), "deep-sleep");
+  CHECK_EQ_STR(modeName(DeviceMode::LightSleep), "light-sleep");
   CHECK_EQ_STR(modeName(DeviceMode::Live), "live");
 }
 

@@ -35,13 +35,18 @@ inline bool dataLogAvailable(const Peripherals &p) {
 // every call site, which is easy to get subtly wrong.
 //
 // Precedence, highest first:
-//   Config  - the web UI is up. Wins over everything: the MODE button, a first
-//             start and "no serving mode selected" all force it.
-//   Offline - no WiFi at all: measure, append to the EEPROM log, deep-sleep.
-//             Only reachable when the EEPROM is actually present.
-//   Sleep   - measure, serve, then deep/light sleep.
-//   Live    - stay awake and serve on tickers.
-enum class DeviceMode : uint8_t { Config, Offline, Sleep, Live };
+//   Config     - the web UI is up. Wins over everything: the MODE button, a
+//                first start and "no serving mode selected" all force it.
+//   Offline    - no WiFi at all: measure, append to the EEPROM log,
+//                deep-sleep. Only reachable when the EEPROM is present.
+//   DeepSleep  - measure, serve, then deep-sleep. The chip resets on wake, so
+//                the next cycle starts from setup().
+//   LightSleep - measure, serve, then light-sleep. Execution resumes inside
+//                loop() and the WiFi association has to be re-established,
+//                which is why it is a mode of its own and not folded into
+//                DeepSleep.
+//   Live       - stay awake and serve on tickers.
+enum class DeviceMode : uint8_t { Config, Offline, DeepSleep, LightSleep, Live };
 
 inline DeviceMode currentMode(const Device &d, const Peripherals &p) {
   if (d.configMode) {
@@ -50,19 +55,30 @@ inline DeviceMode currentMode(const Device &d, const Peripherals &p) {
   if (offlineEnabled(d, p)) {
     return DeviceMode::Offline;
   }
-  if (sleepEnabled(d)) {
-    return DeviceMode::Sleep;
+  // deep sleep first: startSleep() gives it precedence when both are set
+  if (d.sleepMode) {
+    return DeviceMode::DeepSleep;
+  }
+  if (d.lightSleepMode) {
+    return DeviceMode::LightSleep;
   }
   return DeviceMode::Live;
+}
+
+// true for either sleeping mode, where loop() measures and serves itself
+// instead of relying on the tickers
+inline bool isSleeping(DeviceMode m) {
+  return m == DeviceMode::DeepSleep || m == DeviceMode::LightSleep;
 }
 
 // for logs and the device-info payload
 inline const char *modeName(DeviceMode m) {
   switch (m) {
-    case DeviceMode::Config:  return "config";
-    case DeviceMode::Offline: return "offline";
-    case DeviceMode::Sleep:   return "sleep";
-    case DeviceMode::Live:    return "live";
+    case DeviceMode::Config:     return "config";
+    case DeviceMode::Offline:    return "offline";
+    case DeviceMode::DeepSleep:  return "deep-sleep";
+    case DeviceMode::LightSleep: return "light-sleep";
+    case DeviceMode::Live:       return "live";
   }
   return "unknown";
 }

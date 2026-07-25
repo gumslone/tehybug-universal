@@ -161,10 +161,13 @@ class TeHyBug {
     const char *modeName() {
       return mode_logic::modeName(mode());
     }
-    bool inConfigMode()  { return mode() == mode_logic::DeviceMode::Config; }
-    bool inOfflineMode() { return mode() == mode_logic::DeviceMode::Offline; }
-    bool inSleepMode()   { return mode() == mode_logic::DeviceMode::Sleep; }
-    bool inLiveMode()    { return mode() == mode_logic::DeviceMode::Live; }
+    bool inConfigMode()     { return mode() == mode_logic::DeviceMode::Config; }
+    bool inOfflineMode()    { return mode() == mode_logic::DeviceMode::Offline; }
+    bool inDeepSleepMode()  { return mode() == mode_logic::DeviceMode::DeepSleep; }
+    bool inLightSleepMode() { return mode() == mode_logic::DeviceMode::LightSleep; }
+    bool inLiveMode()       { return mode() == mode_logic::DeviceMode::Live; }
+    // either sleeping mode
+    bool inSleepMode()      { return mode_logic::isSleeping(mode()); }
 
     // Config mode is the one mode that is switched directly (MODE button,
     // remote control, first start); the others follow from the configuration.
