@@ -67,6 +67,75 @@ static void test_comfort_state_name() {
   CHECK_EQ_STR(cf2name(999).c_str(), "Unknown");
 }
 
+static void test_second_sensor_metadata() {
+  CASE("second-sensor keys inherit unit/name/icon");
+  // Home Assistant received empty names and units for every second-sensor and
+  // derived value before these fell back to the base key.
+  CHECK_EQ_STR(key2unit("humi2").c_str(), "%RH");
+  CHECK_EQ_STR(key2unit("hi2").c_str(), "\xC2\xB0""C");
+  CHECK_EQ_STR(key2unit("dew2").c_str(), "\xC2\xB0""C");
+  CHECK_EQ_STR(key2unit("ah2").c_str(), "g/m\xC2\xB3");
+  CHECK_EQ_STR(key2unit("cr2").c_str(), "%");
+  CHECK_EQ_STR(key2unit("hi_imp2").c_str(), "\xC2\xB0""F");
+
+  CHECK_EQ_STR(key2name("humi2").c_str(), "Humidity 2");
+  CHECK_EQ_STR(key2name("dew2").c_str(), "Dew point 2");
+  CHECK_EQ_STR(key2name("cs2").c_str(), "Comfort status 2");
+  CHECK_EQ_STR(key2name("temp2").c_str(), "Temperature 2");
+  CHECK(key2icon("humi2") == key2icon("humi"));
+  CHECK(key2icon("dew2") == key2icon("dew"));
+
+  // the base keys must be untouched
+  CHECK_EQ_STR(key2name("humi").c_str(), "Humidity");
+  CHECK_EQ_STR(key2unit("temp").c_str(), "\xC2\xB0""C");
+
+  // eco2 is a sensor of its own, not a second-sensor variant of "eco"
+  CHECK_EQ_STR(key2name("eco2").c_str(), "CO2 equivalent");
+  CHECK_EQ_STR(key2unit("eco2").c_str(), "ppm");
+  CHECK_EQ_STR(baseKey("eco2").c_str(), "eco2");
+  CHECK_EQ_STR(baseKey("humi2").c_str(), "humi");
+  CHECK_EQ_STR(baseKey("humi").c_str(), "humi");
+
+  // bvoc had neither a unit nor an icon
+  CHECK_EQ_STR(key2unit("bvoc").c_str(), "ppm");
+  CHECK(key2icon("bvoc") != String("mdi:help"));
+
+  // an unknown key still yields nothing rather than a bogus " 2"
+  CHECK_EQ_STR(key2name("nope2").c_str(), "");
+}
+
+static void test_expand_placeholders() {
+  CASE("expandPlaceholders");
+  DynamicJsonDocument doc(256);
+  doc["temp"] = "22.6";
+  doc["humi"] = "48.3";
+  const JsonObject v = doc.as<JsonObject>();
+
+  // the common cases: a URL and a message template
+  CHECK_EQ_STR(expandPlaceholders("t=%temp%&h=%humi%", v).c_str(),
+               "t=22.6&h=48.3");
+  CHECK_EQ_STR(expandPlaceholders("%temp%", v).c_str(), "22.6");
+  CHECK_EQ_STR(expandPlaceholders("%temp% %humi%", v).c_str(), "22.6 48.3");
+
+  // text without placeholders is returned unchanged
+  CHECK_EQ_STR(expandPlaceholders("no placeholders", v).c_str(),
+               "no placeholders");
+  CHECK_EQ_STR(expandPlaceholders("", v).c_str(), "");
+
+  // an unknown key is left exactly as written, not blanked
+  CHECK_EQ_STR(expandPlaceholders("a %nope% b", v).c_str(), "a %nope% b");
+  CHECK_EQ_STR(expandPlaceholders("%temp% %nope%", v).c_str(), "22.6 %nope%");
+
+  // a lone or unterminated % must not eat the rest of the string
+  CHECK_EQ_STR(expandPlaceholders("100% humidity", v).c_str(), "100% humidity");
+  CHECK_EQ_STR(expandPlaceholders("%temp% is 100%", v).c_str(), "22.6 is 100%");
+  CHECK_EQ_STR(expandPlaceholders("%", v).c_str(), "%");
+  CHECK_EQ_STR(expandPlaceholders("%%", v).c_str(), "%%"); // empty key, unknown
+
+  // adjacent placeholders and surrounding text
+  CHECK_EQ_STR(expandPlaceholders("[%temp%%humi%]", v).c_str(), "[22.648.3]");
+}
+
 int main() {
   std::printf("Running common_functions tests...\n");
   test_int_format();
@@ -76,5 +145,7 @@ int main() {
   test_key_to_unit();
   test_key_to_name();
   test_comfort_state_name();
+  test_second_sensor_metadata();
+  test_expand_placeholders();
   return SUMMARY();
 }

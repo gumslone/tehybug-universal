@@ -13,6 +13,10 @@
 #define PIXEL_COUNT 1 // Number of NeoPixels
 #define PIXEL_PIN 12  // Digital IO pin connected to the NeoPixels.
 
+// Settling time after SIGNAL_LED_PIN enables the pixel's supply, before the
+// first colour frame is clocked out. Only paid when the pixel was actually off.
+#define PIXEL_POWER_UP_MS 3
+
 #if PIXEL_ACTIVE
 #include <Adafruit_NeoPixel.h>
 #endif
@@ -29,9 +33,19 @@ public:
     if (SIGNAL_LED_PIN == 1) {
       digitalWrite(SIGNAL_LED_PIN, LOW); // on
     } else {
-      digitalWrite(SIGNAL_LED_PIN, HIGH); // on
+      const bool wasUnpowered = !m_powered;
+      digitalWrite(SIGNAL_LED_PIN, HIGH); // on (SIGNAL_LED_PIN gates its supply)
+      m_powered = true;
 
 #if PIXEL_ACTIVE
+      // The WS2812 needs its supply to come up and its internal reset to clear
+      // before it will latch a frame. Writing the colour in the same breath as
+      // enabling power meant the first frame was dropped, so the LED stayed
+      // dark until something lit it a second time — which is why it only came
+      // on when the MODE button was released, not while it was held.
+      if (wasUnpowered) {
+        delay(PIXEL_POWER_UP_MS);
+      }
       setPixel(r, g, b, brightness);
 #endif
     }
@@ -39,18 +53,28 @@ public:
 
   void off() {
     D_println("Led off");
+    // on() configures the pin, but off() is reached on paths where on() never
+    // ran (a boot straight into a serving mode, sleep). Writing to a pin still
+    // in INPUT mode only toggles its pullup, so the LED was not actually driven
+    // off there.
+    pinMode(SIGNAL_LED_PIN, OUTPUT);
     if (SIGNAL_LED_PIN == 1) {
       digitalWrite(SIGNAL_LED_PIN, HIGH); // off
     } else {
 #if PIXEL_ACTIVE
       setPixel(0, 0, 0, 0);
 #endif
-      digitalWrite(SIGNAL_LED_PIN, LOW); // off
+      digitalWrite(SIGNAL_LED_PIN, LOW); // off (cuts the pixel's supply)
+      m_powered = false;
     }
   }
 
-#if PIXEL_ACTIVE
 private:
+  // Whether SIGNAL_LED_PIN currently supplies the pixel, so the power-up
+  // settling delay is only paid on the transition from off to on.
+  bool m_powered{false};
+
+#if PIXEL_ACTIVE
 
   void setPixel(uint8_t r=0, uint8_t g=0, uint8_t b=255, uint8_t brightness=50) {
         m_neoPixel.begin(); // Initialize NeoPixel strip object (REQUIRED)

@@ -13,19 +13,46 @@
 
 const IPAddress apIP(192, 168, 4, 1);
 
+// Give the radio time to actually associate between attempts, and cap how many
+// consecutive failures trigger a reboot.
+constexpr unsigned long WIFI_RETRY_INTERVAL_MS = 10000;
+constexpr uint8_t WIFI_MAX_ATTEMPTS = 6;
+
+// How long a serving-mode device sleeps before retrying a failed WiFi connect.
+// Long enough to ride out a router reboot without draining the battery.
+constexpr int WIFI_RETRY_SLEEP_S = 300;
+
+// One reconnect attempt per call, rate-limited. The old version spun in
+// `while (!connected) { WiFi.reconnect(); yield(); }` and restarted the device
+// on the 10th iteration — all ten fired within microseconds, far quicker than
+// an association can complete, so any brief drop rebooted the device instead of
+// reconnecting. It also blocked loop() for the whole time.
 void connectToWiFi()
 {
-  int tryCount = 0;
-  while ( WiFi.status() != WL_CONNECTED )
-  {
-    tryCount++;
-    WiFi.reconnect();
-    yield();
-    if ( tryCount == 10 )
-    {
-      ESP.restart();
-    }
+  static unsigned long lastAttempt = 0;
+  static bool attempted = false;
+  static uint8_t attempts = 0;
+
+  if (WiFi.status() == WL_CONNECTED) {
+    attempts = 0;
+    return;
   }
+
+  const unsigned long now = millis();
+  // unsigned subtraction, so this stays correct across the millis() rollover
+  if (attempted && (now - lastAttempt) < WIFI_RETRY_INTERVAL_MS) {
+    return;
+  }
+  lastAttempt = now;
+  attempted = true;
+
+  if (++attempts > WIFI_MAX_ATTEMPTS) {
+    D_println(F("WiFi reconnect failed repeatedly, restarting"));
+    ESP.restart();
+  }
+  D_print(F("WiFi reconnect attempt "));
+  D_println(attempts);
+  WiFi.reconnect();
 }
 
 void checkWifi()
@@ -47,8 +74,191 @@ void saveConfigCallback() {
   tehybug.conf.saveConfigCallback();
 }
 
+/* WiFi fast reconnect ------------------------------------------------------
+ *
+ * A full scan + association + DHCP takes a few seconds at ~80 mA, and a
+ * deep-sleep device pays it on every wake — which dominates its power budget,
+ * since the sleep itself is only ~20 uA. Caching the channel, BSSID and IP
+ * from the last successful connection lets the next wake skip both the scan
+ * and DHCP, typically well under a second instead of several.
+ *
+ * The cache lives in RTC memory: it survives deep sleep and is wiped by a power
+ * cycle, which is the right lifetime for it. Offsets 0-31 belong to eboot when
+ * OTA is in play and 64+ holds the HA discovery memo, so this sits at 40.
+ *
+ * A hint goes stale whenever the AP changes channel, the router hands out a
+ * different subnet, or another access point answers for the same SSID — so a
+ * failed fast attempt clears the cache and falls back to the normal scan.
+ * Otherwise this would trade battery life for a device that cannot reconnect.
+ */
+constexpr uint32_t WIFI_HINT_RTC_SLOT = 40;
+constexpr uint32_t WIFI_HINT_MAGIC = 0x57494649;  // 'WIFI'
+constexpr unsigned long WIFI_HINT_TIMEOUT_MS = 4000;
+
+// How long to let the SDK's own auto-connect finish before taking over. It
+// starts at boot and normally associates well inside this.
+constexpr unsigned long WIFI_SDK_GRACE_MS = 1500;
+
+struct WifiHint {
+  uint32_t magic;
+  uint32_t crc;
+  uint32_t ip;
+  uint32_t gw;
+  uint32_t mask;
+  uint32_t dns;
+  uint8_t bssid[6];
+  uint8_t channel;
+  uint8_t reserved;
+};
+
+// RTC user memory is not checksummed by the SDK and holds garbage on a cold
+// boot, so the payload is verified before it is trusted.
+uint32_t wifiHintCrc(const WifiHint &h) {
+  const uint8_t *p = (const uint8_t *)&h.ip;
+  const size_t n = sizeof(WifiHint) - offsetof(WifiHint, ip);
+  uint32_t v = 2166136261u;
+  for (size_t i = 0; i < n; i++) {
+    v ^= p[i];
+    v *= 16777619u;
+  }
+  return v;
+}
+
+bool loadWifiHint(WifiHint &h) {
+  if (!ESP.rtcUserMemoryRead(WIFI_HINT_RTC_SLOT, (uint32_t *)&h, sizeof(h))) {
+    return false;
+  }
+  return h.magic == WIFI_HINT_MAGIC && h.crc == wifiHintCrc(h) &&
+         h.channel >= 1 && h.channel <= 14 && h.ip != 0;
+}
+
+void clearWifiHint() {
+  WifiHint h{};
+  ESP.rtcUserMemoryWrite(WIFI_HINT_RTC_SLOT, (uint32_t *)&h, sizeof(h));
+}
+
+// Remember what worked, so the next wake can skip the scan and DHCP.
+void saveWifiHint() {
+  WifiHint h{};
+  h.magic = WIFI_HINT_MAGIC;
+  h.ip = (uint32_t)WiFi.localIP();
+  h.gw = (uint32_t)WiFi.gatewayIP();
+  h.mask = (uint32_t)WiFi.subnetMask();
+  h.dns = (uint32_t)WiFi.dnsIP();
+  h.channel = WiFi.channel();
+  const uint8_t *bssid = WiFi.BSSID();
+  if (bssid != nullptr) {
+    memcpy(h.bssid, bssid, sizeof(h.bssid));
+  }
+  h.crc = wifiHintCrc(h);
+  ESP.rtcUserMemoryWrite(WIFI_HINT_RTC_SLOT, (uint32_t *)&h, sizeof(h));
+}
+
+bool tryFastConnect() {
+  // Never disturb a link that is already up.
+  //
+  // The SDK auto-connects from its own stored config while the sketch is still
+  // booting, so by the time setup() runs the association and DHCP are often
+  // already done. Re-applying a static address and calling WiFi.begin() again
+  // tears that association down — but WiFi.status() still reports the old one
+  // as connected, so this returned "ok" in ~120 ms with the stack actually
+  // mid-reassociation, and every socket afterwards failed (MQTT rc=-2) for the
+  // rest of that boot. That is also free speed: the SDK already did the work.
+  if (WiFi.status() == WL_CONNECTED) {
+    D_println(F("WiFi already up from the SDK auto-connect"));
+    return true;
+  }
+
+  // Let an association that is already in flight finish.
+  //
+  // The SDK keeps its own copy of the last AP, including the channel, and
+  // starts reconnecting the moment the chip boots — usually landing within a
+  // few hundred milliseconds, before setup() even gets here. Calling begin()
+  // on top of that restarts the association from scratch, which is the same
+  // mistake as re-associating an established link, just harder to catch. Only
+  // fall back to the cached hint if the SDK has not managed it.
+  if (WiFi.SSID().length() > 0) {
+    const unsigned long graceStart = millis();
+    while (WiFi.status() != WL_CONNECTED &&
+           (millis() - graceStart) < WIFI_SDK_GRACE_MS) {
+      delay(10);
+    }
+    if (WiFi.status() == WL_CONNECTED) {
+      D_print(F("WiFi up via the SDK auto-connect, ms: "));
+      D_println(millis() - graceStart);
+      return true;
+    }
+  }
+
+  WifiHint h;
+  if (!loadWifiHint(h)) {
+    return false; // cold boot, or nothing cached yet
+  }
+  const String ssid = WiFi.SSID();
+  const String psk = WiFi.psk();
+  if (ssid.length() == 0) {
+    return false; // no stored credentials: the portal has to run
+  }
+
+  WiFi.mode(WIFI_STA);
+
+  // Reusing the cached address skips DHCP, but only when the whole set is
+  // coherent. A zero or stale DNS entry would otherwise be applied as a static
+  // config and every hostname lookup would fail — an MQTT broker given by name
+  // then fails to connect (rc=-2) even though the link is up. Skipping the scan
+  // is the larger saving anyway, so fall back to DHCP rather than risk that.
+  const bool addressUsable =
+      h.ip != 0 && h.gw != 0 && h.mask != 0 && h.dns != 0 &&
+      ((h.ip & h.mask) == (h.gw & h.mask));
+  if (addressUsable) {
+    WiFi.config(IPAddress(h.ip), IPAddress(h.gw), IPAddress(h.mask),
+                IPAddress(h.dns));
+  } else {
+    D_println(F("Cached address incomplete, keeping DHCP"));
+    WiFi.config(0U, 0U, 0U);
+  }
+
+  WiFi.begin(ssid.c_str(), psk.c_str(), h.channel, h.bssid, true);
+
+  const unsigned long start = millis();
+  while (WiFi.status() != WL_CONNECTED &&
+         (millis() - start) < WIFI_HINT_TIMEOUT_MS) {
+    delay(10);
+  }
+
+  if (WiFi.status() == WL_CONNECTED) {
+    D_print(F("WiFi fast reconnect ok, ms: "));
+    D_println(millis() - start);
+    // Printed because a hostname (an MQTT broker, tehybug.com) is only
+    // reachable if the DNS server came through as well.
+    D_print(F("  ip "));
+    D_print(WiFi.localIP());
+    D_print(F("  dns "));
+    D_println(WiFi.dnsIP());
+    if (WiFi.dnsIP() == IPAddress(0, 0, 0, 0)) {
+      D_println(F("  no DNS: dropping the cached address, DHCP on next boot"));
+      clearWifiHint();
+    }
+    return true;
+  }
+
+  D_println(F("WiFi fast reconnect failed, falling back to a full scan"));
+  clearWifiHint();
+  // Note: not WiFi.disconnect(), which erases the stored credentials.
+  wifi_station_disconnect();
+  WiFi.config(0U, 0U, 0U); // back to DHCP for the normal path
+  return false;
+}
+
 void setupWifi() {
   D_println("Setup WIFI");
+
+  // Fast path first: this is what makes a deep-sleep wake cheap. It only
+  // succeeds when a previous connection cached a still-valid hint.
+  if (tryFastConnect()) {
+    D_println(F("Wifi successfully connected!"));
+    return;
+  }
 
   wifiManager.setDebugOutput(true);
   // Set config save notify callback
@@ -90,20 +300,40 @@ void setupWifi() {
 
   if (!wifiManager.autoConnect(wifiSsid, wifiPassword)) {
     Serial.println(F("Setup: Wifi failed to connect"));
-    // Serving mode: the 3 connect attempts are done and the portal is disabled,
-    // so deep-sleep and retry the connection on the next wake (rides out a
-    // temporary AP/router outage). The device reboots into setup() on wake.
-    // In config mode the portal was shown instead, so just fall through.
-    if (!tehybug.device.configMode) {
-      D_println(F("Deep sleep 5 min, will retry WiFi on wake"));
-      tehybug.pixel.off();
-      startDeepSleep(5 * 60);  // 5 minutes
-      delay(100);
+    yield();
+
+    // Never leave config mode just because the connection failed.
+    //
+    // This used to clear configMode unconditionally here. When the config
+    // portal timed out — the one case where configMode is still true — the
+    // device therefore dropped out of config mode *and* had no link: no
+    // portal, no station, "Starting live mode" with the IP unset, and every
+    // request failing with -1 until the battery ran out, unreachable.
+    //
+    // In config mode the soft-AP stays up, so leaving the flag alone keeps the
+    // device reachable at 192.168.4.1 to fix the credentials.
+    if (tehybug.device.configMode) {
+      D_println(F("Staying in config mode; reachable on the soft-AP"));
+      return;
     }
-    tehybug.device.configMode = false;
+
+    // A serving mode cannot do anything without a link, so sleep and retry on
+    // the next boot rather than burning power failing every request.
+    D_println(F("No WiFi in a serving mode, deep sleep and retry"));
+    tehybug.pixel.off();
+    startDeepSleep(WIFI_RETRY_SLEEP_S);
+    delay(100);
+    // Only reached if the board cannot deep-sleep (GPIO16 not wired to RST):
+    // fall back to config mode so it stays reachable instead of serving into
+    // a dead network.
+    D_println(F("Deep sleep unavailable, falling back to config mode"));
+    tehybug.device.configMode = true;
+    return;
   }
   yield();
   D_println(F("Wifi successfully connected!"));
+  // Cache what the scan just worked out, so the next wake can skip it.
+  saveWifiHint();
   tehybug.conf.saveConfig();
 }
 

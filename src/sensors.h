@@ -27,7 +27,6 @@ ErriezBMX280 bmp280 = ErriezBMX280(0x77);
 #if !defined(ARDUINO_ESP8266_GENERIC)
 Bsec bme680;
 uint8_t bsecState[BSEC_MAX_STATE_BLOB_SIZE] = {0};
-uint16_t stateUpdateCounter = 0;
 #endif
 
 Max44009 Max44009Lux(0x4A);
@@ -61,12 +60,18 @@ void read_bmx280() {
 }
 
 #if !defined(ARDUINO_ESP8266_GENERIC)
-void checkIaqSensorStatus(void) {
+// Checks the BSEC / BME680 driver status. On a hard error the sensor is
+// disabled and false is returned — the device keeps running (WiFi, config mode,
+// the other sensors) instead of hanging. It used to spin in `for(;;) delay(1)`,
+// which feeds the watchdog, so a single sensor fault bricked the device with no
+// reset and no way back to config mode.
+bool checkIaqSensorStatus(void) {
+  bool ok = true;
+
   if (bme680.status != BSEC_OK) {
     if (bme680.status < BSEC_OK) {
       D_println("BSEC error code : " + String(bme680.status));
-      for (;;)
-        delay(1); /* Halt in case of failure */
+      ok = false;
     } else {
       D_println("BSEC warning code : " + String(bme680.status));
     }
@@ -75,12 +80,17 @@ void checkIaqSensorStatus(void) {
   if (bme680.bme680Status != BME680_OK) {
     if (bme680.bme680Status < BME680_OK) {
       D_println("BME680 error code : " + String(bme680.bme680Status));
-      for (;;)
-        delay(1); /* Halt in case of failure */
+      ok = false;
     } else {
       D_println("BME680 warning code : " + String(bme680.bme680Status));
     }
   }
+
+  if (!ok) {
+    D_println("BME680 disabled after error");
+    tehybug.sensor.bme680 = false;
+  }
+  return ok;
 }
 
 void loadBME680State(void) {
@@ -96,18 +106,25 @@ void loadBME680State(void) {
   }
 }
 
+// How often the BSEC calibration blob is persisted. Bosch's reference uses
+// 6 hours; the state only drifts slowly and every save is a SPIFFS write.
+constexpr unsigned long BSEC_STATE_SAVE_PERIOD_MS = 360UL * 60UL * 1000UL;
+
 void saveBME680State(void) {
+  static unsigned long lastSaveMs = 0;
+  static bool saved = false;
+
   bool update = false;
-  if (stateUpdateCounter == 0) {
-    if (bme680.iaqAccuracy >= 3) {
-      update = true;
-      stateUpdateCounter++;
-    }
+  if (!saved) {
+    // first save as soon as the sensor reports a fully calibrated reading
+    update = (bme680.iaqAccuracy >= 3);
   } else {
-    if ((stateUpdateCounter * 10000) < millis()) {
-      update = true;
-      stateUpdateCounter++;
-    }
+    // unsigned subtraction, so this stays correct across the millis() rollover.
+    // The old test was `stateUpdateCounter * 10000 < millis()`, whose threshold
+    // advanced 10 s per save while millis() advanced in real time — so it
+    // rewrote the blob every ~10 seconds, wearing out the flash on a device
+    // meant to run for years (and it broke after the 49-day rollover).
+    update = (millis() - lastSaveMs) >= BSEC_STATE_SAVE_PERIOD_MS;
   }
 
   if (update) {
@@ -118,6 +135,8 @@ void saveBME680State(void) {
     if (file) {
       file.write(bsecState, BSEC_MAX_STATE_BLOB_SIZE);
       file.close();
+      lastSaveMs = millis();
+      saved = true;
       D_println("BME680 state saved to file");
     }
   }
@@ -189,9 +208,16 @@ void read_dht_custom(DHTesp &sensor, const String &temp, const String &humi) {
     tehybug.addTempHumi(temp, prev.temperature, humi, prev.humidity);
     return;
   }
-  // keep reading until two consecutive samples agree within 0.5 °C
-  for (int i = 0; i < 10; i++) {
+  // Keep reading until two consecutive samples agree within 0.5 °C. Capped at
+  // DHT_MAX_SAMPLES: each pass waits a full sampling period (2 s on a DHT22),
+  // and this runs inside a ticker callback — 10 passes meant up to 20 s with no
+  // server.handleClient(), no webSocket.loop() and no mqttClient.loop(), which
+  // outlasts the 10 s MQTT keep-alive.
+  constexpr int DHT_MAX_SAMPLES = 3;
+  bool recorded = false;
+  for (int i = 0; i < DHT_MAX_SAMPLES; i++) {
     delay(sensor.getMinimumSamplingPeriod());
+    yield();
     TempAndHumidity tehy = sensor.getTempAndHumidity();
     // Check if any reads failed and exit early (to try again).
     if (isnan(tehy.temperature) || isnan(tehy.humidity)) {
@@ -206,8 +232,14 @@ void read_dht_custom(DHTesp &sensor, const String &temp, const String &humi) {
         continue;
       }
       tehybug.addTempHumi(temp, tehy.temperature, humi, tehy.humidity);
+      recorded = true;
       break;
     }
+  }
+  // Never leave the reading out entirely: if the samples never settled, report
+  // the last valid one rather than silently dropping the sensor this cycle.
+  if (!recorded && !isnan(prev.temperature) && !isnan(prev.humidity)) {
+    tehybug.addTempHumi(temp, prev.temperature, humi, prev.humidity);
   }
 }
 
@@ -321,38 +353,48 @@ void read_sensors() {
 uint8_t findI2Csensors() {
   Wire.begin(I2C_SDA, I2C_SCL);
   // required to scan twice to find sensors like am2320
-  i2cScanner::Scanner scanner;
+  i2cScanner::Scanner &scanner = i2cScanner::shared();
   scanner.scan();
   scanner.scan();
 
-  if (scanner.addressExists("0x77")) {
+  // 0x77 is ambiguous: a BME680 and a BMP280/BME280 both answer there, so both
+  // flags are set here on purpose and setupBmx280() resolves it by probing —
+  // it reads the chip ID and clears bme680 for a known BMx280, or clears bmx
+  // when the BMx280 driver fails to start (which means it really is a BME680).
+  // The assignment re-points the driver at 0x77 (bmp280 is the same type
+  // constructed with that address).
+  if (scanner.addressExists(0x77)) {
     bmx280 = bmp280;
     tehybug.sensor.bmx = true;
-  } else if (scanner.addressExists("0x76")) {
+  } else if (scanner.addressExists(0x76)) {
     tehybug.sensor.bmx = true;
   }
-  if (scanner.addressExists("0x5c")) {
+  if (scanner.addressExists(0x5c)) {
     tehybug.sensor.am2320 = true;
   }
 #if !defined(ARDUINO_ESP8266_GENERIC)
-  if (scanner.addressExists("0x77")) {
+  if (scanner.addressExists(0x77)) {
     tehybug.sensor.bme680 = true;
   }
 #endif
-  if (scanner.addressExists("0x4a")) {
+  if (scanner.addressExists(0x4a)) {
     tehybug.sensor.max44009 = true;
   }
-  if (scanner.addressExists("0x38")) {
+  if (scanner.addressExists(0x38)) {
     tehybug.sensor.aht20 = true;
   }
 #if !defined(ARDUINO_ESP8266_GENERIC)
-  if (scanner.addressExists("0x50")) {
+  if (scanner.addressExists(0x50)) {
     tehybug.peripherals.eeprom = true;
   }
-  if (scanner.addressExists("0x68")) {
+  if (scanner.addressExists(0x68)) {
     tehybug.peripherals.ds3231 = true;
   }
 #endif
+  // Must return: firstStart() branches on this to show the green "sensors
+  // found" LED. Falling off the end is undefined behaviour and made that
+  // check read a garbage value.
+  return scanner.devicesFound();
 }
 
 void setupBmx280() {

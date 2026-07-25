@@ -18,8 +18,8 @@
 
 // PubSubClient mallocs MQTT_MAX_PACKET_SIZE at construction (boot, before WiFi).
 // Its default is left small in the lib so config / offline mode don't waste heap
-// on a buffer MQTT never uses; setup() calls mqttClient.setBufferSize(4000) to
-// grow it only when MQTT/HA is actually active.
+// on a buffer MQTT never uses; setup() calls mqttClient.setBufferSize() to grow
+// it only when MQTT/HA is actually active.
 #include <PubSubClient.h>
 #include <TickerScheduler.h>
 #include <WebSocketsServer.h>
@@ -63,7 +63,8 @@ ESP8266WebServer server(80);
 WebSocketsServer webSocket = WebSocketsServer(81);
 ESP8266HTTPUpdateServer httpUpdater;
 
-TickerScheduler ticker(5);
+// 5 data-serving slots (get/post/mqtt/ha/eeprom) + 1 for scenario evaluation
+TickerScheduler ticker(6);
 
 /* Modules (function definitions, include order matters) */
 
@@ -102,27 +103,46 @@ void updateConfigLed() {
   }
 }
 
-// How long to poll the MODE button on each offline-mode boot. Offline mode
-// deep-sleeps right after setup, and the ESP can't tell a manual reset from a
-// timer wake (both report a deep-sleep wake), so on every wake we give a short
-// window to catch a MODE press rather than sampling the pin once.
-constexpr unsigned long BUTTON_WAKE_WINDOW_MS = 1000;
+// How long to wait for a MODE-button press after boot.
+//
+// The button cannot be held down during reset — GPIO0 low at reset puts the ESP
+// into flash mode — so it has to be pressed just *after* the device boots,
+// which means the firmware has to wait for it rather than sample the pin once.
+//
+// Live (non-sleep) modes only boot on a manual reset or power-up, so waiting
+// costs nothing there and the window is generous. Sleep and offline modes run
+// this on every wake-up, where it is battery time, so theirs stays short.
+constexpr unsigned long BUTTON_WINDOW_LIVE_MS = 1000;
+constexpr unsigned long BUTTON_WINDOW_SLEEP_MS = 1000;
+
+// How long the MODE button must be held to trigger a factory reset. Long
+// enough that it cannot be hit by the short press that toggles config mode.
+constexpr unsigned long FACTORY_RESET_HOLD_MS = 20000;
+
+// Idle pause at the end of each live-mode loop. Keeps the loop from spinning
+// flat out (which costs power) while staying far below any service interval.
+constexpr unsigned long LIVE_LOOP_IDLE_MS = 150;
 
 // Short press toggles config mode, holding for 20 seconds factory-resets.
 //
-// Offline mode brings up no WiFi and deep-sleeps right after setup, so the MODE
-// button is the only way back to config mode. On every offline-mode boot the
-// button is polled for BUTTON_WAKE_WINDOW_MS so a press shortly after a reset is
-// caught. Limited to offline mode, so live / deep-sleep serving boots are
-// unaffected.
+// Without WiFi (offline mode) or with the web server off (live mode), the MODE
+// button is the only way back into config mode. The window used to apply to
+// offline mode only, leaving live and deep-sleep boots with just the 100 ms
+// settle delay — so the press had to land in a fraction of a second.
 void checkModeButton() {
   pinMode(BUTTON_PIN, INPUT_PULLUP);
   delay(100);
 
-  if (tehybug.device.offlineMode && digitalRead(BUTTON_PIN) == HIGH) {
+  // Already in config mode? Nothing to switch to, so don't delay the boot.
+  if (!tehybug.device.configMode && digitalRead(BUTTON_PIN) == HIGH) {
+    const bool wakesOften = tehybug.sleepEnabled() || tehybug.device.offlineMode;
+    const unsigned long window =
+        wakesOften ? BUTTON_WINDOW_SLEEP_MS : BUTTON_WINDOW_LIVE_MS;
+    D_print(F("MODE button window (ms): "));
+    D_println(window);
     const unsigned long start = millis();
     while (digitalRead(BUTTON_PIN) == HIGH &&
-           (millis() - start) < BUTTON_WAKE_WINDOW_MS) {
+           (millis() - start) < window) {
       delay(10);
     }
   }
@@ -140,7 +160,7 @@ void checkModeButton() {
           updateConfigLed();
         }
         delay(10);
-        if((millis() - pressed) >= 20000)
+        if((millis() - pressed) >= FACTORY_RESET_HOLD_MS)
         {
           handleFactoryReset();
         }
@@ -154,7 +174,7 @@ void checkModeButton() {
 /* Periodic data serving (non-sleep mode) */
 
 void addServeTicker(uint8_t slot, int frequencySeconds, std::function<void()> send) {
-  ticker.add(
+  const bool added = ticker.add(
     slot, (uint32_t)frequencySeconds * 1000,
   [send](void *) {
     read_sensors();
@@ -162,6 +182,12 @@ void addServeTicker(uint8_t slot, int frequencySeconds, std::function<void()> se
     send();
   },
   nullptr, true);
+  // A rejected slot means that service silently never fires again, which is
+  // hard to spot in the field — say so instead of failing quietly.
+  if (!added) {
+    D_print(F("Ticker slot rejected, service will not run: "));
+    D_println(slot);
+  }
 }
 
 void setupServeTickers() {
@@ -184,6 +210,14 @@ void setupServeTickers() {
     // network send) is enough to drive it on its own frequency
     addServeTicker(slot++, tehybug.serveData.eeprom.frequency, [] {});
   }
+  if (tehybug.anyScenarioActive()) {
+    // Scenarios are evaluated in loop() only on the sleep-mode path, so in live
+    // mode they never ran. Give them their own tick against fresh readings, on
+    // the shortest configured reporting interval. One dedicated ticker (rather
+    // than evaluating inside every service tick) keeps a scenario from firing
+    // repeatedly when several services are active.
+    addServeTicker(slot++, tehybug.minDataFrequency(), serve_scenario);
+  }
 }
 
 // Probe the RTC + EEPROM module before the offline-mode decision in setup().
@@ -194,12 +228,12 @@ void setupServeTickers() {
 void detectDataLogModule() {
 #if !defined(ARDUINO_ESP8266_GENERIC)
   Wire.begin(I2C_SDA, I2C_SCL);
-  i2cScanner::Scanner scanner;
+  i2cScanner::Scanner &scanner = i2cScanner::shared();
   scanner.scan();
-  if (scanner.addressExists("0x50")) {
+  if (scanner.addressExists(0x50)) {
     tehybug.peripherals.eeprom = true;
   }
-  if (scanner.addressExists("0x68")) {
+  if (scanner.addressExists(0x68)) {
     tehybug.peripherals.ds3231 = true;
   }
 #endif
@@ -208,12 +242,13 @@ void detectDataLogModule() {
 /* Setup & loop */
 
 void setup() {
+  // Serial first: firstStart() scans the I2C bus and logs what it finds, so
+  // starting it afterwards threw that output away in debug builds. (There is no
+  // wait for the port here — ESP8266's HardwareSerial is always truthy, so the
+  // usual `while (!Serial)` loop is a no-op.)
+  Serial.begin(115200);
   firstStart();
   snprintf(wifiSsid, sizeof(wifiSsid), "TEHYBUG-%X", ESP.getChipId());
-  Serial.begin(115200);
-  while (!Serial) {
-    delay(10);
-  }
 
   // load the config before deciding on WiFi: offline mode (stored in the
   // config) must be known before any radio is brought up
@@ -275,9 +310,16 @@ void setup() {
   // setup mqtt / homeassistant
   if (!tehybug.device.configMode && (tehybug.serveData.mqtt.active || tehybug.serveData.ha.active)) {
     updateMqttClient();
-    mqttClient.setKeepAlive(10);
+    // Longer than the worst-case blocking pass (a DHT read can hold the loop
+    // for a few seconds, and an unreachable HTTP target for the request
+    // timeout). At the old 10 s the broker dropped the connection whenever a
+    // sensor was slow, so MQTT reconnected in a loop instead of publishing.
+    mqttClient.setKeepAlive(45);
     mqttClient.setCallback(mqttCallback);
-    mqttClient.setBufferSize(4000);
+    // Sized to the largest message this firmware actually builds: a ~1 KB HA
+    // payload plus its topic and the 5-byte header. It was 4000, permanently
+    // mallocing ~2.5 KB more than anything could use out of a ~20 KB heap.
+    mqttClient.setBufferSize(1500);
     if (tehybug.serveData.ha.active)
     {
       ha::setupHandle();
@@ -307,40 +349,51 @@ void setup() {
 }
 
 void loop() {
-  // offline mode: measure, append to the EEPROM log, deep-sleep. No WiFi,
-  // no web server and no online scenarios. The deep sleep resets the
-  // device, so this restarts setup() on the next wakeup.
-  if (tehybug.offlineEnabled() && !tehybug.device.configMode) {
-    read_sensors();
-    yield();
-    tehybug.pixel.off();
-    startDeepSleep(tehybug.serveData.eeprom.frequency);
-    return;
-  }
-  // config mode
-  if (tehybug.device.configMode) {
-    MDNS.update();
-    server.handleClient();
-    yield();
-    webSocket.loop();
-  }
-  // sleep mode: measure, act, serve, sleep
-  else if (tehybug.sleepEnabled()) {
-    read_sensors();
-    yield();
-    serve_scenario();
-    yield();
-    serve_data();
+  // One decision, resolved in mode_logic.h, instead of re-deriving the mode
+  // from boolean combinations here.
+  switch (tehybug.mode()) {
+    case mode_logic::DeviceMode::Offline:
+      // measure, append to the EEPROM log, deep-sleep. No WiFi, no web server
+      // and no online scenarios. The deep sleep resets the device, so this
+      // restarts setup() on the next wakeup.
+      read_sensors();
+      yield();
+      tehybug.pixel.off();
+      startDeepSleep(tehybug.serveData.eeprom.frequency);
+      return;
+
+    case mode_logic::DeviceMode::Config:
+      MDNS.update();
+      server.handleClient();
+      yield();
+      webSocket.loop();
+      break;
+
+    case mode_logic::DeviceMode::DeepSleep:
+    case mode_logic::DeviceMode::LightSleep:
+      // measure, act, serve, sleep. serve_data() picks deep vs light sleep;
+      // after a light sleep execution resumes here on the next iteration with
+      // the WiFi association already re-established.
+      read_sensors();
+      yield();
+      serve_scenario();
+      yield();
+      serve_data();
+      break;
+
+    case mode_logic::DeviceMode::Live:
+      // served by the tickers below
+      break;
   }
 
-  if (tehybug.tickerStop && tehybug.device.configMode)
+  if (tehybug.tickerStop && tehybug.inConfigMode())
   {
     tehybug.tickerStop = false;
     ticker.disableAll();
     updateConfigLed();
   }
 
-  if (tehybug.tickerStart && !tehybug.device.configMode)
+  if (tehybug.tickerStart && !tehybug.inConfigMode())
   {
     tehybug.tickerStart = false;
     ticker.enableAll();
@@ -349,7 +402,7 @@ void loop() {
   // update ticker for the non-deep-sleep mode
   ticker.update();
 
-  if (!tehybug.device.configMode && !tehybug.sleepEnabled()) {
+  if (tehybug.inLiveMode()) {
     // reconnect if connection lost
     checkWifi();
     if(tehybug.serveData.mqtt.active || tehybug.serveData.ha.active) {
@@ -357,7 +410,7 @@ void loop() {
       // avoids being disconnected by the broker
       mqttClient.loop();
     }
-    delay(150); // reduce power consumption
+    delay(LIVE_LOOP_IDLE_MS); // reduce power consumption
   }
   yield();
   tehybug.finalizeLoop();

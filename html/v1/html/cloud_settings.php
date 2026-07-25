@@ -24,6 +24,12 @@
             <input type="checkbox" class="form-check-input dont-change" id="configModeActive">
             <input type="checkbox" class="form-check-input dont-change" id="mqttActive">
             <input type="checkbox" class="form-check-input dont-change" id="httpPostActive">
+            <!-- Offline mode runs with WiFi off, so it cannot coexist with the
+                 cloud service: saving this page has to switch it off, or the
+                 device would sleep offline and never reach tehybug.com.
+                 Home Assistant is switched off with MQTT, which it needs. -->
+            <input type="checkbox" class="form-check-input dont-change" id="offlineModeActive">
+            <input type="checkbox" class="form-check-input dont-change" id="haActive">
             <input type="checkbox" class="form-check-input dont-change" id="reboot" checked>
         </div>
     </div>

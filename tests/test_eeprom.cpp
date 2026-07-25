@@ -153,6 +153,49 @@ static void test_recycle_picks_oldest_by_wrap() {
   CHECK_EQ_STR(fs.fileDate(10).c_str(), "2026-06-10"); // index untouched
 }
 
+static void test_hourly_keeps_a_full_day() {
+  CASE("hourly mode keeps all 24 hours without recycling");
+  TeHyBugEeprom fs = freshFs();
+  fs.setSlotWrap(24); // hour-of-day slots, not day-of-month
+  fs.setFileDate(10, "2026-06-14 10");
+
+  // A full day is 24 hour files plus the index — 25 of the 32 slots — so a
+  // complete 24 h of history has to survive with nothing recycled.
+  for (int h = 0; h <= 23; h++) {
+    char name[16];
+    std::snprintf(name, sizeof(name), "%d.txt", h);
+    char line[16];
+    std::snprintf(line, sizeof(line), "h%d\n", h);
+    CHECK(fs.appendLine(name, line, (uint8_t)h));
+  }
+  for (int h = 0; h <= 23; h++) {
+    char name[16], want[16];
+    std::snprintf(name, sizeof(name), "%d.txt", h);
+    std::snprintf(want, sizeof(want), "h%d\n", h);
+    CHECK_EQ_STR(fs.read(name).c_str(), want);
+  }
+  CHECK_EQ_STR(fs.fileDate(10).c_str(), "2026-06-14 10"); // index untouched
+}
+
+static void test_slot_wrap_recycles_by_period() {
+  CASE("recycling measures age with the configured slot wrap");
+  // Month mode (wrap 31) must still pick the day furthest in the past even
+  // when a stale hour-numbered file is present; with a fixed wrap the distance
+  // for an out-of-range slot went negative and that file was always chosen.
+  TeHyBugEeprom fs = freshFs();
+  fs.setSlotWrap(31);
+  fs.setFileDate(10, "2026-06-10");
+  for (int d = 1; d <= 31; d++) {
+    char name[16];
+    std::snprintf(name, sizeof(name), "%d.txt", d);
+    fs.appendLine(name, "x\n", (uint8_t)d);
+  }
+  fs.appendLine("99.txt", "new\n", 2);
+  CHECK_EQ_STR(fs.read("3.txt").c_str(), "");       // day 3 is the oldest
+  CHECK_EQ_STR(fs.read("99.txt").c_str(), "new\n");
+  CHECK_EQ_STR(fs.fileDate(10).c_str(), "2026-06-10");
+}
+
 int main() {
   std::printf("Running eeprom tests...\n");
   test_format_and_capacity();
@@ -164,5 +207,7 @@ int main() {
   test_read_nonexistent();
   test_slot_full_wraps();
   test_recycle_picks_oldest_by_wrap();
+  test_hourly_keeps_a_full_day();
+  test_slot_wrap_recycles_by_period();
   return SUMMARY();
 }

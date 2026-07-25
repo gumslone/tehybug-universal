@@ -97,15 +97,38 @@ class TeHyBugConfig {
       setIfNotDefault(json, "rc_url", m_device.remoteControl.url, device.remoteControl.url);
 
       File configFile = SPIFFS.open("/config.json", "w");
-      serializeJson(json, configFile);
+      if (!configFile) {
+        // "w" already truncated nothing (the open failed), but the caller must
+        // not be told the settings were stored — this used to be ignored, so a
+        // full or failed filesystem silently lost the configuration.
+        D_println(F("Config save failed: cannot open /config.json"));
+        return;
+      }
+      const size_t written = serializeJson(json, configFile);
       configFile.close();
+      if (written == 0) {
+        D_println(F("Config save failed: nothing written"));
+        return;
+      }
+      m_shouldSaveConfig = false; // stored; nothing pending until the next change
       D_println(F("Config saved"));
     }
+
+    // Smallest reporting interval accepted. A read + send pass can hold the
+    // loop for several seconds (a DHT sample alone takes ~2 s each, an
+    // unreachable HTTP target up to the request timeout). With a shorter
+    // interval than that the ticker re-fires as soon as it returns, starving
+    // loop() so the web server and MQTT keep-alive never run — the device
+    // looks frozen. 0 would fire continuously.
+    static constexpr int MIN_DATA_FREQUENCY_S = 10;
 
     void validateDataFrequency(int &freq) {
       const int maxDS = (int)(ESP.deepSleepMax() / 1000000);
       if (freq > maxDS) {
         freq = maxDS;
+      }
+      if (freq < MIN_DATA_FREQUENCY_S) {
+        freq = MIN_DATA_FREQUENCY_S;
       }
     }
     bool configExists() {
@@ -153,17 +176,26 @@ class TeHyBugConfig {
       }
     }
 
+    // The stored file is already the JSON we serve, so hand it back as-is.
+    //
+    // This used to parse it into a 3072-byte DynamicJsonDocument and
+    // re-serialize that into a String, i.e. hold the document, the file buffer
+    // and the output at once — on every websocket connect (sendConfig) and
+    // every GET /api/config, purely to reformat bytes we wrote ourselves.
     String getConfig() {
-      String json = "{}";
       File configFile = SPIFFS.open("/config.json", "r");
-
-      if (configFile) {
-        DynamicJsonDocument root(3072);
-        if (DeserializationError::Ok == deserializeJson(root, configFile)) {
-          json = "";
-          serializeJson(root, json);
-        }
-        configFile.close();
+      if (!configFile) {
+        return "{}";
+      }
+      String json;
+      json.reserve(configFile.size() + 1);
+      while (configFile.available()) {
+        json += (char)configFile.read();
+      }
+      configFile.close();
+      // an empty or truncated file must not be sent as invalid JSON
+      if (json.length() == 0 || json[0] != '{') {
+        return "{}";
       }
       return json;
     }
@@ -259,6 +291,9 @@ class TeHyBugConfig {
 
       setData(json, "rc_active", m_device.remoteControl.active);
       setData(json, "rc_url", m_device.remoteControl.url);
+      // saveConfig() writes "key", so it must be read back here too — without
+      // this the stored device key was ignored and regenerated on every boot.
+      setData(json, "key", m_device.key);
     }
 
     template<typename T>

@@ -284,7 +284,7 @@
                         <ul>
                             <li><strong>Do not hold MODE while pressing RESET.</strong> The MODE button is on GPIO0, so holding it down during reset puts the chip into firmware-flash (UART download) mode and the firmware never starts.</li>
                             <li>Correct order: press and release RESET first, <em>then</em> press the MODE button.</li>
-                            <li>In Offline / deep-sleep modes you have a 1-second window right after the device boots to press MODE; in other modes press it as the device boots.</li>
+                            <li>The device waits about 1 second after booting for a MODE press (in every mode except config mode). Press MODE right after it boots &mdash; the LED turns blue once config mode is on.</li>
                             <li>If the device seems stuck, just press RESET again (without touching MODE) to boot normally.</li>
                         </ul>
                     </div>

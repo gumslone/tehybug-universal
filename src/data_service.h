@@ -34,55 +34,81 @@ void httpGet() {
 }
 
 void httpPost() {
-  http::post(httpClient, getClient(tehybug.serveData.post.url),
-             tehybug.serveData.post.url,
+  // Expand placeholders in the URL too, the same as httpGet does — the POST URL
+  // was passed through raw, so a template like %key% in it never resolved.
+  const String url = tehybug.replacePlaceholders(tehybug.serveData.post.url);
+  http::post(httpClient, getClient(url), url,
              tehybug.replacePlaceholders(tehybug.serveData.post.message));
 }
 
+// Pushes the current readings to every configured target, then sleeps once.
+//
+// Each service used to sleep immediately after its own send. Deep sleep resets
+// the device, so with more than one service configured only the first ever ran
+// — MQTT never fired if HTTP GET was also enabled. Every block also burned a
+// fixed delay(1000), up to 4 s of blocking per pass.
 void serve_data() {
-  if (tehybug.serveData.get.active) {
+  // Nothing can be sent without an association. Skipping is both faster and
+  // clearer than watching every request fail with -1 ("connection failed"),
+  // which is what a dropped link looked like in the log. The sleep below still
+  // runs, so the device rests and tries again on the next wake.
+  const bool linked = (WiFi.status() == WL_CONNECTED);
+  if (!linked) {
+    D_println(F("No WiFi link, skipping this round"));
+  }
+
+  // Sleep modes send once and then sleep, so make the broker connection here
+  // with a retry budget rather than relying on a next loop iteration.
+  if (linked &&
+      (tehybug.serveData.mqtt.active || tehybug.serveData.ha.active) &&
+      !mqttClient.connected()) {
+    mqttEnsureConnected(MQTT_WAKE_CONNECT_BUDGET_MS);
+  }
+
+  if (linked && tehybug.serveData.get.active) {
     httpGet();
-    delay(1000);
-    if (tehybug.sleepEnabled()) {
-      startSleep(tehybug.serveData.get.frequency);
-    }
   }
-
-  if (tehybug.serveData.post.active) {
+  if (linked && tehybug.serveData.post.active) {
     httpPost();
-    delay(1000);
-    if (tehybug.sleepEnabled()) {
-      startSleep(tehybug.serveData.post.frequency);
-    }
   }
-
-  if (tehybug.serveData.mqtt.active) {
+  if (linked && tehybug.serveData.mqtt.active) {
     mqttSendData();
-    delay(1000);
-    if (tehybug.sleepEnabled()) {
-      mqttClient.disconnect();
-      startSleep(tehybug.serveData.mqtt.frequency);
-    }
   }
-
   // HA reports on the MQTT interval
-  if (tehybug.serveData.ha.active) {
+  if (linked && tehybug.serveData.ha.active) {
     haSendData();
-    delay(1000);
-    if (tehybug.sleepEnabled()) {
-      mqttClient.disconnect();
-      startSleep(tehybug.serveData.mqtt.frequency);
-    }
   }
 
-  // EEPROM-only with sleep enabled but WiFi still on (offline mode is the
-  // no-WiFi variant): nothing was pushed online above, so sleep here on the
-  // log frequency instead of spinning the loop.
-  if (tehybug.sleepEnabled() && tehybug.serveData.eeprom.active &&
-      !tehybug.serveData.get.active && !tehybug.serveData.post.active &&
-      !tehybug.serveData.mqtt.active && !tehybug.serveData.ha.active) {
-    startSleep(tehybug.serveData.eeprom.frequency);
+  if (!tehybug.sleepEnabled()) {
+    return;
   }
+
+  // Sleep on the shortest configured interval, so adding a second service can
+  // no longer starve the first. The EEPROM log is written on every wake (inside
+  // read_sensors), so it only needs to be considered when it is the shortest.
+  const int freq = tehybug.wakeIntervalSeconds();
+  if (freq <= 0) {
+    return;
+  }
+
+  if (tehybug.serveData.mqtt.active || tehybug.serveData.ha.active) {
+    mqttClient.disconnect();
+  }
+  // Say what the device will actually do: "Minimum data frequency" above is
+  // only the network services' shortest interval, while the EEPROM log can be
+  // shorter still and then it decides how often the device wakes.
+  D_print(F("Sleeping for (s): "));
+  D_print(freq);
+  if (tehybug.serveData.eeprom.active &&
+      tehybug.serveData.eeprom.frequency == freq) {
+    D_print(F("  (set by the EEPROM log interval)"));
+  }
+  D_println();
+
+  // one settle window before sleeping, so the last send drains, instead of one
+  // per service
+  delay(1000);
+  startSleep(freq);
 }
 
 void checkScenario(Scenario &s) {

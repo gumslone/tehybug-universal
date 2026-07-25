@@ -21,22 +21,31 @@ class TeHyBug {
     DataServ serveData{};
     Scenarios scenarios{};
     DynamicJsonDocument sensorData;
+    // Declaration order is construction order, and each of these binds a
+    // reference to the ones above it: conf takes pixel, time takes conf,
+    // eeprom takes time. pixel used to be declared last, so conf bound a
+    // reference to storage that had not been constructed yet.
+    TeHyBugPixel pixel;
     TeHyBugConfig conf;
     RtcTime time;
     TeHyBugEeprom eeprom;
-    TeHyBugPixel pixel;
 
-    TeHyBug(DHTesp & dht): sensorData(1024), m_dht(dht), conf(calibration, sensor, peripherals, device, serveData, scenarios, pixel), time(conf), eeprom(time) {
+    // initialiser order matches the declarations above (m_dht is declared last)
+    TeHyBug(DHTesp & dht)
+      : sensorData(1024),
+        conf(calibration, sensor, peripherals, device, serveData, scenarios, pixel),
+        time(conf),
+        eeprom(time),
+        m_dht(dht) {
     }
 
-    String replacePlaceholders(String text) {
+    // Expands %key% placeholders from the current sensor readings.
+    // The text scan lives in common_functions.h so it can be unit-tested; it
+    // replaced a loop over every key in sensorData that ran String::replace
+    // ~25 times per URL, payload and log line.
+    String replacePlaceholders(const String & text) {
       const JsonObject root = sensorData.as<JsonObject>();
-      for (JsonPair keyValue : root) {
-        String k = keyValue.key().c_str();
-        String v = keyValue.value();
-        text.replace("%" + k + "%", v);
-      }
-      return text;
+      return expandPlaceholders(text, root);
     }
 
     void additionalSensorData(const String & key, const float & value) {
@@ -93,8 +102,11 @@ class TeHyBug {
       String key = device.key;
       if (key.length() != 36) {
         key = generateDeviceKey();
-        setDeviceKey(key);
       }
+      // Always publish it into sensorData: when the key came from the stored
+      // config this was skipped, so the "key" placeholder resolved to nothing
+      // in every pushed payload.
+      setDeviceKey(key);
       D_print(F("key: "));
       D_println(key);
     }
@@ -135,6 +147,42 @@ class TeHyBug {
       return mode_logic::anyServeModeActive(serveData);
     }
 
+    bool anyScenarioActive() {
+      return mode_logic::anyScenarioActive(scenarios);
+    }
+
+    // How long the device sleeps between wakes: the shortest configured
+    // interval, so adding a second service cannot starve the first. Note the
+    // EEPROM log counts — a 10 s log interval means 10 s wakes even if every
+    // network service reports hourly. 0 when nothing is configured.
+    int wakeIntervalSeconds() {
+      return mode_logic::wakeInterval(serveData);
+    }
+
+    /* Operating mode — resolved in one place (mode_logic.h) from the stored
+       config and the hardware present, instead of re-deriving it from boolean
+       combinations at every call site. */
+
+    mode_logic::DeviceMode mode() {
+      return mode_logic::currentMode(device, peripherals);
+    }
+    const char *modeName() {
+      return mode_logic::modeName(mode());
+    }
+    bool inConfigMode()     { return mode() == mode_logic::DeviceMode::Config; }
+    bool inOfflineMode()    { return mode() == mode_logic::DeviceMode::Offline; }
+    bool inDeepSleepMode()  { return mode() == mode_logic::DeviceMode::DeepSleep; }
+    bool inLightSleepMode() { return mode() == mode_logic::DeviceMode::LightSleep; }
+    bool inLiveMode()       { return mode() == mode_logic::DeviceMode::Live; }
+    // either sleeping mode
+    bool inSleepMode()      { return mode_logic::isSleeping(mode()); }
+
+    // Config mode is the one mode that is switched directly (MODE button,
+    // remote control, first start); the others follow from the configuration.
+    void setConfigMode(bool on) {
+      device.configMode = on;
+    }
+
     // EEPROM-only mode: no WiFi, measure + log + deep-sleep. Needs the
     // EEPROM peripheral present (the generic 1MB build has no EEPROM driver).
     bool offlineEnabled() {
@@ -157,6 +205,9 @@ class TeHyBug {
       if (!eeprom.mounted()) {
         return;
       }
+      // hour-of-day slots wrap at 24, day-of-month slots at 31; the log needs
+      // this to pick the right "oldest" file when it recycles one
+      eeprom.setSlotWrap(serveData.eeprom.hourly ? 24 : 31);
       const String want = serveData.eeprom.hourly ? "hour" : "month";
       const String have = eeprom.fileDate(DATALOG_MODE_KEY);
       if (have.length() == 0) {

@@ -24,6 +24,7 @@ class TeHyBugEeprom {
     String fileDate(uint8_t) { return String(); }
     void setFileDate(uint8_t, const String &) {}
     bool resetDayFile(const String &, uint8_t) { return false; }
+    void setSlotWrap(uint8_t) {}
     void format() {}
 };
 #else
@@ -64,6 +65,12 @@ class TeHyBugEeprom{
     return m_mounted;
   }
 
+  // Tell the log how slot numbers wrap so recycling picks the right "oldest"
+  // file: 31 for day-of-month slots, 24 for hour-of-day slots.
+  void setSlotWrap(uint8_t wrap) {
+    m_slotWrap = (wrap > 0) ? wrap : 31;
+  }
+
   // Erase all logged data by re-creating the filesystem (used by factory
   // reset). Re-mounts afterwards so logging can resume without a reboot.
   void format() {
@@ -94,8 +101,15 @@ class TeHyBugEeprom{
       return data;
     }
     data.reserve(m_efs.filesize(f));
+    // Each fgetc is its own I2C transaction, so a ~1 KB slot is ~1000 of them.
+    // This runs from the /api/datalog HTTP handler, so yield periodically to
+    // keep the WiFi stack serviced and the watchdog fed.
+    unsigned int read = 0;
     while (!m_efs.eof(f)) {
       data += (char)m_efs.fgetc(f);
+      if ((++read & 0x3F) == 0) { // every 64 bytes
+        yield();
+      }
     }
     m_efs.fclose(f);
     return data;
@@ -260,7 +274,11 @@ class TeHyBugEeprom{
   }
 
   // removes the day file furthest in the past relative to currentMday
-  void removeOldestFile(uint8_t currentMday) {
+  // `current` is the slot in use now: a day of month (1-31) in month mode, or
+  // an hour of day (0-23) in hourly mode. Distances are measured modulo
+  // m_slotWrap so the oldest slot is picked correctly in both — with the wrap
+  // hardcoded to 31 this chose the wrong file for hourly logs.
+  void removeOldestFile(uint8_t current) {
     uint8_t oldestAge = 0;
     char oldestName[EFS_FILENAMELENGTH + 1] = {0};
 
@@ -269,8 +287,13 @@ class TeHyBugEeprom{
       if (strcmp(m_efs.filename(f), INDEX_FILE) == 0) {
         continue; // never recycle the date index slot
       }
-      const int fileMday = atoi(m_efs.filename(f));
-      const uint8_t age = (uint8_t)((currentMday - fileMday + 31) % 31);
+      const int fileSlot = atoi(m_efs.filename(f));
+      // Positive modulo: a slot number outside the current range (a file left
+      // over from the other logging period) would otherwise yield a negative
+      // remainder, which wraps huge when cast and gets picked as "oldest".
+      const int wrap = (int)m_slotWrap;
+      const uint8_t age =
+          (uint8_t)((((current - fileSlot) % wrap) + wrap) % wrap);
       if (age >= oldestAge) {
         oldestAge = age;
         strncpy(oldestName, m_efs.filename(f), EFS_FILENAMELENGTH);
@@ -286,6 +309,8 @@ class TeHyBugEeprom{
   EepromFS m_efs;
   RtcTime & m_time;
   bool m_mounted{false};
+  // slot numbering wrap: 31 day-of-month slots, or 24 hour-of-day slots
+  uint8_t m_slotWrap{31};
 
 };
 #endif

@@ -12,7 +12,10 @@
 #include "common_functions.h"
 #include "fw_version.h"
 
-constexpr uint8_t MAX_WEBSOCKET_CLIENTS = 10;
+// Track exactly as many slots as the library will ever hand out
+// (WEBSOCKETS_SERVER_CLIENT_MAX, 5). It was 10, so half the String objects
+// could never be used and every push scanned them anyway.
+constexpr uint8_t MAX_WEBSOCKET_CLIENTS = WEBSOCKETS_SERVER_CLIENT_MAX;
 String websocketConnection[MAX_WEBSOCKET_CLIENTS];
 
 const char mainPage[] PROGMEM = R"=====(
@@ -100,7 +103,12 @@ void sendToWebsocketClients(const String &message, std::initializer_list<const c
 }
 
 void sendDeviceInfo() {
-  sendToWebsocketClients(getInfo(), {"/main", "/firststart", "/api/info"});
+  // "/settings" included because the Cloud and Home Assistant settings pages
+  // connect under that websocket url (see connectionStart in gumboard.js) and
+  // display the device key. Without it those pages never received the info
+  // message and their key field stayed on "Loading...".
+  sendToWebsocketClients(getInfo(),
+                         {"/main", "/firststart", "/api/info", "/settings"});
 }
 
 void sendSensorData() {
@@ -112,11 +120,25 @@ void sendConfig() {
                          {"/settings", "/setsensor", "/scenarios", "/setsystem", "/datalog"});
 }
 
-void Log(String function, String message) {
+// Sends a log line to the dashboard websocket.
+//
+// Takes its arguments by reference (it used to copy both Strings on every
+// call, and it is called on every MQTT publish and retry), and builds the JSON
+// with ArduinoJson so a quote or backslash in a topic or payload can no longer
+// produce malformed JSON on the wire. The payload is only built when a client
+// is actually connected.
+void Log(const String &function, const String &message) {
   D_println(function + ": " + message);
-  sendToWebsocketClients("{\"log\":{\"function\":\"" + function +
-                         "\",\"message\":\"" + message + "\"}}",
-                         {"/main"});
+  if (webSocket.connectedClients() == 0) {
+    return;
+  }
+  DynamicJsonDocument doc(512);
+  const JsonObject log = doc.createNestedObject("log");
+  log["function"] = function;
+  log["message"] = message;
+  String out;
+  serializeJson(doc, out);
+  sendToWebsocketClients(out, {"/main"});
 }
 
 /* HTTP API */
@@ -234,9 +256,9 @@ void handleFactoryReset() {
     delay(10);
   }
   Wire.begin(I2C_SDA, I2C_SCL);
-  i2cScanner::Scanner scanner;
+  i2cScanner::Scanner &scanner = i2cScanner::shared();
   scanner.scan();
-  if (scanner.addressExists("0x50")) {
+  if (scanner.addressExists(0x50)) {
     tehybug.peripherals.eeprom = true;
     tehybug.eeprom.format();
   }

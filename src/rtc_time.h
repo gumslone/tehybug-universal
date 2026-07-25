@@ -28,6 +28,11 @@ class RtcTime {
 #else
 #include <ds3231.h>
 
+// A DS3231 that has never been set powers up in 1900/2000, so anything from
+// this year on means someone actually set the clock. Bump it if it ever starts
+// letting a stale battery-backed date through.
+constexpr uint16_t RTC_MIN_VALID_YEAR = 2024;
+
 class RtcTime {
   public:
     RtcTime(TeHyBugConfig & conf): m_conf(conf) {
@@ -60,7 +65,7 @@ class RtcTime {
     }
     // true once the clock has been set (fresh DS3231 chips start at 1900/2000)
     bool isTimeSet() {
-      return m_rtcTime.year >= 2024;
+      return m_rtcTime.year >= RTC_MIN_VALID_YEAR;
     }
     // "YYYY-MM-DD HH:MM" of the last update()
     String timestamp() {

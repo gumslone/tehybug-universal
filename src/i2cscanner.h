@@ -1,12 +1,16 @@
 #pragma once
 #include <Arduino.h>
 #include <Wire.h>
+#include <string.h>  // memset
 #include "debug.h"
 
 namespace i2cScanner {
 
 class Scanner {
  public:
+  // Probes the bus, at most twice for the lifetime of this scanner. Two passes
+  // are needed because some sensors (the AM2320) only answer after a first
+  // transaction has woken them; a third pass would just cost time.
   void scan() {
     if (scanCount_ >= 2) {
       D_println("I2C scan skipped: max 2 attempts reached");
@@ -14,7 +18,7 @@ class Scanner {
     }
 
     scanCount_++;
-    addresses_.clear();
+    memset(found_, 0, sizeof(found_));
     devicesFound_ = 0;
 
     D_println("Scanning...");
@@ -45,8 +49,18 @@ class Scanner {
     }
   }
 
-  bool addressExists(const char *addr) const {
-    return addresses_.indexOf(addr) >= 0;
+  // Exact O(1) bit test on the 7-bit address.
+  //
+  // The results used to be a comma-separated String ("0x38,0x50,...") searched
+  // with indexOf, which allocated and grew a String on the heap during boot
+  // detection — including the pre-WiFi offline path, where the heap is
+  // tightest — and matched on substrings, so a shorter probe like "0x5" would
+  // have matched "0x50".
+  bool addressExists(uint8_t address) const {
+    if (address >= ADDRESS_COUNT) {
+      return false;
+    }
+    return (found_[address >> 3] & (1u << (address & 0x07))) != 0;
   }
 
   uint8_t devicesFound() const {
@@ -55,16 +69,28 @@ class Scanner {
 
  private:
   void appendAddress(uint8_t address) {
-    addresses_ += "0x";
-    if (address < 16) {
-      addresses_ += "0";
-    }
-    addresses_ += String(address, HEX) + ",";
+    found_[address >> 3] |= (uint8_t)(1u << (address & 0x07));
   }
+
+  // I2C uses 7-bit addresses, so one bit each fits in 16 bytes
+  static constexpr uint8_t ADDRESS_COUNT = 128;
 
   uint8_t scanCount_{0};
   uint8_t devicesFound_{0};
-  String addresses_;
+  uint8_t found_[ADDRESS_COUNT / 8]{};
 };
+
+// The one scanner the firmware uses.
+//
+// The two-pass cap above only limits a single instance, and every call site
+// used to build its own: on an offline-mode boot detectDataLogModule() probed
+// the bus once and findI2Csensors() twice more, so it was scanned three times
+// in a row with identical results. Sharing one instance makes the cap mean what
+// it says — the bus is probed twice per boot, and later callers reuse the
+// result instead of re-probing.
+inline Scanner &shared() {
+  static Scanner instance;
+  return instance;
+}
 
 } // namespace i2cScanner
