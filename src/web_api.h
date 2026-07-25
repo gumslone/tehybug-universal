@@ -103,7 +103,12 @@ void sendToWebsocketClients(const String &message, std::initializer_list<const c
 }
 
 void sendDeviceInfo() {
-  sendToWebsocketClients(getInfo(), {"/main", "/firststart", "/api/info"});
+  // "/settings" included because the Cloud and Home Assistant settings pages
+  // connect under that websocket url (see connectionStart in gumboard.js) and
+  // display the device key. Without it those pages never received the info
+  // message and their key field stayed on "Loading...".
+  sendToWebsocketClients(getInfo(),
+                         {"/main", "/firststart", "/api/info", "/settings"});
 }
 
 void sendSensorData() {

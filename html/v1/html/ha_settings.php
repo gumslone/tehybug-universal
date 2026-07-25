@@ -61,6 +61,10 @@
                     <input type="checkbox" class="form-check-input dont-change" id="mqttActive">
                     <input type="checkbox" class="form-check-input dont-change" id="haActive" checked>
                     <input type="checkbox" class="form-check-input dont-change" id="httpPostActive">
+                    <!-- Offline mode runs with WiFi off, so it cannot coexist
+                         with Home Assistant: saving this page switches it off,
+                         or the device would sleep offline and never publish. -->
+                    <input type="checkbox" class="form-check-input dont-change" id="offlineModeActive">
                     <input type="checkbox" class="form-check-input dont-change" id="reboot" checked>
                 </div>
             </div>
