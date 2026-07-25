@@ -102,10 +102,21 @@ class TeHyBugConfig {
       D_println(F("Config saved"));
     }
 
+    // Smallest reporting interval accepted. A read + send pass can hold the
+    // loop for several seconds (a DHT sample alone takes ~2 s each, an
+    // unreachable HTTP target up to the request timeout). With a shorter
+    // interval than that the ticker re-fires as soon as it returns, starving
+    // loop() so the web server and MQTT keep-alive never run — the device
+    // looks frozen. 0 would fire continuously.
+    static constexpr int MIN_DATA_FREQUENCY_S = 10;
+
     void validateDataFrequency(int &freq) {
       const int maxDS = (int)(ESP.deepSleepMax() / 1000000);
       if (freq > maxDS) {
         freq = maxDS;
+      }
+      if (freq < MIN_DATA_FREQUENCY_S) {
+        freq = MIN_DATA_FREQUENCY_S;
       }
     }
     bool configExists() {

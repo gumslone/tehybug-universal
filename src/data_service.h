@@ -34,55 +34,65 @@ void httpGet() {
 }
 
 void httpPost() {
-  http::post(httpClient, getClient(tehybug.serveData.post.url),
-             tehybug.serveData.post.url,
+  // Expand placeholders in the URL too, the same as httpGet does — the POST URL
+  // was passed through raw, so a template like %key% in it never resolved.
+  const String url = tehybug.replacePlaceholders(tehybug.serveData.post.url);
+  http::post(httpClient, getClient(url), url,
              tehybug.replacePlaceholders(tehybug.serveData.post.message));
 }
 
+// Pushes the current readings to every configured target, then sleeps once.
+//
+// Each service used to sleep immediately after its own send. Deep sleep resets
+// the device, so with more than one service configured only the first ever ran
+// — MQTT never fired if HTTP GET was also enabled. Every block also burned a
+// fixed delay(1000), up to 4 s of blocking per pass.
 void serve_data() {
   if (tehybug.serveData.get.active) {
     httpGet();
-    delay(1000);
-    if (tehybug.sleepEnabled()) {
-      startSleep(tehybug.serveData.get.frequency);
-    }
   }
-
   if (tehybug.serveData.post.active) {
     httpPost();
-    delay(1000);
-    if (tehybug.sleepEnabled()) {
-      startSleep(tehybug.serveData.post.frequency);
-    }
   }
-
   if (tehybug.serveData.mqtt.active) {
     mqttSendData();
-    delay(1000);
-    if (tehybug.sleepEnabled()) {
-      mqttClient.disconnect();
-      startSleep(tehybug.serveData.mqtt.frequency);
-    }
   }
-
   // HA reports on the MQTT interval
   if (tehybug.serveData.ha.active) {
     haSendData();
-    delay(1000);
-    if (tehybug.sleepEnabled()) {
-      mqttClient.disconnect();
-      startSleep(tehybug.serveData.mqtt.frequency);
-    }
   }
 
-  // EEPROM-only with sleep enabled but WiFi still on (offline mode is the
-  // no-WiFi variant): nothing was pushed online above, so sleep here on the
-  // log frequency instead of spinning the loop.
-  if (tehybug.sleepEnabled() && tehybug.serveData.eeprom.active &&
-      !tehybug.serveData.get.active && !tehybug.serveData.post.active &&
-      !tehybug.serveData.mqtt.active && !tehybug.serveData.ha.active) {
-    startSleep(tehybug.serveData.eeprom.frequency);
+  if (!tehybug.sleepEnabled()) {
+    return;
   }
+
+  // Sleep on the shortest configured interval, so adding a second service can
+  // no longer starve the first. The EEPROM log is written on every wake (inside
+  // read_sensors), so it only needs to be considered when it is the shortest.
+  int freq = 0;
+  if (tehybug.anyServeModeActive()) {
+    if (tehybug.serveData.get.active || tehybug.serveData.post.active ||
+        tehybug.serveData.mqtt.active || tehybug.serveData.ha.active) {
+      freq = tehybug.minDataFrequency();
+    }
+    if (tehybug.serveData.eeprom.active) {
+      const int logFreq = tehybug.serveData.eeprom.frequency;
+      if (freq == 0 || logFreq < freq) {
+        freq = logFreq;
+      }
+    }
+  }
+  if (freq <= 0) {
+    return;
+  }
+
+  if (tehybug.serveData.mqtt.active || tehybug.serveData.ha.active) {
+    mqttClient.disconnect();
+  }
+  // one settle window before sleeping, so the last send drains, instead of one
+  // per service
+  delay(1000);
+  startSleep(freq);
 }
 
 void checkScenario(Scenario &s) {

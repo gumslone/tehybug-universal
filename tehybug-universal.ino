@@ -155,7 +155,7 @@ void checkModeButton() {
 /* Periodic data serving (non-sleep mode) */
 
 void addServeTicker(uint8_t slot, int frequencySeconds, std::function<void()> send) {
-  ticker.add(
+  const bool added = ticker.add(
     slot, (uint32_t)frequencySeconds * 1000,
   [send](void *) {
     read_sensors();
@@ -163,6 +163,12 @@ void addServeTicker(uint8_t slot, int frequencySeconds, std::function<void()> se
     send();
   },
   nullptr, true);
+  // A rejected slot means that service silently never fires again, which is
+  // hard to spot in the field — say so instead of failing quietly.
+  if (!added) {
+    D_print(F("Ticker slot rejected, service will not run: "));
+    D_println(slot);
+  }
 }
 
 void setupServeTickers() {
@@ -284,7 +290,11 @@ void setup() {
   // setup mqtt / homeassistant
   if (!tehybug.device.configMode && (tehybug.serveData.mqtt.active || tehybug.serveData.ha.active)) {
     updateMqttClient();
-    mqttClient.setKeepAlive(10);
+    // Longer than the worst-case blocking pass (a DHT read can hold the loop
+    // for a few seconds, and an unreachable HTTP target for the request
+    // timeout). At the old 10 s the broker dropped the connection whenever a
+    // sensor was slow, so MQTT reconnected in a loop instead of publishing.
+    mqttClient.setKeepAlive(45);
     mqttClient.setCallback(mqttCallback);
     // Sized to the largest message this firmware actually builds: a ~1 KB HA
     // payload plus its topic and the 5-byte header. It was 4000, permanently

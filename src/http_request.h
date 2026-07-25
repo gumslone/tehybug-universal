@@ -6,10 +6,20 @@
 // caller's responsibility so it happens exactly once per request.
 namespace http {
 
+// Hard bound on how long one request may stall the device. These run from
+// ticker callbacks in live mode, where a hung or black-holed endpoint would
+// otherwise block the web server, the websockets and the MQTT keep-alive for
+// the client library's default timeout on every pass.
+constexpr uint16_t HTTP_TIMEOUT_MS = 5000;
+
 String get(HTTPClient &http, WiFiClient &client, const String &url) {
   D_print("HTTP GET: ");
   D_println(url);
-  http.begin(client, url); // Specify request destination
+  if (!http.begin(client, url)) { // Specify request destination
+    D_println("HTTP begin failed (malformed URL?)");
+    return String();
+  }
+  http.setTimeout(HTTP_TIMEOUT_MS);
   http.setFollowRedirects(HTTPC_FORCE_FOLLOW_REDIRECTS);
 
   const int httpCode = http.GET(); // Send the request
@@ -30,7 +40,11 @@ String get(HTTPClient &http, WiFiClient &client, const String &url) {
 String post(HTTPClient &http, WiFiClient &client, const String &url, const String &body) {
   D_print("HTTP POST: ");
   D_println(url);
-  http.begin(client, url); // Specify request destination
+  if (!http.begin(client, url)) { // Specify request destination
+    D_println("HTTP begin failed (malformed URL?)");
+    return String();
+  }
+  http.setTimeout(HTTP_TIMEOUT_MS);
   http.addHeader("Content-Type", "application/json");
 
   const int httpCode = http.POST(body); // Send the request

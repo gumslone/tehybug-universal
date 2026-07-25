@@ -163,6 +163,9 @@ class TeHyBug {
       if (!eeprom.mounted()) {
         return;
       }
+      // hour-of-day slots wrap at 24, day-of-month slots at 31; the log needs
+      // this to pick the right "oldest" file when it recycles one
+      eeprom.setSlotWrap(serveData.eeprom.hourly ? 24 : 31);
       const String want = serveData.eeprom.hourly ? "hour" : "month";
       const String have = eeprom.fileDate(DATALOG_MODE_KEY);
       if (have.length() == 0) {
