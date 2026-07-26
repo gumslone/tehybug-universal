@@ -22,29 +22,8 @@ const char mainPage[] PROGMEM = R"=====(
 <!doctype html>
 <html>
 <head>
-<script>
-// Fill in the device IP in the offline fallback message. Run after the DOM is
-// ready so the #ip element exists (on a local device the response can arrive
-// before the body is parsed), and assign onload before send.
-function setBugIp() {
-  var xhr = new XMLHttpRequest();
-  xhr.open('GET', '/api/getip');
-  xhr.onload = function() {
-    var el = document.getElementById("ip");
-    if (xhr.status == 200 && el) { el.innerHTML = xhr.responseText; }
-  };
-  xhr.send();
-}
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', setBugIp);
-} else {
-  setBugIp();
-}
-</script>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-    <link href="https://tehybug.com/tehybug/v1/css/style.php" rel="stylesheet">
-    <script src="https://tehybug.com/tehybug/v1/js/javascript.php"></script>
     <title>TeHyBug</title>
 </head>
 <body>
@@ -55,6 +34,28 @@ if (document.readyState === 'loading') {
 <br>If it does not load, you are probably still on the TeHyBug access point,
 which has no internet. Rejoin your home WiFi and open the address above.
 </div>
+<script>
+// Fill in the device address from the device itself. This is the only part of
+// the page that works on the TeHyBug access point, so it must not depend on
+// anything loading from the internet.
+function setBugIp() {
+  var xhr = new XMLHttpRequest();
+  xhr.open('GET', '/api/getip');
+  xhr.onload = function() {
+    var el = document.getElementById("ip");
+    if (xhr.status == 200 && el) { el.innerHTML = xhr.responseText; }
+  };
+  xhr.send();
+}
+setBugIp();
+</script>
+<!-- The interface itself is hosted on tehybug.com, so it only loads once the
+     browser is back on a network with internet. Both are pulled in without
+     blocking: a stylesheet in <head> blocks painting and a plain <script src>
+     there blocks parsing, so on the access point (no internet) the browser
+     stalled before it drew anything at all and the page came up empty. -->
+<link rel="stylesheet" href="https://tehybug.com/tehybug/v1/css/style.php" media="print" onload="this.media='all'">
+<script src="https://tehybug.com/tehybug/v1/js/javascript.php" defer></script>
 </body>
 </html>
 )=====";
