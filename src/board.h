@@ -1,16 +1,19 @@
 #pragma once
 
-// Pin mapping differs between the generic 1MB build (old / first-gen
+// The indicator differs between the generic 1MB build (old / first-gen
 // TeHyBug, esp-01 based) and the ESP8285 build (TeHyBug universal and Mini).
 #if defined(ARDUINO_ESP8266_GENERIC)
 #define PIXEL_ACTIVE 0
 #define SIGNAL_LED_PIN 1
-#define I2C_SDA 2
-#define I2C_SCL 0
-#else
+#endif
+
+// I2C is wired the same way on both boards. The generic build used to declare
+// these the other way round (SDA=2, SCL=0), so a first-gen board scanned the
+// bus with the two lines crossed and reported "No I2C devices found" however
+// many sensors were fitted — every I2C sensor was undetectable there. Keeping
+// one definition for both builds is what stops that coming back.
 #define I2C_SDA 0
 #define I2C_SCL 2
-#endif
 
 // Config-mode button
 #define BUTTON_PIN 0
