@@ -197,10 +197,42 @@ void read_aht20() {
   }
 }
 
-// A DHT needs a moment after its supply comes up before it answers at all.
-// AUTO_DETECT reads immediately, so without this it reads its own power-up as
-// a timeout and picks the wrong model.
-constexpr unsigned long DHT_POWER_UP_MS = 1200;
+// A DHT needs time after its supply comes up before it answers at all - the
+// DHT22 datasheet asks for ~2 s. Probing sooner reads the sensor's own
+// power-up as a timeout, which is indistinguishable from "wrong model".
+constexpr unsigned long DHT_POWER_UP_MS = 2000;
+
+// Work out which DHT is attached, without the driver's assumption that a
+// timeout means DHT11.
+//
+// DHTesp::AUTO_DETECT tries DHT22 and drops to DHT11 the moment a read times
+// out — but a timeout is equally what an absent, unpowered or still-settling
+// sensor gives. A DHT22 that was not ready yet is then recorded as a DHT11 and
+// talked to with the wrong protocol for the whole session, which is worse than
+// the hardcoded DHT22 this replaced. So confirm the fallback: accept DHT11 only
+// when a DHT11 read actually answers, and otherwise stay on DHT22 — the more
+// common part, and what this firmware assumed before it detected anything.
+void setupDht(DHTesp &sensor, uint8_t pin) {
+  pinMode(pin, INPUT_PULLUP);
+  sensor.setup(pin, DHTesp::DHT22);
+  delay(sensor.getMinimumSamplingPeriod());
+  if (!isnan(sensor.getTempAndHumidity().temperature)) {
+    D_println(F("DHT model detected: DHT22"));
+    return;
+  }
+  sensor.setup(pin, DHTesp::DHT11);
+  delay(sensor.getMinimumSamplingPeriod());
+  if (!isnan(sensor.getTempAndHumidity().temperature)) {
+    D_println(F("DHT model detected: DHT11"));
+    return;
+  }
+  // Neither answered. Stay on DHT22 and let the read path report the failure,
+  // rather than locking in a guess that cannot be told apart from a real one.
+  sensor.setup(pin, DHTesp::DHT22);
+  D_print(F("DHT answered as neither model ("));
+  D_print(sensor.getStatusString());
+  D_println(F("), assuming DHT22"));
+}
 
 void read_dht_custom(DHTesp &sensor, const String &temp, const String &humi) {
   TempAndHumidity prev = sensor.getTempAndHumidity(); // first read
@@ -514,19 +546,10 @@ void setupSensors() {
     Max44009Lux.setAutomaticMode();
   }
   if (tehybug.sensor.dht) {
-    // Power the sensor before setup, not just before each read: AUTO_DETECT
-    // performs a real read to tell a DHT22 from a DHT11, and an unpowered
-    // sensor answers that with a timeout — which it would take as "DHT11" and
-    // then talk the wrong protocol for the rest of the session.
+    // Power the sensor before probing it, not just before each read.
     dhtPowerOn();
     delay(DHT_POWER_UP_MS);
-    pinMode(2, INPUT_PULLUP);
-    // AUTO_DETECT, not DHT22: the sensor page offers one "DHTXX" switch, so a
-    // DHT11 has always been a legal thing to tick and has never worked. The
-    // driver tries DHT22 first and falls back to DHT11 on timeout.
-    dht.setup(2, DHTesp::AUTO_DETECT);
-    D_print(F("DHT model detected: "));
-    D_println(dht.getModel() == DHTesp::DHT11 ? F("DHT11") : F("DHT22"));
+    setupDht(dht, 2);
   }
   else
   {
@@ -538,8 +561,7 @@ void setupSensors() {
   }
 #if !defined(ARDUINO_ESP8266_GENERIC)
   if (tehybug.sensor.dht_2) {
-    pinMode(13, INPUT_PULLUP);
-    dht2.setup(13, DHTesp::DHT22); // Connect DHT sensor to GPIO 13
+    setupDht(dht2, 13);
   }
 #endif
   if (tehybug.peripherals.eeprom) {
