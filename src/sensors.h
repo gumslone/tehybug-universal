@@ -289,8 +289,8 @@ void read_dht_custom(DHTesp &sensor, const String &temp, const String &humi) {
 // I2C line the pin doubles as, which is why a DHT and I2C sensors are
 // alternatives on this hardware rather than a combination.
 void dhtPowerOn() {
-  pinMode(0, OUTPUT);
-  digitalWrite(0, LOW);
+  pinMode(DHT_POWER_PIN, OUTPUT);
+  digitalWrite(DHT_POWER_PIN, LOW);
 }
 
 void read_dht() {
@@ -549,7 +549,7 @@ void setupSensors() {
     // Power the sensor before probing it, not just before each read.
     dhtPowerOn();
     delay(DHT_POWER_UP_MS);
-    setupDht(dht, 2);
+    setupDht(dht, DHT_PIN);
   }
   else
   {

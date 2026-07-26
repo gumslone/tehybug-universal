@@ -15,6 +15,17 @@
 #define I2C_SDA 0
 #define I2C_SCL 2
 
+// DHT data line, and the pin that gates the sensor's supply (driven low = on).
+//
+// Unverified on the generic (esp-01) board: the DHT does not read there and
+// swapping these two, which is what the I2C mapping on that board turned out to
+// need, did not help either. So the fault is elsewhere - a different pin, or a
+// supply that is not gated at all - and the next thing worth knowing is which
+// ESP-01 pin the data line is actually soldered to. These are named rather than
+// buried in sensors.h so that test is a one-line change.
+#define DHT_PIN 2
+#define DHT_POWER_PIN 0
+
 // Config-mode button
 #define BUTTON_PIN 0
 
