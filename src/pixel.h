@@ -17,6 +17,16 @@
 // first colour frame is clocked out. Only paid when the pixel was actually off.
 #define PIXEL_POWER_UP_MS 3
 
+// On the generic (esp-01) board the indicator sits on GPIO1, which is the UART
+// TX pin. Driving it as a GPIO takes the pin away from the serial port, so a
+// debug build lit the LED and lost its own log in the same call. In a debug
+// build the log is worth more than the indicator, so leave the pin alone.
+#if DEBUG && SIGNAL_LED_PIN == 1
+#define SIGNAL_LED_ACTIVE 0
+#else
+#define SIGNAL_LED_ACTIVE 1
+#endif
+
 #if PIXEL_ACTIVE
 #include <Adafruit_NeoPixel.h>
 #endif
@@ -29,6 +39,10 @@ public:
 #endif
   void on(uint8_t r=0, uint8_t g=0, uint8_t b=255, uint8_t brightness=50) {
     D_println("Led on");
+#if !SIGNAL_LED_ACTIVE
+    (void)r; (void)g; (void)b; (void)brightness;
+    return; // the pin is the debug serial line, see SIGNAL_LED_ACTIVE
+#else
     pinMode(SIGNAL_LED_PIN, OUTPUT);
     if (SIGNAL_LED_PIN == 1) {
       digitalWrite(SIGNAL_LED_PIN, LOW); // on
@@ -49,6 +63,7 @@ public:
       setPixel(r, g, b, brightness);
 #endif
     }
+#endif
   }
 
   void off() {
@@ -57,6 +72,9 @@ public:
     // ran (a boot straight into a serving mode, sleep). Writing to a pin still
     // in INPUT mode only toggles its pullup, so the LED was not actually driven
     // off there.
+#if !SIGNAL_LED_ACTIVE
+    return; // the pin is the debug serial line, see SIGNAL_LED_ACTIVE
+#else
     pinMode(SIGNAL_LED_PIN, OUTPUT);
     if (SIGNAL_LED_PIN == 1) {
       digitalWrite(SIGNAL_LED_PIN, HIGH); // off
@@ -67,6 +85,7 @@ public:
       digitalWrite(SIGNAL_LED_PIN, LOW); // off (cuts the pixel's supply)
       m_powered = false;
     }
+#endif
   }
 
 private:
