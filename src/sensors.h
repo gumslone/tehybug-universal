@@ -197,6 +197,11 @@ void read_aht20() {
   }
 }
 
+// A DHT needs a moment after its supply comes up before it answers at all.
+// AUTO_DETECT reads immediately, so without this it reads its own power-up as
+// a timeout and picks the wrong model.
+constexpr unsigned long DHT_POWER_UP_MS = 1200;
+
 void read_dht_custom(DHTesp &sensor, const String &temp, const String &humi) {
   TempAndHumidity prev = sensor.getTempAndHumidity(); // first read
   if (tehybug.device.configMode)
@@ -248,9 +253,16 @@ void read_dht_custom(DHTesp &sensor, const String &temp, const String &humi) {
   }
 }
 
+// GPIO0 gates the DHT's supply, low being "on". Driving it also takes over the
+// I2C line the pin doubles as, which is why a DHT and I2C sensors are
+// alternatives on this hardware rather than a combination.
+void dhtPowerOn() {
+  pinMode(0, OUTPUT);
+  digitalWrite(0, LOW);
+}
+
 void read_dht() {
-  pinMode(0, OUTPUT);   // sets the digital pin 0 as output
-  digitalWrite(0, LOW); // sets the digital pin 0 on
+  dhtPowerOn();
   read_dht_custom(dht, "temp", "humi");
 }
 
@@ -502,8 +514,19 @@ void setupSensors() {
     Max44009Lux.setAutomaticMode();
   }
   if (tehybug.sensor.dht) {
+    // Power the sensor before setup, not just before each read: AUTO_DETECT
+    // performs a real read to tell a DHT22 from a DHT11, and an unpowered
+    // sensor answers that with a timeout — which it would take as "DHT11" and
+    // then talk the wrong protocol for the rest of the session.
+    dhtPowerOn();
+    delay(DHT_POWER_UP_MS);
     pinMode(2, INPUT_PULLUP);
-    dht.setup(2, DHTesp::DHT22); // Connect DHT sensor to GPIO 2
+    // AUTO_DETECT, not DHT22: the sensor page offers one "DHTXX" switch, so a
+    // DHT11 has always been a legal thing to tick and has never worked. The
+    // driver tries DHT22 first and falls back to DHT11 on timeout.
+    dht.setup(2, DHTesp::AUTO_DETECT);
+    D_print(F("DHT model detected: "));
+    D_println(dht.getModel() == DHTesp::DHT11 ? F("DHT11") : F("DHT22"));
   }
   else
   {
