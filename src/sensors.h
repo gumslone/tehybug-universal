@@ -10,8 +10,8 @@
 #include <FS.h>
 #include "DHTesp.h"
 #include "Max44009.h"
-#if !defined(ARDUINO_ESP8266_GENERIC)
 #include "AHT20.h"
+#if !defined(ARDUINO_ESP8266_GENERIC)
 #include "bsec.h"
 #endif
 #include <AM2320_asukiaaa.h>
@@ -31,9 +31,7 @@ uint8_t bsecState[BSEC_MAX_STATE_BLOB_SIZE] = {0};
 
 Max44009 Max44009Lux(0x4A);
 
-#if !defined(ARDUINO_ESP8266_GENERIC)
 AHT20 AHT;
-#endif
 
 AM2320_asukiaaa am2320;
 
@@ -190,16 +188,14 @@ void read_max44009() {
   }
 }
 
-#if !defined(ARDUINO_ESP8266_GENERIC)
 void read_aht20() {
   float humidity, temperature;
   if (AHT.getSensor(&humidity, &temperature)) {
     tehybug.addTempHumi("temp", temperature, "humi", (humidity * 100.0F));
   } else {
-    Serial.println("GET DATA FROM AHT20 FAIL");
+    D_println(F("GET DATA FROM AHT20 FAIL"));
   }
 }
-#endif
 
 void read_dht_custom(DHTesp &sensor, const String &temp, const String &humi) {
   TempAndHumidity prev = sensor.getTempAndHumidity(); // first read
@@ -240,6 +236,15 @@ void read_dht_custom(DHTesp &sensor, const String &temp, const String &humi) {
   // the last valid one rather than silently dropping the sensor this cycle.
   if (!recorded && !isnan(prev.temperature) && !isnan(prev.humidity)) {
     tehybug.addTempHumi(temp, prev.temperature, humi, prev.humidity);
+  } else if (!recorded) {
+    // Every sample was NaN, so nothing at all goes into sensorData and the
+    // reading simply vanishes from the payload with no explanation. Say what
+    // the driver made of it — "TIMEOUT" points at wiring or the power gate in
+    // read_dht(), "CHECKSUM" at a marginal signal.
+    D_print(F("DHT read failed for "));
+    D_print(temp);
+    D_print(F(": "));
+    D_println(sensor.getStatusString());
   }
 }
 
@@ -331,10 +336,10 @@ void read_sensors() {
     read_ds18b20();
   }
 
-#if !defined(ARDUINO_ESP8266_GENERIC)
   if (tehybug.sensor.aht20) {
     read_aht20();
   }
+#if !defined(ARDUINO_ESP8266_GENERIC)
   if (tehybug.sensor.adc) {
     read_adc();
   }
@@ -504,11 +509,11 @@ void setupSensors() {
   {
     dht.setupComfortProfile(); // required for nondht sensors
   }
-#if !defined(ARDUINO_ESP8266_GENERIC)
   if (tehybug.sensor.aht20) {
     D_println("AHT20");
     AHT.begin();
   }
+#if !defined(ARDUINO_ESP8266_GENERIC)
   if (tehybug.sensor.dht_2) {
     pinMode(13, INPUT_PULLUP);
     dht2.setup(13, DHTesp::DHT22); // Connect DHT sensor to GPIO 13

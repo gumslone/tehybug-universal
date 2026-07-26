@@ -49,8 +49,11 @@ if (document.readyState === 'loading') {
 </head>
 <body>
 <div id="page">
-Loading...
-<br>If the page doesnt load: make sure that you are connected to your local home network and then open this ip: <span id="ip">tehybug.local</span> with your browser
+<h3>TeHyBug</h3>
+<b>On your own network this device is at: <span id="ip">tehybug.local</span></b>
+<br><br>Loading the full interface...
+<br>If it does not load, you are probably still on the TeHyBug access point,
+which has no internet. Rejoin your home WiFi and open the address above.
 </div>
 </body>
 </html>
@@ -188,9 +191,18 @@ void handleGetSensor() {
   server.send(200, "application/json", getSensor());
 }
 
+// The address to reach the device on once you are back on your own network.
+// Served plain so the config-mode page can show it while you are still on the
+// device's own AP, where there is no internet and nothing else loads.
 void handleGetIp() {
   server.sendHeader("Connection", "close");
-  server.send(200, "text/html", WiFi.localIP().toString());
+  const IPAddress ip = WiFi.localIP();
+  // 0.0.0.0 means the device has not joined a network yet — printing that as an
+  // address to browse to just sends people to a dead end.
+  server.send(200, "text/html",
+              ip == IPAddress(0, 0, 0, 0)
+                  ? String(F("not on your network yet - set WiFi first"))
+                  : ip.toString());
 }
 
 // GET /api/datalog            -> {"active":...,"time":"...","files":[...]}
