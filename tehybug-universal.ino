@@ -327,7 +327,12 @@ void setup() {
     setupWebServer();
   } else {
     WiFi.softAPdisconnect(true);
-    D_println(F("Starting live mode"));
+    // Name the mode actually resolved, not "live": a device configured for
+    // deep or light sleep announced "Starting live mode" and then went to
+    // sleep, which is confusing in exactly the logs used to debug sleep.
+    D_print(F("Starting "));
+    D_print(tehybug.modeName());
+    D_println(F(" mode"));
   }
 
   // setup mqtt / homeassistant

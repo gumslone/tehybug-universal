@@ -336,7 +336,7 @@ void setupWifi() {
   yield();
 
   if (!wifiManager.autoConnect(wifiSsid, wifiPassword)) {
-    Serial.println(F("Setup: Wifi failed to connect"));
+    D_println(F("Setup: Wifi failed to connect"));
     yield();
 
     // Never leave config mode just because the connection failed.

@@ -314,7 +314,7 @@ void read_am2320() {
     }
     yield();
   }
-  Serial.println("Error: Cannot update the am2320 sensor values.");
+  D_println(F("Error: Cannot update the am2320 sensor values."));
 }
 
 void read_ds18b20_custom(DallasTemperature &ds18b20, const String &temp) {
@@ -329,7 +329,7 @@ void read_ds18b20_custom(DallasTemperature &ds18b20, const String &temp) {
     D_println(tempC);
     tehybug.addSensorData(temp, tempC);
   } else {
-    Serial.println("Error: Could not read temperature data");
+    D_println(F("Error: Could not read temperature data"));
   }
 }
 
@@ -466,7 +466,7 @@ void setupBmx280() {
       tehybug.sensor.bme680 = false;
       break;
     default:
-      Serial.println(F("Unknown\n"));
+      D_println(F("Unknown\n"));
       break;
   }
 
