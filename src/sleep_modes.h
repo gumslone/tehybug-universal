@@ -5,6 +5,7 @@
 // header is included): `tehybug`, `mqttClient`.
 #include <ESP8266WiFi.h>
 #include "debug.h"
+#include "wifi_hint.h"
 
 // How long to wait for the WiFi association to come back after a light sleep
 // before giving up on this round (the next wake tries again).
@@ -134,9 +135,37 @@ void startLightSleep(int freq)
   wifi_fpm_close();
   wifi_set_opmode_current(STATION_MODE);
   wifi_set_sleep_type(NONE_SLEEP_T);
-  wifi_station_connect(); // re-associate with the credentials we kept
 
-  D_println("Woke from light sleep, reconnecting WiFi...");
+  // Re-associate straight to the AP we were on, instead of scanning for it.
+  //
+  // wifi_station_connect() starts a full scan on every wake — visible in the
+  // log as "scandone" before each reconnect, and measured at 300-900 ms of
+  // radio-on time per cycle. The channel and BSSID have not changed across a
+  // sleep of a few minutes, and they are already in RTC memory for the
+  // deep-sleep path, so pin them and skip the scan. If the hint is missing or
+  // the AP really did move, the association fails and the retry below falls
+  // back to a normal scan, which is the same recovery the boot path uses.
+  WifiHint hint;
+  bool pinned = false;
+  if (loadWifiHint(hint)) {
+    const String ssid = WiFi.SSID();
+    const String psk = WiFi.psk();
+    if (ssid.length() > 0) {
+      // Suppress persistence: these are the credentials the SDK already has,
+      // so letting the core write them back is a flash erase on every wake.
+      const bool wasPersistent = WiFi.getPersistent();
+      WiFi.persistent(false);
+      WiFi.begin(ssid.c_str(), psk.c_str(), hint.channel, hint.bssid, true);
+      WiFi.persistent(wasPersistent);
+      pinned = true;
+    }
+  }
+  if (!pinned) {
+    wifi_station_connect(); // re-associate with the credentials we kept
+  }
+
+  D_print(F("Woke from light sleep, reconnecting WiFi"));
+  D_println(pinned ? F(" (pinned to the cached AP)") : F(" (scanning)"));
 
   // Wait for the link to come back before returning to the caller, which
   // serves data immediately.
@@ -150,9 +179,15 @@ void startLightSleep(int freq)
   bool retried = false;
   while (WiFi.status() != WL_CONNECTED &&
          (millis() - start) < LIGHT_SLEEP_RECONNECT_TIMEOUT_MS) {
-    // the SDK usually re-associates by itself; nudge it once if it has not
+    // The SDK usually re-associates by itself; nudge it once if it has not.
+    // For a pinned attempt this is also the fallback when the AP has moved
+    // channel or BSSID: reconnect() drops the pinning and scans normally.
     if (!retried && (millis() - start) > 1000) {
       retried = true;
+      if (pinned) {
+        D_println(F("  pinned reconnect stalled, falling back to a scan"));
+        clearWifiHint(); // it is stale; the boot path will rebuild it
+      }
       WiFi.reconnect();
     }
     delay(50);
@@ -161,6 +196,12 @@ void startLightSleep(int freq)
   if (WiFi.status() == WL_CONNECTED) {
     D_print(F("WiFi back after light sleep, ms: "));
     D_println(millis() - start);
+    // Refresh the hint from what actually worked. Without this the light-sleep
+    // path would only ever read it, so the one time a stale hint was cleared
+    // above, every later wake would scan with nothing left to rebuild it.
+    // The counter restarts at 0 because this path re-runs DHCP: it applies no
+    // static address, unlike the boot fast path.
+    saveWifiHint();
   } else {
     D_println(F("WiFi did not return after light sleep; skipping this round"));
   }
