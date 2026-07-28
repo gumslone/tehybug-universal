@@ -127,6 +127,20 @@ static void test_expand_placeholders() {
   CHECK_EQ_STR(expandPlaceholders("%temp% %nope%", v).c_str(), "22.6 %nope%");
 
   // a lone or unterminated % must not eat the rest of the string
+  // dropUnknown: the data log asks for unresolved placeholders to be removed
+  // instead of written out, so a template naming a sensor the device does not
+  // have does not spend those bytes on every entry.
+  CHECK_EQ_STR(expandPlaceholders("a %nope% b", v, true).c_str(), "a  b");
+  CHECK_EQ_STR(expandPlaceholders("%temp% %nope%", v, true).c_str(), "22.6 ");
+  CHECK_EQ_STR(expandPlaceholders("%nope%", v, true).c_str(), "");
+  // the real case: "%temp% %humi% %qfe%" on a device with no pressure sensor
+  CHECK_EQ_STR(expandPlaceholders("%temp% %humi% %qfe%", v, true).c_str(),
+               "22.6 48.3 ");
+  // known keys are unaffected by the flag
+  CHECK_EQ_STR(expandPlaceholders("%temp% %humi%", v, true).c_str(), "22.6 48.3");
+  // and the default still leaves them verbatim, which is what a URL wants
+  CHECK_EQ_STR(expandPlaceholders("a %nope% b", v).c_str(), "a %nope% b");
+
   CHECK_EQ_STR(expandPlaceholders("100% humidity", v).c_str(), "100% humidity");
   CHECK_EQ_STR(expandPlaceholders("%temp% is 100%", v).c_str(), "22.6 is 100%");
   CHECK_EQ_STR(expandPlaceholders("%", v).c_str(), "%");

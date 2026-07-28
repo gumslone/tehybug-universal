@@ -12,7 +12,13 @@
 /// An unknown or unterminated placeholder is left exactly as written.
 /// (JsonObject is a lightweight handle, so it is taken by value as ArduinoJson
 /// intends — a const reference makes its accessors unavailable.)
-inline String expandPlaceholders(const String &text, JsonObject values) {
+// dropUnknown decides what happens to a placeholder with no matching reading.
+// Leaving it verbatim is right for a URL or an MQTT payload, where seeing
+// "%qfe%" arrive is how you find out the key is wrong. It is wrong for the
+// EEPROM data log, where it is written into a ~2 KB slot on every entry and
+// makes the line unparseable, so that caller asks for it to be dropped.
+inline String expandPlaceholders(const String &text, JsonObject values,
+                                 bool dropUnknown = false) {
   if (text.indexOf('%') < 0) {
     return text; // nothing to expand
   }
@@ -42,7 +48,7 @@ inline String expandPlaceholders(const String &text, JsonObject values) {
       if (value != nullptr) {
         out += value;
       }
-    } else {
+    } else if (!dropUnknown) {
       out += text.substring(start, end + 1); // leave it as written
     }
     pos = end + 1;

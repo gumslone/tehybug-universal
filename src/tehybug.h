@@ -43,9 +43,9 @@ class TeHyBug {
     // The text scan lives in common_functions.h so it can be unit-tested; it
     // replaced a loop over every key in sensorData that ran String::replace
     // ~25 times per URL, payload and log line.
-    String replacePlaceholders(const String & text) {
+    String replacePlaceholders(const String & text, bool dropUnknown = false) {
       const JsonObject root = sensorData.as<JsonObject>();
-      return expandPlaceholders(text, root);
+      return expandPlaceholders(text, root, dropUnknown);
     }
 
     void additionalSensorData(const String & key, const float & value) {
@@ -268,7 +268,12 @@ class TeHyBug {
       // %humi%") instead logs exactly what the user wrote.
       String line = time.timeOfDay() + " ";
       if (serveData.eeprom.message.length() > 0) {
-        line += replacePlaceholders(serveData.eeprom.message);
+        // Drop placeholders with no reading behind them rather than writing
+        // them out: a template naming a sensor this device does not have (a
+        // "%qfe%" with no pressure sensor) otherwise spends those bytes on
+        // every single entry, in the one place where space is measured in
+        // hundreds of bytes.
+        line += replacePlaceholders(serveData.eeprom.message, true);
       } else {
         static const struct { const char *key; const char *code; } loggedFields[] = {
           {"temp", "t"},  {"humi", "h"},  {"temp2", "t2"}, {"humi2", "h2"},
@@ -285,6 +290,11 @@ class TeHyBug {
             line += sensorData[f.key].as<String>() + f.code;
           }
         }
+      }
+      // A dropped placeholder can leave the separator that preceded it
+      // stranded at the end of the line.
+      while (line.length() > 0 && line.charAt(line.length() - 1) == ' ') {
+        line = line.substring(0, line.length() - 1);
       }
       line += "\n";
 
