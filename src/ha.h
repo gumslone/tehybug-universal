@@ -31,9 +31,39 @@ void setupHandle() {
 // than HA support, so these become no-ops (like the RTC/EEPROM and https
 // features that build already omits). The ESP8285 builds are unaffected.
 
+#if !defined(ARDUINO_ESP8266_GENERIC)
+// Publishes one discovery document, refusing to send a broken one.
+//
+// This used to serialize into a fixed char[1024] and publish whatever landed
+// there, with neither the document's own overflow flag nor the serialized
+// length checked — the same mistake publishState() below documents having been
+// fixed for, just never carried across to the discovery path. A document that
+// overflows drops fields silently, and Home Assistant answers a config message
+// missing "state_topic" or "unique_id" by ignoring the entity outright: the
+// sensor simply never appears, with nothing on the device saying why.
+void publishConfig(PubSubClient & mqttClient, const String & topic,
+                   DynamicJsonDocument & payload) {
+  if (payload.overflowed()) {
+    D_print(F("HA discovery document overflowed, not publishing: "));
+    D_println(topic);
+    return;
+  }
+  String out;
+  out.reserve(measureJson(payload) + 1);
+  serializeJson(payload, out);
+  if (!mqttClient.publish(topic.c_str(), out.c_str(), true)) {
+    // Nearly always the broker rejecting an oversized packet: the buffer is
+    // sized in setup() and a discovery document is the largest thing sent.
+    D_print(F("HA discovery publish failed ("));
+    D_print(out.length());
+    D_print(F(" B): "));
+    D_println(topic);
+  }
+}
+#endif
+
  void publishAutoConfig(PubSubClient & mqttClient, const String & version, DynamicJsonDocument & sensorData) {
 #if !defined(ARDUINO_ESP8266_GENERIC)
-  char mqttPayload[1024];
   DynamicJsonDocument device(256);
   DynamicJsonDocument autoconfPayload(1024);
   StaticJsonDocument<64> identifiersDoc;
@@ -58,8 +88,7 @@ void setupHandle() {
     autoconfPayload["json_attributes_topic"] = MQTT_TOPIC_STATE;
     autoconfPayload["json_attributes_template"] = "{\"ssid\": \"{{value_json.wifi.ssid}}\", \"ip\": \"{{value_json.wifi.ip}}\"}";
     autoconfPayload["icon"] = "mdi:wifi";
-    serializeJson(autoconfPayload, mqttPayload);
-    mqttClient.publish(wifiTopic.c_str(), &mqttPayload[0], true);
+    publishConfig(mqttClient, wifiTopic, autoconfPayload);
     autoconfPayload.clear();
   }
   const JsonObject root = sensorData.as<JsonObject>();
@@ -79,8 +108,7 @@ void setupHandle() {
       autoconfPayload["unit_of_measurement"] = key2unit(k);
     autoconfPayload["icon"] = key2icon(k);
     autoconfPayload["unique_id"] = String(identifier) + "_sensor_" + k;
-    serializeJson(autoconfPayload, mqttPayload);
-    mqttClient.publish(topic.c_str(), &mqttPayload[0], true);
+    publishConfig(mqttClient, topic, autoconfPayload);
     autoconfPayload.clear();
   }
   device.clear();
