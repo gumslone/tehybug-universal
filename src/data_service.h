@@ -9,6 +9,11 @@
 #include "common_functions.h"
 #include "http_request.h"
 
+// How long a just-written MQTT publish and DISCONNECT get to drain out of the
+// TCP buffer before the radio sleeps. HTTP needs no equivalent: its response
+// has already arrived by the time the sleep path runs.
+constexpr unsigned long MQTT_DRAIN_MS = 250;
+
 WiFiClient & getClient(const String & url)
 {
 #if !defined(ARDUINO_ESP8266_GENERIC)
@@ -93,6 +98,11 @@ void serve_data() {
 
   if (tehybug.serveData.mqtt.active || tehybug.serveData.ha.active) {
     mqttClient.disconnect();
+    // Give the QoS-0 publishes just written and the DISCONNECT packet a moment
+    // to actually leave the radio - they sit in the TCP buffer, and sleeping
+    // now would drop them. A moment, not the old full second: this is a drain,
+    // not a ceremony.
+    delay(MQTT_DRAIN_MS);
   }
   // Say what the device will actually do: "Minimum data frequency" above is
   // only the network services' shortest interval, while the EEPROM log can be
@@ -105,14 +115,12 @@ void serve_data() {
   }
   D_println();
 
-  // One settle window before sleeping, so the last send drains, instead of one
-  // per service. With no link nothing was sent and there is nothing to drain,
-  // so skip it — that is a full second of radio-on time saved on every wake
-  // that the network was unreachable, which is exactly when the device can
-  // least afford it.
-  if (linked) {
-    delay(1000);
-  }
+  // No settle window for HTTP: the "200" in the log is the response, so by
+  // this point the exchange has already made the full round trip and there is
+  // nothing left in flight. The old fixed delay(1000) here was measured on
+  // hardware as 1.00 s of a 2.45 s wake - 41% of the awake time, spent doing
+  // nothing. MQTT is different (QoS-0 bytes still in the TCP buffer) and gets
+  // its bounded drain above.
   startSleep(freq);
 }
 
