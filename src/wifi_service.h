@@ -1,9 +1,8 @@
 #pragma once
 // WiFi connection management, config portal (WiFiManager) and mDNS.
-//
-// Expects the following globals (defined in tehybug.ino before this
-// header is included): `tehybug`, `wifiManager`, `wifiSsid`,
-// `wifiPassword` — plus sleep_modes.h and sensors.h.
+#include "globals.h"
+#include "sleep_modes.h"
+#include "sensors.h"
 #include <ESP8266WiFi.h>
 #include <ESP8266mDNS.h>
 #include <WiFiManager.h>

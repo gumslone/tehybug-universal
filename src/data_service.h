@@ -1,10 +1,9 @@
 #pragma once
 // Pushes measurements to the configured targets (HTTP GET/POST, MQTT,
 // Home Assistant) and evaluates the automation scenarios.
-//
-// Expects the following globals (defined in tehybug.ino before this
-// header is included): `tehybug`, `espClient`, `espClient_ssl`,
-// `httpClient` — plus http_request.h, mqtt_service.h and sleep_modes.h.
+#include "globals.h"
+#include "mqtt_service.h"
+#include "sleep_modes.h"
 #include "debug.h"
 #include "common_functions.h"
 #include "http_request.h"

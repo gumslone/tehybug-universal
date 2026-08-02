@@ -1,9 +1,9 @@
 #pragma once
 // Sensor drivers, detection and reading.
-//
-// Expects the following globals to exist (defined in tehybug.ino before
-// this header is included): `tehybug`, `dht` and — on non-generic
-// boards — `dht2`.
+#include "globals.h"
+#include "i2cscanner.h"
+#include "board.h"
+#include "debug.h"
 #include <Wire.h>
 #include <OneWire.h>
 #include <DallasTemperature.h>

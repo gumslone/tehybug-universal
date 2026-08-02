@@ -1,8 +1,6 @@
 #pragma once
 // Deep / light / modem sleep between measurements.
-//
-// Expects the following globals (defined in tehybug.ino before this
-// header is included): `tehybug`, `mqttClient`.
+#include "globals.h"
 #include <ESP8266WiFi.h>
 #include "debug.h"
 #include "wifi_hint.h"

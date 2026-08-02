@@ -1,9 +1,11 @@
 // TeHyBug — WiFi temperature/humidity/air-quality sensor firmware
 // for ESP8266/ESP8285 boards.
 //
-// The sketch is built as a single translation unit: the module headers
-// below contain function definitions and are included exactly once, in
-// dependency order.
+// The sketch is built as a single translation unit: each module header
+// contains function definitions and is included exactly once. The modules
+// declare the shared objects they use via src/globals.h (defined below), so
+// they are self-sufficient and their include order does not matter — the list
+// further down is alphabetical to keep it that way.
 #include "src/debug.h"
 #include "src/board.h"
 
@@ -66,15 +68,15 @@ ESP8266HTTPUpdateServer httpUpdater;
 // 5 data-serving slots (get/post/mqtt/ha/eeprom) + 1 for scenario evaluation
 TickerScheduler ticker(6);
 
-/* Modules (function definitions, include order matters) */
+/* Modules (alphabetical — order-independent, see the note at the top) */
 
-#include "src/http_request.h"
-#include "src/ha.h"
-#include "src/sensors.h"
-#include "src/web_api.h"
-#include "src/mqtt_service.h"
-#include "src/sleep_modes.h"
 #include "src/data_service.h"
+#include "src/ha.h"
+#include "src/http_request.h"
+#include "src/mqtt_service.h"
+#include "src/sensors.h"
+#include "src/sleep_modes.h"
+#include "src/web_api.h"
 #include "src/wifi_service.h"
 
 /* Button & LED */

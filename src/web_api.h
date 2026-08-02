@@ -1,9 +1,7 @@
 #pragma once
 // Config-mode web interface: HTTP API, websocket push and logging.
-//
-// Expects the following globals (defined in tehybug.ino before this
-// header is included): `tehybug`, `server`, `webSocket`, `wifiManager`,
-// `httpUpdater` — plus `read_sensors()` from sensors.h.
+#include "globals.h"
+#include "sensors.h"
 #include <ESP8266WebServer.h>
 #include <WebSocketsServer.h>
 #include <ArduinoJson.h>
