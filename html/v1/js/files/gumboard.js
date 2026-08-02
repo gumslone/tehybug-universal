@@ -122,14 +122,33 @@ function knownSensorKeys() {
     return Object.keys(sensorMap).filter(function (k) { return availableSensors[k]; });
 }
 
-// "bug_key=%key%&t=%temp%&h=%humi%..." from the device's own sensors
-function suggestedGetQuery() {
-    return 'bug_key=%key%' + knownSensorKeys().map(function (k) { return sensorMap[k].url; }).join('');
+// The device reports metric keys plus imperial siblings (temp_imp, dew_imp,
+// hi_imp...) side by side. A suggestion should be one system, not both:
+// metric takes the base keys, imperial swaps in the _imp sibling wherever the
+// device computes one and keeps the base key where none exists (humidity,
+// pressure, lux have no imperial variant).
+function unitAdjustedKeys(units) {
+    const keys = knownSensorKeys().filter(function (k) { return k.indexOf('_imp') < 0; });
+    if (units !== 'imperial') {
+        return keys;
+    }
+    return keys.map(function (k) { return availableSensors[k + '_imp'] ? k + '_imp' : k; });
+}
+
+// "bug_key=%key%&t=%temp%&h=%humi%..." from the device's own sensors. The
+// imperial variant keeps the same short parameter names and only swaps the
+// placeholder, so t= simply carries Fahrenheit.
+function suggestedGetQuery(units) {
+    const parts = unitAdjustedKeys(units).map(function (k) {
+        const base = k.replace('_imp', '');
+        return (sensorMap[base].url || '').replace('%' + base + '%', '%' + k + '%');
+    });
+    return 'bug_key=%key%' + parts.join('');
 }
 
 // '{"temp":"%temp%", "humi":"%humi%", ...}' from the device's own sensors
-function suggestedJsonPayload() {
-    const parts = knownSensorKeys().map(function (k) { return sensorMap[k].mqtt; }).join('');
+function suggestedJsonPayload(units) {
+    const parts = unitAdjustedKeys(units).map(function (k) { return sensorMap[k].mqtt; }).join('');
     return '{' + parts.replace(/^, /, '') + '}';
 }
 
@@ -147,20 +166,20 @@ function haveSensorSuggestions() {
     return false;
 }
 
-function applySuggestedGetUrl(fieldId) {
+function applySuggestedGetUrl(fieldId, units) {
     if (!haveSensorSuggestions()) {
         return;
     }
     const current = $('#' + fieldId).val() || '';
     const base = current.indexOf('://') > 0 ? current.split('?')[0] : 'http://tehybug.com/track/';
-    $('#' + fieldId).val(base + '?' + suggestedGetQuery());
+    $('#' + fieldId).val(base + '?' + suggestedGetQuery(units));
 }
 
-function applySuggestedPayload(fieldId) {
+function applySuggestedPayload(fieldId, units) {
     if (!haveSensorSuggestions()) {
         return;
     }
-    $('#' + fieldId).val(suggestedJsonPayload());
+    $('#' + fieldId).val(suggestedJsonPayload(units));
 }
 
 function sensorData(key, value) {
