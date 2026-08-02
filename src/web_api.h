@@ -114,7 +114,9 @@ void sendDeviceInfo() {
 }
 
 void sendSensorData() {
-  sendToWebsocketClients(getSensor(), {"/main", "/settings"});
+  // "/datalog" included so its template field can offer "fill from my
+  // sensors" - the page needs to know which readings this device produces.
+  sendToWebsocketClients(getSensor(), {"/main", "/settings", "/datalog"});
 }
 
 void sendConfig() {

@@ -175,6 +175,16 @@ function applySuggestedGetUrl(fieldId, units) {
     $('#' + fieldId).val(base + '?' + suggestedGetQuery(units));
 }
 
+// "%temp% %humi% %temp2%" - the data log's template format is a plain
+// space-separated placeholder list, not JSON.
+function applySuggestedLogTemplate(fieldId, units) {
+    if (!haveSensorSuggestions()) {
+        return;
+    }
+    const parts = unitAdjustedKeys(units).map(function (k) { return '%' + k + '%'; });
+    $('#' + fieldId).val(parts.join(' '));
+}
+
 function applySuggestedPayload(fieldId, units) {
     if (!haveSensorSuggestions()) {
         return;
@@ -263,7 +273,7 @@ function RefreshData(input) {
         }
 
         // Sensor data
-        const sensorPages = ['settings', 'cloud_settings', 'main'];
+        const sensorPages = ['settings', 'cloud_settings', 'main', 'datalog'];
         if (sensorPages.includes(pageName)) {
             sensorData(key, val.toString());
         }

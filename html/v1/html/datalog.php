@@ -41,6 +41,9 @@
                 <div class="form-group mb-3">
                     <label for="eepromLogMessage" class="form-label">Logged Fields (placeholder template)</label>
                     <input type="text" class="form-control" id="eepromLogMessage" placeholder="leave empty for all measured fields">
+                    <small class="d-block">Fill from my sensors:
+                        <a href="#" onclick="applySuggestedLogTemplate('eepromLogMessage','metric');return false;">metric</a> &middot;
+                        <a href="#" onclick="applySuggestedLogTemplate('eepromLogMessage','imperial');return false;">imperial</a></small>
                     <small class="text-muted">Choose exactly which values to store using placeholders, e.g. <code>%temp% %humi%</code> to log only temperature and humidity. Leave empty to log the default set of measured values. See the placeholder names on the <a href="javascript:void(0);" onclick="ChangeContent(this, 'settings', '#right-content');">Data Serving</a> page.</small>
                 </div>
             </div>
@@ -226,7 +229,9 @@
     function loadDataLog() {
         $.getJSON(dataLogUrl('datalog'), function (data) {
             if (!data.active) {
-                $('#datalog_status').text('No RTC + EEPROM module detected.');
+                $('#datalog_status').text('No RTC + EEPROM module detected. ' +
+                    'If a DHT or DS18B20 is enabled on Port B (green), it takes the bus the module needs - ' +
+                    'move that sensor to Port A (black) on the Sensor Settings page.');
                 $('#datalog_panel').hide();
                 $('#offline_unavailable').show();
                 return;
