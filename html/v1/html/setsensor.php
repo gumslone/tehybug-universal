@@ -10,15 +10,16 @@
                 Sensors Port B (Green)
             </div>
             <div class="card-body">
+                <p class="text-muted small">⚠️ Port B shares its pins with the I2C bus. While a DHT or DS18B20 is active here, I2C sensors and the <strong>RTC + EEPROM data-log module are not detected</strong> — move the sensor to Port A (black) if you want the data log alongside it.</p>
                 <div class="form-check form-switch">
                     <input type="checkbox" class="form-check-input" id="dht_sensor">
                     <label class="form-check-label" for="dht_sensor">DHTXX Active</label>
-                    <small class="text-muted d-block">DHT11/21/22 temperature &amp; humidity sensor on Port B (green).</small>
+                    <small class="text-muted d-block">DHT11/21/22 temperature &amp; humidity sensor on Port B (green). Readings: <code>%temp%</code> / <code>%humi%</code>.</small>
                 </div>
                 <div class="form-check form-switch">
                     <input type="checkbox" class="form-check-input" id="ds18b20_sensor">
                     <label class="form-check-label" for="ds18b20_sensor">DS18B20 Active</label>
-                    <small class="text-muted d-block">DS18B20 temperature sensor on Port B. Cannot be combined with DHT on the same port.</small>
+                    <small class="text-muted d-block">DS18B20 temperature sensor on Port B. Cannot be combined with DHT on the same port. Readings: <code>%temp%</code>.</small>
                 </div>
             </div>
         </div>
@@ -29,20 +30,21 @@
                 Sensors Port A (Black)
             </div>
             <div class="card-body">
+                <p class="text-muted small">Port A has its own pin, so sensors here <strong>leave the I2C bus free</strong> — the data-log module and I2C sensors keep working alongside. It fits <strong>one</strong> sensor: DHT, DS18B20 or ADC, not a combination.</p>
                 <div class="form-check form-switch">
                     <input type="checkbox" class="form-check-input" id="second_dht_sensor">
                     <label class="form-check-label" for="second_dht_sensor">DHTXX Active</label>
-                    <small class="text-muted d-block">DHT sensor on Port A (black).</small>
+                    <small class="text-muted d-block">DHT sensor on Port A (black). Readings: <code>%temp2%</code> / <code>%humi2%</code> — use the "Fill from my sensors" links on Data Serving to get the right placeholders.</small>
                 </div>
                 <div class="form-check form-switch">
                     <input type="checkbox" class="form-check-input" id="second_ds18b20_sensor">
                     <label class="form-check-label" for="second_ds18b20_sensor">DS18B20 Active</label>
-                    <small class="text-muted d-block">DS18B20 sensor on Port A.</small>
+                    <small class="text-muted d-block">DS18B20 sensor on Port A. Readings: <code>%temp2%</code>.</small>
                 </div>
                 <div class="form-check form-switch">
                     <input type="checkbox" class="form-check-input" id="adc_sensor">
                     <label class="form-check-label" for="adc_sensor">ADC Active</label>
-                    <small class="text-muted d-block">Read the analog input on Port A (e.g. soil moisture).</small>
+                    <small class="text-muted d-block">Read the analog input on Port A (e.g. soil moisture). Reading: <code>%adc%</code>.</small>
                 </div>
             </div>
         </div>
