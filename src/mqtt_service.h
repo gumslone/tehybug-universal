@@ -176,6 +176,9 @@ void haSyncDiscovery() {
   }
 
   ha::publishAutoConfig(mqttClient, version, tehybug.sensorData);
+  // Same cadence as discovery itself (memoized, so rare): sweep out what the
+  // old Lua firmware left retained on the broker.
+  ha::retireLegacyAutoConfig(mqttClient);
 
   if (current != previous) {
     File out = SPIFFS.open(HA_KEYS_FILE, "w");

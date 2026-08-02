@@ -364,8 +364,15 @@ void read_adc() {
   pinMode(pin, OUTPUT);
   digitalWrite(pin, HIGH); // on
   delay(100);
-  // read the analog in value
-  const float sensorValue = analogRead(0);
+  // Average a burst of readings instead of trusting one: the ESP8266 ADC is
+  // noisy, and the old Lua firmware averaged 1000 samples for the same
+  // reason. 100 at ~100 us each is ~10 ms and settles the value just as well.
+  constexpr int ADC_SAMPLES = 100;
+  uint32_t sum = 0;
+  for (int i = 0; i < ADC_SAMPLES; i++) {
+    sum += analogRead(0);
+  }
+  const float sensorValue = (float)sum / ADC_SAMPLES;
   tehybug.addSensorData("adc", sensorValue);
   digitalWrite(pin, LOW); // off
 }

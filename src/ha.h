@@ -116,6 +116,37 @@ void publishConfig(PubSubClient & mqttClient, const String & topic,
 #endif
 }
 
+// Clears the discovery entries the old Lua firmware left on the broker.
+//
+// That firmware published every sensor under one shared literal node -
+// homeassistant/sensor/TeHyBug/sensor_<key>/config, retained, and with no
+// availability topic. After a device is upgraded, Home Assistant therefore
+// keeps showing those old entities with the last value they ever reported,
+// forever, right next to the new ones - and they are not this firmware's
+// topics, so the normal retirement pass never touches them. Publish an empty
+// retained payload to every key the Lua firmware could have created.
+//
+// The legacy node is shared across ALL old devices (they collided with each
+// other there, which was its own bug), so this also blanks the entities of a
+// still-running Lua device on the same broker - transiently: that firmware
+// republishes its discovery on every send, so they return within one of its
+// reporting intervals.
+void retireLegacyAutoConfig(PubSubClient & mqttClient) {
+#if !defined(ARDUINO_ESP8266_GENERIC)
+  // every sensor.<key> the Lua scripts ever assigned (tehy_scripts5)
+  static const char *const legacyKeys[] = {
+      "air", "data", "dew", "dew_imp", "humi", "lux", "qfe",
+      "qfe_imp", "qnh", "qnh_imp", "temp", "temp_imp", "uv", "xdc"};
+  for (const char *key : legacyKeys) {
+    const String topic =
+        String(F("homeassistant/sensor/TeHyBug/sensor_")) + key +
+        F("/config");
+    mqttClient.publish(topic.c_str(), "", true);
+  }
+  D_println(F("Legacy Lua HA discovery entries retired"));
+#endif
+}
+
 // Removes a sensor's entity from Home Assistant.
 //
 // Discovery messages are retained per topic, so publishing a new set never
