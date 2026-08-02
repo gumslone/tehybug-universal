@@ -80,7 +80,7 @@
         <hr>
         
         <h5 class="card-title">Step 4: Go Live</h5>
-        <p class="card-text">Once configured, <a href="javascript:void(0);" onclick="javascript:ChangeContent(this, 'setsystem', '#right-content');">disable configuration mode</a> to start serving data.</p>
+        <p class="card-text">On <a href="javascript:void(0);" onclick="javascript:ChangeContent(this, 'setsystem', '#right-content');">System Settings</a>: choose your power mode, switch <strong>off</strong> "Config Mode Active", keep "Reboot device after saving" ticked, and hit Save. The device restarts into live mode and this web interface stops being served — that is expected. To configure again later: press RESET, then MODE within a second (RESET twice if the LED stays dark), until the LED turns blue.</p>
         <div class="alert alert-warning" role="alert">
             <strong>Before Going Live:</strong>
             <ul class="mb-0">

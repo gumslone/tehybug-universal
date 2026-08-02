@@ -170,12 +170,14 @@
                         Getting Started
                     </div>
                     <div class="card-body">
-                        <p>Welcome to your TeHyBug! Here are a few steps to get you started:</p>
+                        <p>Welcome to your TeHyBug! From zero to serving data, in order:</p>
                         <ol>
-                            <li>Check out the <a href="javascript:void(0);" onclick="ChangeContent(this, 'firststart', '#right-content');">Quick Start Guide</a> for a basic setup walkthrough.</li>
-                            <li>Configure your <a href="javascript:void(0);" onclick="ChangeContent(this, 'setsensor', '#right-content');">Sensor Settings</a> to match your hardware.</li>
-                            <li>Set up <a href="javascript:void(0);" onclick="ChangeContent(this, 'settings', '#right-content');">Custom Data Serving</a> or <a href="javascript:void(0);" onclick="ChangeContent(this, 'cloud_settings', '#right-content');">Cloud Services</a> or <a href="javascript:void(0);" onclick="ChangeContent(this, 'ha_settings', '#right-content');">Home Assistant</a> to send your data.</li>
+                            <li><strong><a href="javascript:void(0);" onclick="ChangeContent(this, 'setsensor', '#right-content');">Sensor Settings</a></strong> — switch on the sensor(s) you have attached, then check their readings appear on this Dashboard. (I2C sensors are detected automatically.)</li>
+                            <li><strong>Pick ONE way to send data</strong> — the easiest is <a href="javascript:void(0);" onclick="ChangeContent(this, 'cloud_settings', '#right-content');">TeHyBug Cloud</a>; or <a href="javascript:void(0);" onclick="ChangeContent(this, 'ha_settings', '#right-content');">Home Assistant</a>; or your own server via <a href="javascript:void(0);" onclick="ChangeContent(this, 'settings', '#right-content');">Custom Data Serving</a> (use the "Fill from my sensors" links there). Save the page.</li>
+                            <li><strong>Go live on <a href="javascript:void(0);" onclick="ChangeContent(this, 'setsystem', '#right-content');">System Settings</a></strong> — choose a power mode (Deep Sleep for battery), switch <em>off</em> "Config Mode Active", keep "Reboot" ticked, and Save. The device restarts and starts serving; this web interface goes away — that is normal.</li>
+                            <li><strong>Getting back in later:</strong> press RESET, then press MODE within a second — the LED turns blue when config mode is on. If the LED stays dark, press RESET twice about a second apart, then MODE.</li>
                         </ol>
+                        <p class="text-muted small mb-0">The <a href="javascript:void(0);" onclick="ChangeContent(this, 'firststart', '#right-content');">Quick Start Guide</a> has the full walkthrough, sensor notes and battery-life estimates.</p>
                     </div>
                 </div>
             </div>
