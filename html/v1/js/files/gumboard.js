@@ -89,10 +89,10 @@ function updateConnectionStatus(isOnline) {
 const sensorMap = {
     'temp': { name: "Temperature", unit: "°C", url: '&t=%temp%', mqtt: ', "temp":"%temp%"' },
     'temp_imp': { name: "Temperature", unit: "°F", url: '', mqtt: ', "temp_imp":"%temp_imp%"' },
-    'temp2': { name: "Temperature2", unit: "°C", url: '&t=%temp2%', mqtt: ', "temp2":"%temp2%"' },
+    'temp2': { name: "Temperature2", unit: "°C", url: '&t2=%temp2%', mqtt: ', "temp2":"%temp2%"' },
     'temp2_imp': { name: "Temperature2", unit: "°F", url: '', mqtt: ', "temp2_imp":"%temp2_imp%"' },
     'humi': { name: "Humidity", unit: "%RH", url: '&h=%humi%', mqtt: ', "humi":"%humi%"' },
-    'humi2': { name: "Humidity2", unit: "%RH", url: '', mqtt: ', "humi2":"%humi2%"' },
+    'humi2': { name: "Humidity2", unit: "%RH", url: '&h2=%humi2%', mqtt: ', "humi2":"%humi2%"' },
     'ah': { name: "Absolute humidity", unit: "g/m³", url: '&ah=%ah%', mqtt: ', "ah":"%ah%"' },
     'ah2': { name: "Absolute humidity2", unit: "g/m³", url: '', mqtt: ', "ah2":"%ah2%"' },
     'cr': { name: "Comfort ratio", unit: "%", url: '', mqtt: ', "cr":"%cr%"' },
