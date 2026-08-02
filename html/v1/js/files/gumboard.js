@@ -137,13 +137,29 @@ function suggestedJsonPayload() {
 // the user already entered (everything before '?') and only regenerates the
 // query string; with no usable URL in the field it falls back to the cloud
 // default.
+// True once at least one real reading has arrived; the links explain
+// themselves instead of sitting disabled when it has not.
+function haveSensorSuggestions() {
+    if (knownSensorKeys().length > 0) {
+        return true;
+    }
+    alert('No sensor readings received from the device yet - wait a moment and try again.');
+    return false;
+}
+
 function applySuggestedGetUrl(fieldId) {
+    if (!haveSensorSuggestions()) {
+        return;
+    }
     const current = $('#' + fieldId).val() || '';
     const base = current.indexOf('://') > 0 ? current.split('?')[0] : 'http://tehybug.com/track/';
     $('#' + fieldId).val(base + '?' + suggestedGetQuery());
 }
 
 function applySuggestedPayload(fieldId) {
+    if (!haveSensorSuggestions()) {
+        return;
+    }
     $('#' + fieldId).val(suggestedJsonPayload());
 }
 
@@ -154,7 +170,6 @@ function sensorData(key, value) {
 
     const sensor = sensorMap[key];
     availableSensors[key] = true;
-    $(".suggest-btn").prop('disabled', false);
 
     // Rebuild the reference strings from the full known set instead of
     // appending this key: the device pushes sensor data repeatedly, and

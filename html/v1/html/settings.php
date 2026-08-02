@@ -39,12 +39,8 @@
                 </div>
                 <div class="form-group mb-3">
                     <label for="mqttMessage" class="form-label">Message</label>
-                    <div class="input-group">
-                        <input type="text" class="form-control" id="mqttMessage" placeholder="Loading or no data">
-                        <button type="button" class="btn btn-outline-secondary suggest-btn" disabled
-                                title="Build the payload from the sensors this device actually has"
-                                onclick="applySuggestedPayload('mqttMessage')">From my sensors</button>
-                    </div>
+                    <input type="text" class="form-control" id="mqttMessage" placeholder="Loading or no data">
+                    <small class="d-block"><a href="#" onclick="applySuggestedPayload('mqttMessage');return false;">Fill from my sensors</a></small>
                     <small class="text-muted">Payload template — <code>%placeholders%</code> are replaced with sensor values before publishing.</small>
                 </div>
                 <div class="form-group mb-3">
@@ -84,12 +80,8 @@
             <div class="card-body">
                 <div class="form-group mb-3">
                     <label for="httpGetURL" class="form-label">HTTP Get URL</label>
-                    <div class="input-group">
                     <input type="url" class="form-control" id="httpGetURL" minlength="7" placeholder="https://example.com Loading or no data" pattern="[Hh][Tt][Tt][Pp][Ss]?:\/\/(?:(?:[a-zA-Z\u00a1-\uffff0-9]+-?)*[a-zA-Z\u00a1-\uffff0-9]+)(?:\.(?:[a-zA-Z\u00a1-\uffff0-9]+-?)*[a-zA-Z\u00a1-\uffff0-9]+)*(?:\.(?:[a-zA-Z\u00a1-\uffff]{2,}))(?::\d{2,5})?(?:\/[^\s]*)?" >
-                        <button type="button" class="btn btn-outline-secondary suggest-btn" disabled
-                                title="Keep the server, rebuild the query string from the sensors this device actually has"
-                                onclick="applySuggestedGetUrl('httpGetURL')">From my sensors</button>
-                    </div>
+                    <small class="d-block"><a href="#" onclick="applySuggestedGetUrl('httpGetURL');return false;">Fill query string from my sensors</a></small>
                     <small class="text-muted">Full URL requested each interval — <code>%placeholders%</code> are replaced with sensor values.</small>
                 </div>
                 <div class="form-group mb-3">
@@ -123,12 +115,8 @@
                 </div>
                 <div class="form-group mb-3">
                     <label for="httpPostJson" class="form-label">Post Json</label>
-                    <div class="input-group">
-                        <input type="text" class="form-control" id="httpPostJson" placeholder="Loading or no data">
-                        <button type="button" class="btn btn-outline-secondary suggest-btn" disabled
-                                title="Build the JSON body from the sensors this device actually has"
-                                onclick="applySuggestedPayload('httpPostJson')">From my sensors</button>
-                    </div>
+                    <input type="text" class="form-control" id="httpPostJson" placeholder="Loading or no data">
+                    <small class="d-block"><a href="#" onclick="applySuggestedPayload('httpPostJson');return false;">Fill from my sensors</a></small>
                     <small class="text-muted">JSON body template — <code>%placeholders%</code> are replaced with sensor values.</small>
                 </div>
                 <div class="form-check form-switch">
