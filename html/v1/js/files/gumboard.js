@@ -112,22 +112,66 @@ const sensorMap = {
     'adc': { name: "ADC", unit: "ADC", url: '&x=%adc%', mqtt: ', "adc":"%adc%"' }
 };
 
+// Every sensor key the device has actually reported this session. This is
+// what lets the portal guess a payload or query string that matches the
+// hardware instead of a generic example.
+const availableSensors = {};
+
+// sensorMap order, filtered to what the device really has
+function knownSensorKeys() {
+    return Object.keys(sensorMap).filter(function (k) { return availableSensors[k]; });
+}
+
+// "bug_key=%key%&t=%temp%&h=%humi%..." from the device's own sensors
+function suggestedGetQuery() {
+    return 'bug_key=%key%' + knownSensorKeys().map(function (k) { return sensorMap[k].url; }).join('');
+}
+
+// '{"temp":"%temp%", "humi":"%humi%", ...}' from the device's own sensors
+function suggestedJsonPayload() {
+    const parts = knownSensorKeys().map(function (k) { return sensorMap[k].mqtt; }).join('');
+    return '{' + parts.replace(/^, /, '') + '}';
+}
+
+// One-click apply into the real fields. The GET helper keeps whatever server
+// the user already entered (everything before '?') and only regenerates the
+// query string; with no usable URL in the field it falls back to the cloud
+// default.
+function applySuggestedGetUrl(fieldId) {
+    const current = $('#' + fieldId).val() || '';
+    const base = current.indexOf('://') > 0 ? current.split('?')[0] : 'http://tehybug.com/track/';
+    $('#' + fieldId).val(base + '?' + suggestedGetQuery());
+}
+
+function applySuggestedPayload(fieldId) {
+    $('#' + fieldId).val(suggestedJsonPayload());
+}
+
 function sensorData(key, value) {
     if (!sensorMap[key]) {
         return;
     }
 
     const sensor = sensorMap[key];
-    
-    $("#url").append(sensor.url);
-    $("#mqtt_message").append(sensor.mqtt);
+    availableSensors[key] = true;
+    $(".suggest-btn").prop('disabled', false);
+
+    // Rebuild the reference strings from the full known set instead of
+    // appending this key: the device pushes sensor data repeatedly, and
+    // appending grew these with duplicates on every message.
+    $("#url").text('http://tehybug.com/track/?' + suggestedGetQuery());
+    $("#mqtt_message").text(suggestedJsonPayload().slice(1, -1) ? ', ' + suggestedJsonPayload().slice(1, -1) : '');
 
     if (pageName == 'main') {
         $("#sensor_data").append(`<tr><td>${sensor.name}</td><td>${value} ${sensor.unit}</td></tr>`);
     } else if (pageName == 'cloud_settings') {
-        $("#httpGetURL").val($("#httpGetURL").val() + sensor.url);
+        // idempotent for the same reason: regenerate rather than append
+        $("#httpGetURL").val('http://tehybug.com/track/?' + suggestedGetQuery());
     } else {
-        $("#sensor_data").append(`<tr><td>${sensor.name}</td><td><code>%${key}%</code></td><td>${sensor.unit}</td></tr>`);
+        // dedupe the placeholder table too - repeated pushes re-listed every row
+        if (!$("#sensor_data").find('[data-key="' + key + '"]').length) {
+            $("#sensor_data").append(`<tr data-key="${key}"><td>${sensor.name}</td><td><code>%${key}%</code></td><td>${sensor.unit}</td></tr>`);
+        }
     }
 }
 
