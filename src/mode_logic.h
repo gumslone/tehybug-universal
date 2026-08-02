@@ -136,6 +136,56 @@ inline int wakeInterval(const DataServ &s) {
   return freq;
 }
 
+/* Boot decisions ------------------------------------------------------------
+ *
+ * The precedence rules setup() runs on, extracted so they are pinned by host
+ * tests instead of living between hardware calls.
+ */
+
+// An offline wake sleeps with the radio left uninitialised (RF_DISABLED),
+// which is most of what makes offline mode cheap. If the MODE button just
+// switched this boot into config mode, the radio is now needed and cannot be
+// brought up without a reset — configMode is persisted, so the restart comes
+// straight back into it. One extra boot on a deliberate user action.
+inline bool needsRadioRestart(const Device &d, bool fromDeepSleepWake) {
+  return d.configMode && d.offlineMode && fromDeepSleepWake;
+}
+
+// A device with nothing configured to do must land in config mode — the
+// alternative is a fresh device booting into a live mode that serves nothing,
+// with WiFi credentials but no way to reach the UI short of the MODE button.
+inline bool mustForceConfig(bool firstStart, const DataServ &s) {
+  return firstStart || !anyServeModeActive(s);
+}
+
+// What setup() brings up after WiFi, resolved from the final config-mode
+// decision (i.e. after mustForceConfig has been applied):
+//  - config mode runs the web server and nothing else — no MQTT session, no
+//    tickers, no remote control, so nothing fights the UI for the heap
+//  - MQTT is initialised for plain MQTT and for HA, which rides the same
+//    client; HA discovery setup additionally needs ha
+//  - tickers only drive live mode: sleep modes serve from loop() directly
+struct SetupPlan {
+  bool webServer{false};
+  bool mqtt{false};
+  bool ha{false};
+  bool remoteControl{false};
+  bool tickers{false};
+};
+
+inline SetupPlan setupPlan(const Device &d, const DataServ &s) {
+  SetupPlan p;
+  if (d.configMode) {
+    p.webServer = true;
+    return p;
+  }
+  p.mqtt = s.mqtt.active || s.ha.active;
+  p.ha = s.ha.active;
+  p.remoteControl = d.remoteControl.active;
+  p.tickers = !sleepEnabled(d);
+  return p;
+}
+
 /* The forced-light-sleep judge -----------------------------------------------
  *
  * wifi_fpm_do_sleep() has two observed failure modes, both invisible in the

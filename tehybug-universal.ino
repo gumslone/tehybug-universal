@@ -127,14 +127,12 @@ void setup() {
   // a held MODE button forces config mode (WiFi on) even from offline mode
   checkModeButton();
 
-  // An offline wake sleeps with the radio left uninitialised (RF_DISABLED
-  // below) — that is most of what makes offline mode cheap. If the MODE button
-  // just asked for config mode we now need that radio, and it cannot be brought
-  // up on this boot without a reset. configMode was persisted by
-  // toggleConfigMode(), so the restart comes straight back into it. One extra
-  // boot on a deliberate, user-initiated event is the right place to spend it.
-  if (tehybug.device.configMode && tehybug.device.offlineMode &&
-      ESP.getResetInfoPtr()->reason == REASON_DEEP_SLEEP_AWAKE) {
+  // Why an offline wake that just entered config mode must reboot first is
+  // needsRadioRestart's comment (mode_logic.h): the short version is that the
+  // radio was left uninitialised by RF_DISABLED and only a reset brings it up.
+  if (mode_logic::needsRadioRestart(
+          tehybug.device,
+          ESP.getResetInfoPtr()->reason == REASON_DEEP_SLEEP_AWAKE)) {
     D_println(F("Config mode from an offline wake, restarting for the radio"));
     ESP.restart();
   }
@@ -173,12 +171,18 @@ void setup() {
   // getClient(), not here, to keep its buffers off the heap until needed.
 
   // force config when no data serving mode is selected
-  if (tehybug.conf.firstStart() || !tehybug.anyServeModeActive()) {
+  if (mode_logic::mustForceConfig(tehybug.conf.firstStart(),
+                                  tehybug.serveData)) {
     tehybug.device.configMode = true;
-    D_println("Data serving mode not selected or first start");
+    D_println(F("Data serving mode not selected or first start"));
   }
 
-  if (tehybug.device.configMode) {
+  // From here on the decisions are the plan's (mode_logic::setupPlan, host-
+  // tested); setup() only executes them.
+  const mode_logic::SetupPlan plan =
+      mode_logic::setupPlan(tehybug.device, tehybug.serveData);
+
+  if (plan.webServer) {
     D_println(F("Starting config mode"));
     setupWebServer();
   } else {
@@ -192,7 +196,7 @@ void setup() {
   }
 
   // setup mqtt / homeassistant
-  if (!tehybug.device.configMode && (tehybug.serveData.mqtt.active || tehybug.serveData.ha.active)) {
+  if (plan.mqtt) {
     updateMqttClient();
     // Longer than the worst-case blocking pass (a DHT read can hold the loop
     // for a few seconds, and an unreachable HTTP target for the request
@@ -204,8 +208,7 @@ void setup() {
     // payload plus its topic and the 5-byte header. It was 4000, permanently
     // mallocing ~2.5 KB more than anything could use out of a ~20 KB heap.
     mqttClient.setBufferSize(1500);
-    if (tehybug.serveData.ha.active)
-    {
+    if (plan.ha) {
       ha::setupHandle();
     }
     Log(F("Setup"), F("MQTT started"));
@@ -214,13 +217,13 @@ void setup() {
   setupSensors();
 
   // process changes requested by remote control
-  if (!tehybug.device.configMode && tehybug.device.remoteControl.active) {
+  if (plan.remoteControl) {
     const String url = tehybug.replacePlaceholders(tehybug.device.remoteControl.url);
     tehybug.handleRemoteControl(http::get(httpClient, getClient(url), url));
   }
 
   // setup tickers for non-deep-sleep mode
-  if (!tehybug.device.configMode && !tehybug.sleepEnabled()) {
+  if (plan.tickers) {
     setupServeTickers();
   }
 

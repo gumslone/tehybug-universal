@@ -312,8 +312,61 @@ static void test_sleep_judge() {
   CHECK(x.refusals == 1 && x.shortReturns == 1);
 }
 
+static void test_boot_decisions() {
+  CASE("needsRadioRestart / mustForceConfig / setupPlan");
+  Device d;
+  DataServ s;
+
+  // radio restart: only the offline-wake-into-config combination
+  d.configMode = true;
+  d.offlineMode = true;
+  CHECK(needsRadioRestart(d, true));
+  CHECK(!needsRadioRestart(d, false));  // manual reset boots with RF anyway
+  d.offlineMode = false;
+  CHECK(!needsRadioRestart(d, true));   // online wake never disabled the radio
+  d.configMode = false;
+  d.offlineMode = true;
+  CHECK(!needsRadioRestart(d, true));   // staying offline needs no radio
+
+  // config is forced on a first start or when nothing is configured to run
+  CHECK(mustForceConfig(true, s));
+  CHECK(mustForceConfig(false, s));     // nothing active -> nothing to serve
+  s.get.active = true;
+  CHECK(!mustForceConfig(false, s));
+  CHECK(mustForceConfig(true, s));      // first start wins even when configured
+
+  // config mode runs the web UI and nothing that would fight it for heap
+  Device cfg;
+  cfg.configMode = true;
+  DataServ all;
+  all.mqtt.active = true;
+  all.ha.active = true;
+  mode_logic::SetupPlan p = setupPlan(cfg, all);
+  CHECK(p.webServer);
+  CHECK(!p.mqtt && !p.ha && !p.remoteControl && !p.tickers);
+
+  // serving: HA alone still brings the MQTT client up (it rides it)
+  Device live;
+  live.configMode = false;
+  DataServ haOnly;
+  haOnly.ha.active = true;
+  p = setupPlan(live, haOnly);
+  CHECK(!p.webServer && p.mqtt && p.ha && p.tickers);
+
+  // sleep modes serve from loop(), so no tickers - but MQTT still initialises
+  live.sleepMode = true;
+  p = setupPlan(live, haOnly);
+  CHECK(p.mqtt && !p.tickers);
+
+  // remote control follows its flag, outside config mode only
+  live.remoteControl.active = true;
+  p = setupPlan(live, haOnly);
+  CHECK(p.remoteControl);
+}
+
 int main() {
   std::printf("Running mode_logic tests...\n");
+  test_boot_decisions();
   test_sleep_judge();
   test_serve_plan();
   test_scenario_condition();
