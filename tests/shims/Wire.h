@@ -1,6 +1,11 @@
 // Fake I2C bus for native host tests: emulates a 16-bit-addressed serial
-// EEPROM (FT24C256A, 32 KB) backed by an in-memory array, so the real
-// EepromFS driver runs unchanged on a desktop compiler.
+// EEPROM backed by an in-memory array, so the real EepromFS driver runs
+// unchanged on a desktop compiler. The capacity is selectable (FT24C512A,
+// 64 KB on current modules; FT24C256A, 32 KB on earlier ones).
+//
+// Addresses wrap at the capacity, exactly as the real parts do — they ignore
+// the address bits above their own size. That is not a detail: it is the
+// property EepromFS::begin() uses to work out which chip it is talking to.
 #pragma once
 #include <Arduino.h>
 #include <cstdint>
@@ -12,10 +17,16 @@
 
 class FakeWire {
  public:
-  static constexpr size_t SIZE = 32768; // FT24C256A = 32 KB
+  static constexpr size_t SIZE = 65536;      // largest part we emulate
+  static constexpr size_t SIZE_32K = 32768;  // FT24C256A
+  static constexpr size_t SIZE_64K = 65536;  // FT24C512A
 
   void begin() {}
   void begin(int, int) {}
+
+  // capacity of the simulated part; addresses above it wrap back to the start
+  void setCapacity(size_t bytes) { m_capacity = bytes; }
+  size_t capacity() const { return m_capacity; }
 
   // which I2C addresses acknowledge (default: just the data-log EEPROM)
   void setPresent(std::initializer_list<int> addrs) {
@@ -44,7 +55,7 @@ class FakeWire {
     if (ack && m_tx.size() >= 2) {
       m_ptr = ((unsigned)m_tx[0] << 8) | m_tx[1];
       for (size_t i = 2; i < m_tx.size(); i++) {
-        if (m_ptr < SIZE) m_mem[m_ptr] = m_tx[i];
+        m_mem[cell()] = m_tx[i];
         m_ptr++;
       }
     }
@@ -56,7 +67,7 @@ class FakeWire {
     m_rx.clear();
     if (m_present.count(addr) == 0) return 0;
     for (int i = 0; i < n; i++) {
-      m_rx.push_back(m_ptr < SIZE ? m_mem[m_ptr] : 0xFF);
+      m_rx.push_back(m_mem[cell()]);
       m_ptr++;
     }
     return n;
@@ -69,15 +80,21 @@ class FakeWire {
     return v;
   }
 
-  // test helper: wipe the simulated chip (fresh, unformatted EEPROM) and
-  // reset the present devices to just the EEPROM
-  void wipe() {
+  // test helper: wipe the simulated chip (fresh, unformatted EEPROM), set its
+  // capacity and reset the present devices to just the EEPROM. Defaults to the
+  // 32 KB part so tests that predate the capacity switch keep their layout.
+  void wipe(size_t bytes = SIZE_32K) {
     for (size_t i = 0; i < SIZE; i++) m_mem[i] = 0;
+    m_capacity = bytes;
     m_present = {0x50};
   }
 
  private:
+  // address wrapped into the simulated part, as the real chip does
+  size_t cell() const { return m_ptr % m_capacity; }
+
   uint8_t m_mem[SIZE] = {0};
+  size_t m_capacity = SIZE_32K;
   unsigned m_ptr = 0;
   int m_addr = 0;
   std::set<int> m_present{0x50};

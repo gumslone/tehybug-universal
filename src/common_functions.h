@@ -12,7 +12,13 @@
 /// An unknown or unterminated placeholder is left exactly as written.
 /// (JsonObject is a lightweight handle, so it is taken by value as ArduinoJson
 /// intends — a const reference makes its accessors unavailable.)
-inline String expandPlaceholders(const String &text, JsonObject values) {
+// dropUnknown decides what happens to a placeholder with no matching reading.
+// Leaving it verbatim is right for a URL or an MQTT payload, where seeing
+// "%qfe%" arrive is how you find out the key is wrong. It is wrong for the
+// EEPROM data log, where it is written into a ~2 KB slot on every entry and
+// makes the line unparseable, so that caller asks for it to be dropped.
+inline String expandPlaceholders(const String &text, JsonObject values,
+                                 bool dropUnknown = false) {
   if (text.indexOf('%') < 0) {
     return text; // nothing to expand
   }
@@ -42,12 +48,45 @@ inline String expandPlaceholders(const String &text, JsonObject values) {
       if (value != nullptr) {
         out += value;
       }
-    } else {
+    } else if (!dropUnknown) {
       out += text.substring(start, end + 1); // leave it as written
     }
     pos = end + 1;
   }
   return out;
+}
+
+// The compact EEPROM-log line: each present default reading rendered as
+// "<value><code>" (e.g. "22.6t 48.3h 1013.2p"), reusing the one-letter field
+// codes of the cloud GET URL. Space in the log is measured in hundreds of
+// bytes per day, which is why this exists instead of JSON. Pure over the
+// readings object so the field set and format are host-tested.
+inline String compactLogLine(JsonObject values) {
+  static const struct { const char *key; const char *code; } loggedFields[] = {
+    {"temp", "t"},  {"humi", "h"},  {"temp2", "t2"}, {"humi2", "h2"},
+    {"qfe", "p"},   {"alt", "al"},  {"lux", "l"},    {"adc", "x"},
+    {"iaq", "q"},   {"eco2", "c"},  {"bvoc", "v"},   {"air", "a"}
+  };
+  String line;
+  for (const auto &f : loggedFields) {
+    if (!values.containsKey(f.key)) {
+      continue;
+    }
+    // via const char*, not as<String>(): every reading is stored as a string
+    // (TeHyBug::addSensorData), and the host build's String shim is not a type
+    // ArduinoJson knows how to convert to - same constraint as
+    // expandPlaceholders above.
+    const char *value = values[f.key].as<const char *>();
+    if (value == nullptr) {
+      continue;
+    }
+    if (line.length() > 0) {
+      line += " ";
+    }
+    line += value;
+    line += f.code;
+  }
+  return line;
 }
 
 /// <summary>

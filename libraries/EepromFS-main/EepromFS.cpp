@@ -107,16 +107,33 @@ void EepromFS::rawflush(){
 // begin wants a formated filesystem
 uint8_t EepromFS::begin() { 
 
-	// find the size this only works for 4096 and 32768 eeproms 
+	// Find the size: 4096 (AT24C32), 32768 (FT24C256A) or 65536 (FT24C512A).
+	//
+	// A chip ignores the address bits above its own capacity, so an access past
+	// its end wraps back to the start. Mark one address just below the end of
+	// each candidate size and see which marks survive: on a 4 KB part all three
+	// writes land on 4094, on a 32 KB part the last two both land on 32766, and
+	// only a 64 KB part keeps all three apart.
+	//
+	// This used to probe 4094 and 32766 only, so a 64 KB part answered both
+	// probes and was read as 32 KB — half the chip went unused.
 	if (eepromsize == 0) {
-		uint8_t c4 = readbyte(4094);
-		uint8_t c32 = readbyte(32766);
-		writebyte(4094, 42);
-    	writebyte(32766, 84);
-  		if (ferror !=0 ) return 0;
-  		if (readbyte(32766) == 84 && readbyte(4094) == 42) eepromsize = 32767; else eepromsize = 4096;
-  		writebyte(4094, c4);
- 		writebyte(32766, c32);	
+		const unsigned int a4 = 4094, a32 = 32766, a64 = 65534;
+		// read before marking: on a wrapping part these alias to one cell and
+		// therefore hold the same byte, so restoring them in any order is safe
+		uint8_t c4 = readbyte(a4);
+		uint8_t c32 = readbyte(a32);
+		uint8_t c64 = readbyte(a64);
+		writebyte(a4, 42);
+		writebyte(a32, 84);
+		writebyte(a64, 126);
+		if (ferror != 0) return 0;
+		if (readbyte(a4) != 42) eepromsize = 4096;
+		else if (readbyte(a32) != 84) eepromsize = 32768;
+		else eepromsize = 65536;
+		writebyte(a4, c4);
+		writebyte(a32, c32);
+		writebyte(a64, c64);
 	}
 
 	slotsize=0;

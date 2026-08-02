@@ -1,13 +1,17 @@
 #pragma once
 // Pushes measurements to the configured targets (HTTP GET/POST, MQTT,
 // Home Assistant) and evaluates the automation scenarios.
-//
-// Expects the following globals (defined in tehybug.ino before this
-// header is included): `tehybug`, `espClient`, `espClient_ssl`,
-// `httpClient` — plus http_request.h, mqtt_service.h and sleep_modes.h.
+#include "globals.h"
+#include "mqtt_service.h"
+#include "sleep_modes.h"
 #include "debug.h"
 #include "common_functions.h"
 #include "http_request.h"
+
+// How long a just-written MQTT publish and DISCONNECT get to drain out of the
+// TCP buffer before the radio sleeps. HTTP needs no equivalent: its response
+// has already arrived by the time the sleep path runs.
+constexpr unsigned long MQTT_DRAIN_MS = 250;
 
 WiFiClient & getClient(const String & url)
 {
@@ -17,7 +21,13 @@ WiFiClient & getClient(const String & url)
     // its buffers only cost heap once HTTPS is actually needed.
     if (!espClient_ssl) {
       espClient_ssl = new BearSSL::WiFiClientSecure();
-      espClient_ssl->setBufferSizes(256, 256);  // shrink TLS buffers
+      // 512 is the smallest the core accepts - it silently clamps anything
+      // lower (this call used to ask for 256 and claim it worked). The small
+      // receive buffer only holds if the server negotiates MFLN; against one
+      // that does not, the handshake fails and the request reports -1. The
+      // default cloud endpoint is plain http, so this only affects
+      // user-configured https targets.
+      espClient_ssl->setBufferSizes(512, 512);
       espClient_ssl->setInsecure();             // skip cert verification
     }
     return *espClient_ssl;
@@ -57,58 +67,57 @@ void serve_data() {
     D_println(F("No WiFi link, skipping this round"));
   }
 
+  // The decisions live in mode_logic::servePlan(), host-tested; this function
+  // only executes them against the hardware.
+  const mode_logic::ServePlan plan =
+      mode_logic::servePlan(tehybug.serveData, tehybug.device, linked);
+
   // Sleep modes send once and then sleep, so make the broker connection here
   // with a retry budget rather than relying on a next loop iteration.
-  if (linked &&
-      (tehybug.serveData.mqtt.active || tehybug.serveData.ha.active) &&
-      !mqttClient.connected()) {
+  if (plan.connectMqtt && !mqttClient.connected()) {
     mqttEnsureConnected(MQTT_WAKE_CONNECT_BUDGET_MS);
   }
 
-  if (linked && tehybug.serveData.get.active) {
+  if (plan.sendGet) {
     httpGet();
   }
-  if (linked && tehybug.serveData.post.active) {
+  if (plan.sendPost) {
     httpPost();
   }
-  if (linked && tehybug.serveData.mqtt.active) {
+  if (plan.sendMqtt) {
     mqttSendData();
   }
   // HA reports on the MQTT interval
-  if (linked && tehybug.serveData.ha.active) {
+  if (plan.sendHa) {
     haSendData();
   }
 
-  if (!tehybug.sleepEnabled()) {
+  if (!plan.sleep) {
     return;
   }
 
-  // Sleep on the shortest configured interval, so adding a second service can
-  // no longer starve the first. The EEPROM log is written on every wake (inside
-  // read_sensors), so it only needs to be considered when it is the shortest.
-  const int freq = tehybug.wakeIntervalSeconds();
-  if (freq <= 0) {
-    return;
-  }
-
-  if (tehybug.serveData.mqtt.active || tehybug.serveData.ha.active) {
+  if (plan.disconnectMqtt) {
     mqttClient.disconnect();
+    // Give the QoS-0 publishes just written and the DISCONNECT packet a moment
+    // to actually leave the radio - they sit in the TCP buffer, and sleeping
+    // now would drop them. Skipped when nothing was sent this wake (no link):
+    // an unreachable-network wake is when the battery can least afford 250 ms
+    // of standing around.
+    if (plan.drainMqtt) {
+      delay(MQTT_DRAIN_MS);
+    }
   }
-  // Say what the device will actually do: "Minimum data frequency" above is
-  // only the network services' shortest interval, while the EEPROM log can be
-  // shorter still and then it decides how often the device wakes.
+  // Say what the device will actually do: the plan's interval is the shortest
+  // configured one, and the EEPROM log can be the one that decides it.
   D_print(F("Sleeping for (s): "));
-  D_print(freq);
+  D_print(plan.sleepSeconds);
   if (tehybug.serveData.eeprom.active &&
-      tehybug.serveData.eeprom.frequency == freq) {
+      tehybug.serveData.eeprom.frequency == plan.sleepSeconds) {
     D_print(F("  (set by the EEPROM log interval)"));
   }
   D_println();
 
-  // one settle window before sleeping, so the last send drains, instead of one
-  // per service
-  delay(1000);
-  startSleep(freq);
+  startSleep(plan.sleepSeconds);
 }
 
 void checkScenario(Scenario &s) {
@@ -120,10 +129,7 @@ void checkScenario(Scenario &s) {
   if (tehybug.sensorData.containsKey(s.data)) {
     val = tehybug.sensorData[s.data];
   }
-  const bool conditionMet = (s.condition == "lt" && val < s.value)
-                            || (s.condition == "gt" && val > s.value)
-                            || (s.condition == "eq" && val == s.value);
-  if (!conditionMet) {
+  if (!mode_logic::scenarioConditionMet(s.condition, val, s.value)) {
     return;
   }
 

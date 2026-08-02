@@ -89,10 +89,10 @@ function updateConnectionStatus(isOnline) {
 const sensorMap = {
     'temp': { name: "Temperature", unit: "°C", url: '&t=%temp%', mqtt: ', "temp":"%temp%"' },
     'temp_imp': { name: "Temperature", unit: "°F", url: '', mqtt: ', "temp_imp":"%temp_imp%"' },
-    'temp2': { name: "Temperature2", unit: "°C", url: '&t=%temp2%', mqtt: ', "temp2":"%temp2%"' },
+    'temp2': { name: "Temperature2", unit: "°C", url: '&t2=%temp2%', mqtt: ', "temp2":"%temp2%"' },
     'temp2_imp': { name: "Temperature2", unit: "°F", url: '', mqtt: ', "temp2_imp":"%temp2_imp%"' },
     'humi': { name: "Humidity", unit: "%RH", url: '&h=%humi%', mqtt: ', "humi":"%humi%"' },
-    'humi2': { name: "Humidity2", unit: "%RH", url: '', mqtt: ', "humi2":"%humi2%"' },
+    'humi2': { name: "Humidity2", unit: "%RH", url: '&h2=%humi2%', mqtt: ', "humi2":"%humi2%"' },
     'ah': { name: "Absolute humidity", unit: "g/m³", url: '&ah=%ah%', mqtt: ', "ah":"%ah%"' },
     'ah2': { name: "Absolute humidity2", unit: "g/m³", url: '', mqtt: ', "ah2":"%ah2%"' },
     'cr': { name: "Comfort ratio", unit: "%", url: '', mqtt: ', "cr":"%cr%"' },
@@ -112,22 +112,110 @@ const sensorMap = {
     'adc': { name: "ADC", unit: "ADC", url: '&x=%adc%', mqtt: ', "adc":"%adc%"' }
 };
 
+// Every sensor key the device has actually reported this session. This is
+// what lets the portal guess a payload or query string that matches the
+// hardware instead of a generic example.
+const availableSensors = {};
+
+// sensorMap order, filtered to what the device really has
+function knownSensorKeys() {
+    return Object.keys(sensorMap).filter(function (k) { return availableSensors[k]; });
+}
+
+// The device reports metric keys plus imperial siblings (temp_imp, dew_imp,
+// hi_imp...) side by side. A suggestion should be one system, not both:
+// metric takes the base keys, imperial swaps in the _imp sibling wherever the
+// device computes one and keeps the base key where none exists (humidity,
+// pressure, lux have no imperial variant).
+function unitAdjustedKeys(units) {
+    const keys = knownSensorKeys().filter(function (k) { return k.indexOf('_imp') < 0; });
+    if (units !== 'imperial') {
+        return keys;
+    }
+    return keys.map(function (k) { return availableSensors[k + '_imp'] ? k + '_imp' : k; });
+}
+
+// "bug_key=%key%&t=%temp%&h=%humi%..." from the device's own sensors. The
+// imperial variant keeps the same short parameter names and only swaps the
+// placeholder, so t= simply carries Fahrenheit.
+function suggestedGetQuery(units) {
+    const parts = unitAdjustedKeys(units).map(function (k) {
+        const base = k.replace('_imp', '');
+        return (sensorMap[base].url || '').replace('%' + base + '%', '%' + k + '%');
+    });
+    return 'bug_key=%key%' + parts.join('');
+}
+
+// '{"temp":"%temp%", "humi":"%humi%", ...}' from the device's own sensors
+function suggestedJsonPayload(units) {
+    const parts = unitAdjustedKeys(units).map(function (k) { return sensorMap[k].mqtt; }).join('');
+    return '{' + parts.replace(/^, /, '') + '}';
+}
+
+// One-click apply into the real fields. The GET helper keeps whatever server
+// the user already entered (everything before '?') and only regenerates the
+// query string; with no usable URL in the field it falls back to the cloud
+// default.
+// True once at least one real reading has arrived; the links explain
+// themselves instead of sitting disabled when it has not.
+function haveSensorSuggestions() {
+    if (knownSensorKeys().length > 0) {
+        return true;
+    }
+    alert('No sensor readings received from the device yet - wait a moment and try again.');
+    return false;
+}
+
+function applySuggestedGetUrl(fieldId, units) {
+    if (!haveSensorSuggestions()) {
+        return;
+    }
+    const current = $('#' + fieldId).val() || '';
+    const base = current.indexOf('://') > 0 ? current.split('?')[0] : 'http://tehybug.com/track/';
+    $('#' + fieldId).val(base + '?' + suggestedGetQuery(units));
+}
+
+// "%temp% %humi% %temp2%" - the data log's template format is a plain
+// space-separated placeholder list, not JSON.
+function applySuggestedLogTemplate(fieldId, units) {
+    if (!haveSensorSuggestions()) {
+        return;
+    }
+    const parts = unitAdjustedKeys(units).map(function (k) { return '%' + k + '%'; });
+    $('#' + fieldId).val(parts.join(' '));
+}
+
+function applySuggestedPayload(fieldId, units) {
+    if (!haveSensorSuggestions()) {
+        return;
+    }
+    $('#' + fieldId).val(suggestedJsonPayload(units));
+}
+
 function sensorData(key, value) {
     if (!sensorMap[key]) {
         return;
     }
 
     const sensor = sensorMap[key];
-    
-    $("#url").append(sensor.url);
-    $("#mqtt_message").append(sensor.mqtt);
+    availableSensors[key] = true;
+
+    // Rebuild the reference strings from the full known set instead of
+    // appending this key: the device pushes sensor data repeatedly, and
+    // appending grew these with duplicates on every message.
+    $("#url").text('http://tehybug.com/track/?' + suggestedGetQuery());
+    $("#mqtt_message").text(suggestedJsonPayload().slice(1, -1) ? ', ' + suggestedJsonPayload().slice(1, -1) : '');
 
     if (pageName == 'main') {
         $("#sensor_data").append(`<tr><td>${sensor.name}</td><td>${value} ${sensor.unit}</td></tr>`);
     } else if (pageName == 'cloud_settings') {
-        $("#httpGetURL").val($("#httpGetURL").val() + sensor.url);
+        // idempotent for the same reason: regenerate rather than append
+        $("#httpGetURL").val('http://tehybug.com/track/?' + suggestedGetQuery());
     } else {
-        $("#sensor_data").append(`<tr><td>${sensor.name}</td><td><code>%${key}%</code></td><td>${sensor.unit}</td></tr>`);
+        // dedupe the placeholder table too - repeated pushes re-listed every row
+        if (!$("#sensor_data").find('[data-key="' + key + '"]').length) {
+            $("#sensor_data").append(`<tr data-key="${key}"><td>${sensor.name}</td><td><code>%${key}%</code></td><td>${sensor.unit}</td></tr>`);
+        }
     }
 }
 
@@ -185,7 +273,7 @@ function RefreshData(input) {
         }
 
         // Sensor data
-        const sensorPages = ['settings', 'cloud_settings', 'main'];
+        const sensorPages = ['settings', 'cloud_settings', 'main', 'datalog'];
         if (sensorPages.includes(pageName)) {
             sensorData(key, val.toString());
         }

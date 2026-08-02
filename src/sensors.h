@@ -1,17 +1,17 @@
 #pragma once
 // Sensor drivers, detection and reading.
-//
-// Expects the following globals to exist (defined in tehybug.ino before
-// this header is included): `tehybug`, `dht` and — on non-generic
-// boards — `dht2`.
+#include "globals.h"
+#include "i2cscanner.h"
+#include "board.h"
+#include "debug.h"
 #include <Wire.h>
 #include <OneWire.h>
 #include <DallasTemperature.h>
 #include <FS.h>
 #include "DHTesp.h"
 #include "Max44009.h"
-#if !defined(ARDUINO_ESP8266_GENERIC)
 #include "AHT20.h"
+#if !defined(ARDUINO_ESP8266_GENERIC)
 #include "bsec.h"
 #endif
 #include <AM2320_asukiaaa.h>
@@ -31,9 +31,7 @@ uint8_t bsecState[BSEC_MAX_STATE_BLOB_SIZE] = {0};
 
 Max44009 Max44009Lux(0x4A);
 
-#if !defined(ARDUINO_ESP8266_GENERIC)
 AHT20 AHT;
-#endif
 
 AM2320_asukiaaa am2320;
 
@@ -190,16 +188,51 @@ void read_max44009() {
   }
 }
 
-#if !defined(ARDUINO_ESP8266_GENERIC)
 void read_aht20() {
   float humidity, temperature;
   if (AHT.getSensor(&humidity, &temperature)) {
     tehybug.addTempHumi("temp", temperature, "humi", (humidity * 100.0F));
   } else {
-    Serial.println("GET DATA FROM AHT20 FAIL");
+    D_println(F("GET DATA FROM AHT20 FAIL"));
   }
 }
-#endif
+
+// A DHT needs time after its supply comes up before it answers at all - the
+// DHT22 datasheet asks for ~2 s. Probing sooner reads the sensor's own
+// power-up as a timeout, which is indistinguishable from "wrong model".
+constexpr unsigned long DHT_POWER_UP_MS = 2000;
+
+// Work out which DHT is attached, without the driver's assumption that a
+// timeout means DHT11.
+//
+// DHTesp::AUTO_DETECT tries DHT22 and drops to DHT11 the moment a read times
+// out — but a timeout is equally what an absent, unpowered or still-settling
+// sensor gives. A DHT22 that was not ready yet is then recorded as a DHT11 and
+// talked to with the wrong protocol for the whole session, which is worse than
+// the hardcoded DHT22 this replaced. So confirm the fallback: accept DHT11 only
+// when a DHT11 read actually answers, and otherwise stay on DHT22 — the more
+// common part, and what this firmware assumed before it detected anything.
+void setupDht(DHTesp &sensor, uint8_t pin) {
+  pinMode(pin, INPUT_PULLUP);
+  sensor.setup(pin, DHTesp::DHT22);
+  delay(sensor.getMinimumSamplingPeriod());
+  if (!isnan(sensor.getTempAndHumidity().temperature)) {
+    D_println(F("DHT model detected: DHT22"));
+    return;
+  }
+  sensor.setup(pin, DHTesp::DHT11);
+  delay(sensor.getMinimumSamplingPeriod());
+  if (!isnan(sensor.getTempAndHumidity().temperature)) {
+    D_println(F("DHT model detected: DHT11"));
+    return;
+  }
+  // Neither answered. Stay on DHT22 and let the read path report the failure,
+  // rather than locking in a guess that cannot be told apart from a real one.
+  sensor.setup(pin, DHTesp::DHT22);
+  D_print(F("DHT answered as neither model ("));
+  D_print(sensor.getStatusString());
+  D_println(F("), assuming DHT22"));
+}
 
 void read_dht_custom(DHTesp &sensor, const String &temp, const String &humi) {
   TempAndHumidity prev = sensor.getTempAndHumidity(); // first read
@@ -240,12 +273,41 @@ void read_dht_custom(DHTesp &sensor, const String &temp, const String &humi) {
   // the last valid one rather than silently dropping the sensor this cycle.
   if (!recorded && !isnan(prev.temperature) && !isnan(prev.humidity)) {
     tehybug.addTempHumi(temp, prev.temperature, humi, prev.humidity);
+  } else if (!recorded) {
+    // Every sample was NaN, so nothing at all goes into sensorData and the
+    // reading simply vanishes from the payload with no explanation. Say what
+    // the driver made of it — "TIMEOUT" points at wiring or the power gate in
+    // read_dht(), "CHECKSUM" at a marginal signal.
+    D_print(F("DHT read failed for "));
+    D_print(temp);
+    D_print(F(": "));
+    D_println(sensor.getStatusString());
   }
 }
 
+// GPIO0 gates the DHT's supply, low being "on". Driving it also takes over the
+// I2C line the pin doubles as, which is why a DHT and I2C sensors are
+// alternatives on this hardware rather than a combination.
+// Returns true when the line was just asserted: the sensor was unpowered
+// until now and needs its settle time before it answers. The old Lua
+// firmware waited 2 s after grounding on every single read - it could afford
+// to, because in its deep-sleep flow every read was a fresh boot. Here the
+// state is tracked so live mode pays the wait once, not per read.
+bool dhtPowerOn() {
+  pinMode(DHT_POWER_PIN, OUTPUT);
+  digitalWrite(DHT_POWER_PIN, LOW);
+  static bool grounded = false; // per boot, like the pin state itself
+  if (grounded) {
+    return false;
+  }
+  grounded = true;
+  return true;
+}
+
 void read_dht() {
-  pinMode(0, OUTPUT);   // sets the digital pin 0 as output
-  digitalWrite(0, LOW); // sets the digital pin 0 on
+  if (dhtPowerOn()) {
+    delay(DHT_POWER_UP_MS); // freshly grounded: give it its power-up time
+  }
   read_dht_custom(dht, "temp", "humi");
 }
 
@@ -265,7 +327,7 @@ void read_am2320() {
     }
     yield();
   }
-  Serial.println("Error: Cannot update the am2320 sensor values.");
+  D_println(F("Error: Cannot update the am2320 sensor values."));
 }
 
 void read_ds18b20_custom(DallasTemperature &ds18b20, const String &temp) {
@@ -280,7 +342,7 @@ void read_ds18b20_custom(DallasTemperature &ds18b20, const String &temp) {
     D_println(tempC);
     tehybug.addSensorData(temp, tempC);
   } else {
-    Serial.println("Error: Could not read temperature data");
+    D_println(F("Error: Could not read temperature data"));
   }
 }
 
@@ -302,8 +364,15 @@ void read_adc() {
   pinMode(pin, OUTPUT);
   digitalWrite(pin, HIGH); // on
   delay(100);
-  // read the analog in value
-  const float sensorValue = analogRead(0);
+  // Average a burst of readings instead of trusting one: the ESP8266 ADC is
+  // noisy, and the old Lua firmware averaged 1000 samples for the same
+  // reason. 100 at ~100 us each is ~10 ms and settles the value just as well.
+  constexpr int ADC_SAMPLES = 100;
+  uint32_t sum = 0;
+  for (int i = 0; i < ADC_SAMPLES; i++) {
+    sum += analogRead(0);
+  }
+  const float sensorValue = (float)sum / ADC_SAMPLES;
   tehybug.addSensorData("adc", sensorValue);
   digitalWrite(pin, LOW); // off
 }
@@ -331,10 +400,10 @@ void read_sensors() {
     read_ds18b20();
   }
 
-#if !defined(ARDUINO_ESP8266_GENERIC)
   if (tehybug.sensor.aht20) {
     read_aht20();
   }
+#if !defined(ARDUINO_ESP8266_GENERIC)
   if (tehybug.sensor.adc) {
     read_adc();
   }
@@ -350,12 +419,49 @@ void read_sensors() {
   tehybug.shouldSensorDataBeGarbageCollected(true);
 }
 
-uint8_t findI2Csensors() {
-  Wire.begin(I2C_SDA, I2C_SCL);
-  // required to scan twice to find sensors like am2320
+// Bring up the I2C bus in whichever line orientation the sensor is actually
+// reachable on, and remember the answer for the rest of the session.
+//
+// The old Lua firmware set the bus up per sensor script, and they did not all
+// agree: bme280/bme680/sgp30 used SDA=GPIO0/SCL=GPIO2 while the AM2320 script
+// used the mirror image - which worked because the TeHyBug ports are wired as
+// mirror images of each other, so whichever way a sensor was attached, one
+// script's orientation fit. A single fixed orientation therefore loses
+// sensors that the old firmware found. Probe the configured orientation
+// first, and only when the bus looks empty try the mirrored one. (Two scans
+// per orientation: some sensors, the AM2320 included, only answer after a
+// first transaction has woken them.)
+void i2cBusBegin() {
+  static int8_t mirrored = -1; // -1 undecided, 0 configured, 1 mirrored
   i2cScanner::Scanner &scanner = i2cScanner::shared();
+  scanner.resetAttempts();
+  if (mirrored == 1) {
+    Wire.begin(I2C_SCL, I2C_SDA);
+  } else {
+    Wire.begin(I2C_SDA, I2C_SCL);
+  }
   scanner.scan();
   scanner.scan();
+  if (mirrored == -1) {
+    if (scanner.devicesFound() > 0) {
+      mirrored = 0;
+    } else {
+      Wire.begin(I2C_SCL, I2C_SDA);
+      scanner.resetAttempts();
+      scanner.scan();
+      scanner.scan();
+      if (scanner.devicesFound() > 0) {
+        mirrored = 1;
+        D_println(F("I2C devices found on the mirrored orientation"));
+      }
+      // still nothing: leave undecided, so a later call probes both again
+    }
+  }
+}
+
+uint8_t findI2Csensors() {
+  i2cScanner::Scanner &scanner = i2cScanner::shared();
+  i2cBusBegin();
 
   // 0x77 is ambiguous: a BME680 and a BMP280/BME280 both answer there, so both
   // flags are set here on purpose and setupBmx280() resolves it by probing —
@@ -417,7 +523,7 @@ void setupBmx280() {
       tehybug.sensor.bme680 = false;
       break;
     default:
-      Serial.println(F("Unknown\n"));
+      D_println(F("Unknown\n"));
       break;
   }
 
@@ -497,21 +603,23 @@ void setupSensors() {
     Max44009Lux.setAutomaticMode();
   }
   if (tehybug.sensor.dht) {
-    pinMode(2, INPUT_PULLUP);
-    dht.setup(2, DHTesp::DHT22); // Connect DHT sensor to GPIO 2
+    // Power the sensor before probing it, not just before each read.
+    if (dhtPowerOn()) {
+      delay(DHT_POWER_UP_MS);
+    }
+    setupDht(dht, DHT_PIN);
   }
   else
   {
     dht.setupComfortProfile(); // required for nondht sensors
   }
-#if !defined(ARDUINO_ESP8266_GENERIC)
   if (tehybug.sensor.aht20) {
     D_println("AHT20");
     AHT.begin();
   }
+#if !defined(ARDUINO_ESP8266_GENERIC)
   if (tehybug.sensor.dht_2) {
-    pinMode(13, INPUT_PULLUP);
-    dht2.setup(13, DHTesp::DHT22); // Connect DHT sensor to GPIO 13
+    setupDht(dht2, 13);
   }
 #endif
   if (tehybug.peripherals.eeprom) {

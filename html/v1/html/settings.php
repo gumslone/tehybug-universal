@@ -40,6 +40,9 @@
                 <div class="form-group mb-3">
                     <label for="mqttMessage" class="form-label">Message</label>
                     <input type="text" class="form-control" id="mqttMessage" placeholder="Loading or no data">
+                    <small class="d-block">Fill from my sensors:
+                        <a href="#" onclick="applySuggestedPayload('mqttMessage','metric');return false;">metric</a> &middot;
+                        <a href="#" onclick="applySuggestedPayload('mqttMessage','imperial');return false;">imperial</a></small>
                     <small class="text-muted">Payload template — <code>%placeholders%</code> are replaced with sensor values before publishing.</small>
                 </div>
                 <div class="form-group mb-3">
@@ -80,6 +83,9 @@
                 <div class="form-group mb-3">
                     <label for="httpGetURL" class="form-label">HTTP Get URL</label>
                     <input type="url" class="form-control" id="httpGetURL" minlength="7" placeholder="https://example.com Loading or no data" pattern="[Hh][Tt][Tt][Pp][Ss]?:\/\/(?:(?:[a-zA-Z\u00a1-\uffff0-9]+-?)*[a-zA-Z\u00a1-\uffff0-9]+)(?:\.(?:[a-zA-Z\u00a1-\uffff0-9]+-?)*[a-zA-Z\u00a1-\uffff0-9]+)*(?:\.(?:[a-zA-Z\u00a1-\uffff]{2,}))(?::\d{2,5})?(?:\/[^\s]*)?" >
+                    <small class="d-block">Fill query string from my sensors:
+                        <a href="#" onclick="applySuggestedGetUrl('httpGetURL','metric');return false;">metric</a> &middot;
+                        <a href="#" onclick="applySuggestedGetUrl('httpGetURL','imperial');return false;">imperial</a></small>
                     <small class="text-muted">Full URL requested each interval — <code>%placeholders%</code> are replaced with sensor values.</small>
                 </div>
                 <div class="form-group mb-3">
@@ -114,6 +120,9 @@
                 <div class="form-group mb-3">
                     <label for="httpPostJson" class="form-label">Post Json</label>
                     <input type="text" class="form-control" id="httpPostJson" placeholder="Loading or no data">
+                    <small class="d-block">Fill from my sensors:
+                        <a href="#" onclick="applySuggestedPayload('httpPostJson','metric');return false;">metric</a> &middot;
+                        <a href="#" onclick="applySuggestedPayload('httpPostJson','imperial');return false;">imperial</a></small>
                     <small class="text-muted">JSON body template — <code>%placeholders%</code> are replaced with sensor values.</small>
                 </div>
                 <div class="form-check form-switch">

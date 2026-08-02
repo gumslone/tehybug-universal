@@ -1,10 +1,9 @@
 #pragma once
 // Deep / light / modem sleep between measurements.
-//
-// Expects the following globals (defined in tehybug.ino before this
-// header is included): `tehybug`, `mqttClient`.
+#include "globals.h"
 #include <ESP8266WiFi.h>
 #include "debug.h"
+#include "wifi_hint.h"
 
 // How long to wait for the WiFi association to come back after a light sleep
 // before giving up on this round (the next wake tries again).
@@ -13,6 +12,49 @@ constexpr unsigned long LIGHT_SLEEP_RECONNECT_TIMEOUT_MS = 8000;
 // The SDK's forced-sleep call takes microseconds in a uint32 and rejects
 // anything much above 268 s, so longer intervals are slept in chunks.
 constexpr uint32_t FPM_MAX_SLEEP_US = 260UL * 1000000UL;
+constexpr unsigned long FPM_MAX_SLEEP_MS = 260UL * 1000UL;
+
+// The SDK needs a moment after the association is torn down before it will
+// accept a forced sleep; without this the first call answers -1.
+constexpr unsigned long FPM_SETTLE_MS = 20;
+// Back-off before re-asking after a refusal. When to retry versus give up is
+// mode_logic::judgeSleepChunk()'s call, not this file's.
+constexpr unsigned long FPM_RETRY_MS = 50;
+
+/* Boot mark ----------------------------------------------------------------
+ *
+ * One RTC word meaning "the previous boot never reached deep sleep". Written at
+ * boot, cleared as the very last thing before ESP.deepSleep().
+ *
+ * Why the reset reason is not enough on its own: on these boards a deep-sleep
+ * wake is a pulse on the same RST pin the reset button pulls, and a press
+ * while the device is asleep can be misreported as a deep-sleep wake - which
+ * is precisely when someone trying to reach config mode presses it, since a
+ * sleeping node is asleep almost all the time. A "going to sleep" flag cannot
+ * tell those apart either (it is set for both). This mark can: a timer wake
+ * always follows a completed sleep entry, so it always finds the mark cleared,
+ * while a second reset inside the short awake window finds it set - only a
+ * human resets twice within seconds. Worst case becomes "press reset twice,
+ * then MODE", instead of a window that never appears.
+ */
+constexpr uint32_t BOOT_MARK_RTC_SLOT = 50;  // WifiHint ends at 47, HA memo at 64
+constexpr uint32_t BOOT_MARK_MAGIC = 0x4D4F4445;  // 'MODE'
+
+bool bootMarkPresent() {
+  uint32_t v = 0;
+  return ESP.rtcUserMemoryRead(BOOT_MARK_RTC_SLOT, &v, sizeof(v)) &&
+         v == BOOT_MARK_MAGIC;
+}
+
+void setBootMark() {
+  uint32_t v = BOOT_MARK_MAGIC;
+  ESP.rtcUserMemoryWrite(BOOT_MARK_RTC_SLOT, &v, sizeof(v));
+}
+
+void clearBootMark() {
+  uint32_t v = 0;
+  ESP.rtcUserMemoryWrite(BOOT_MARK_RTC_SLOT, &v, sizeof(v));
+}
 
 void wakeupCallback()
 {
@@ -41,32 +83,103 @@ void startLightSleep(int freq)
   // without touching the saved credentials.
   wifi_station_disconnect();
 
-  // Enter light sleep
-  wifi_set_opmode(NULL_MODE);
+  // Enter light sleep.
+  //
+  // _current, not wifi_set_opmode(): the persistent form writes the mode to
+  // flash on every single sleep, which is both flash wear and time, and the
+  // mode is meant to last only until the wake below restores it.
+  wifi_set_opmode_current(NULL_MODE);
   wifi_fpm_set_sleep_type(LIGHT_SLEEP_T);
   wifi_fpm_open();
   wifi_fpm_set_wakeup_cb(wakeupCallback);
+
+  // Let the teardown settle before asking to sleep. wifi_fpm_do_sleep() answers
+  // -1 while the association is still coming down — observed on hardware as
+  // "fpm_do_sleep refused, rc: -1" on the very first call, with the identical
+  // argument accepted on other boots. The retry loop below covers the rest.
+  delay(FPM_SETTLE_MS);
 
   // The SDK's forced sleep takes microseconds in a uint32 and tops out around
   // 268 s, so a longer interval has to be slept in chunks. (The old code
   // computed `freq * 1000000` in a signed int, which also overflowed above
   // ~2147 s.)
-  uint32_t remaining_us = (uint32_t)freq * 1000000UL;
-  while (remaining_us > 0) {
-    const uint32_t chunk =
-        (remaining_us > FPM_MAX_SLEEP_US) ? FPM_MAX_SLEEP_US : remaining_us;
-    wifi_fpm_do_sleep(chunk);
-    delay(chunk / 1000UL + 1UL);
-    remaining_us -= chunk;
+  // Sleep until the requested time has actually elapsed, rather than trusting a
+  // single delay() to last.
+  //
+  // wifi_fpm_do_sleep() can return 0 (accepted) and still come straight back:
+  // delay() on this core arms a timer and yields exactly once, so anything else
+  // calling esp_schedule() — a WiFi disconnect event still in flight from the
+  // wifi_station_disconnect() above, for instance — releases it early. The old
+  // loop subtracted the whole chunk regardless and exited, so a 60 s sleep could
+  // return in 1 ms ("actually slept: 1") and every service then ran ~60x too
+  // often. Re-issuing the sleep for whatever is left makes an early release cost
+  // nothing.
+  const unsigned long targetMs = (unsigned long)freq * 1000UL;
+  const unsigned long sleepStart = millis();
+  mode_logic::SleepJudge judge;
+  bool abandoned = false;
+  while (!abandoned && millis() - sleepStart < targetMs) {
+    const unsigned long leftMs = targetMs - (millis() - sleepStart);
+    const uint32_t chunkUs = (leftMs > FPM_MAX_SLEEP_MS)
+                                 ? FPM_MAX_SLEEP_US
+                                 : (uint32_t)leftMs * 1000UL;
+    const unsigned long chunkStart = millis();
+    const sint8 rc = wifi_fpm_do_sleep(chunkUs);
+    if (rc == 0) {
+      delay(chunkUs / 1000UL + 1UL);
+    }
+    // The verdict logic is pure and host-tested (mode_logic::judgeSleepChunk);
+    // this loop only carries it out.
+    switch (mode_logic::judgeSleepChunk(judge, rc != 0,
+                                        millis() - chunkStart)) {
+      case mode_logic::SleepVerdict::Continue:
+        break;
+      case mode_logic::SleepVerdict::RetryRefused:
+        delay(FPM_RETRY_MS);
+        break;
+      case mode_logic::SleepVerdict::AbandonRefused:
+        D_print(F("  fpm_do_sleep refused, rc: "));
+        D_println(rc);
+        abandoned = true;
+        break;
+      case mode_logic::SleepVerdict::AbandonBouncing:
+        D_println(F("  light sleep keeps returning early, waiting it out"));
+        abandoned = true;
+        break;
+    }
   }
+  if (abandoned) {
+    // The SDK will not sleep this interval. Waiting the rest out awake is
+    // wasteful, but it keeps the reporting interval honest, which matters
+    // more than the power for a mode the user can switch away from.
+    delay(targetMs - (millis() - sleepStart));
+  }
+  // What the cycle actually cost, against what was asked for. A wake that comes
+  // back far short of the target means the forced sleep is being cut off, and
+  // every service then reports that much more often than it was configured to.
+  const unsigned long sleptMs = millis() - sleepStart;
+  D_print(F("Light sleep asked (ms): "));
+  D_print((unsigned long)freq * 1000UL);
+  D_print(F("  actually slept: "));
+  D_println(sleptMs);
 
   // Wake up and restore WiFi
   wifi_fpm_close();
-  wifi_set_opmode(STATION_MODE);
+  wifi_set_opmode_current(STATION_MODE);
   wifi_set_sleep_type(NONE_SLEEP_T);
+
+  // Re-associate with the SDK's own reconnect, and do NOT pin the cached
+  // channel/BSSID here. Pinning was tried (b8ac824) and made the wake WORSE
+  // on hardware: restoring the opmode starts the SDK's auto-connect, a
+  // WiFi.begin() on top of that in-flight attempt stalls the association -
+  // the same "never begin() over an in-flight connect" lesson the boot path
+  // already documents - and every wake then cost a deterministic ~2.3 s
+  // (stall, 1 s nudge, full rescan) against the 0.3-0.9 s this plain
+  // reconnect measures. The hint stays maintained below for the deep-sleep
+  // boot path, which has the grace logic to use it safely.
   wifi_station_connect(); // re-associate with the credentials we kept
 
-  D_println("Woke from light sleep, reconnecting WiFi...");
+  D_println(F("Woke from light sleep, reconnecting WiFi..."));
 
   // Wait for the link to come back before returning to the caller, which
   // serves data immediately.
@@ -91,6 +204,12 @@ void startLightSleep(int freq)
   if (WiFi.status() == WL_CONNECTED) {
     D_print(F("WiFi back after light sleep, ms: "));
     D_println(millis() - start);
+    // Refresh the hint from what actually worked. Without this the light-sleep
+    // path would only ever read it, so the one time a stale hint was cleared
+    // above, every later wake would scan with nothing left to rebuild it.
+    // The counter restarts at 0 because this path re-runs DHCP: it applies no
+    // static address, unlike the boot fast path.
+    saveWifiHint();
   } else {
     D_println(F("WiFi did not return after light sleep; skipping this round"));
   }
@@ -110,9 +229,17 @@ void startModemSleep(int freq)
   // WiFi automatically wakes when needed
 }
 
-void startDeepSleep(int freq) {
+// wakeMode defaults to RF_DEFAULT because the serving modes need the radio on
+// the next boot. Offline mode passes RF_DISABLED: it never transmits, so
+// powering and calibrating the radio on wake only to switch it off again in
+// setup() is pure cost. Callers that disable RF must make sure anything needing
+// the radio on that boot resets first — see the guard in setup().
+void startDeepSleep(int freq, RFMode wakeMode = RF_DEFAULT) {
   D_println("Going to deep sleep...");
-  ESP.deepSleep(freq * 1000000ULL);
+  // Last thing before sleeping: the next boot finding this cleared is what
+  // certifies it as a timer wake (see the boot mark above).
+  clearBootMark();
+  ESP.deepSleep(freq * 1000000ULL, wakeMode);
   yield();
 }
 

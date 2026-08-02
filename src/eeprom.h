@@ -17,6 +17,8 @@ class TeHyBugEeprom {
     TeHyBugEeprom(RtcTime &) {}
     void setup() {}
     bool mounted() { return false; }
+    unsigned long capacityBytes() { return 0; }
+    unsigned int slotBytes() { return 0; }
     void readdir() {}
     String read(const char *) { return String(); }
     bool appendLine(const String &, const String &, uint8_t) { return false; }
@@ -30,12 +32,15 @@ class TeHyBugEeprom {
 #else
 #include <EepromFS.h>
 
-// Slot-based data log on the external I2C EEPROM (FT24C256A, 32 KB, on the
-// DS3231 RTC module). One file per day of month ("<mday>.txt"), so 32 slots
-// of ~1 KB hold a full month of daily logs; when no free slot is left the
-// oldest day file is removed. NOTE: begin() reuses the slot count an
-// already-formatted EEPROM was created with — SLOTS only applies when
-// formatting a blank chip.
+// Slot-based data log on the external I2C EEPROM on the DS3231 RTC module.
+// Current modules carry an FT24C512A (64 KB); earlier ones an FT24C256A
+// (32 KB). The capacity is detected at mount and decides the slot size, so a
+// day file is ~2 KB on the newer modules and ~1 KB on the older ones.
+//
+// One file per day of month ("<mday>.txt"), so 32 slots hold a full month of
+// daily logs; when no free slot is left the oldest day file is removed.
+// NOTE: begin() reuses the slot count an already-formatted EEPROM was created
+// with — SLOTS only applies when formatting a blank chip.
 class TeHyBugEeprom{
   public :
   static constexpr uint8_t SLOTS = 32;
@@ -47,22 +52,84 @@ class TeHyBugEeprom{
 
   TeHyBugEeprom(RtcTime & time): m_efs(0x50, 0), m_time(time) {}
 
+  // One settle before retrying a mount whose bus transactions failed.
+  static constexpr unsigned long BUS_RETRY_DELAY_MS = 50;
+
   void setup(){
       uint8_t slots = m_efs.begin();
+      // A transient bus failure at mount time must not be mistaken for a
+      // blank chip: begin() returns 0 both for "no filesystem" and for "the
+      // chip did not answer", and formatting on the latter erases a healthy
+      // log. Observed on hardware: two deep-sleep wakes logged "unformatted,
+      // formatting..." with bus error status 17/21 over an intact,
+      // month-old filesystem - only the format writes failing on the same
+      // dead bus saved the data. ferror records failed transactions, so a
+      // genuinely blank chip reads clean; if the bus is erroring, give it
+      // one settle-and-retry, and if it still errors leave the chip alone
+      // this wake - a skipped log entry beats an erased log.
+      if (m_efs.ferror != 0) {
+        delay(BUS_RETRY_DELAY_MS);
+        m_efs.ferror = 0;
+        slots = m_efs.begin();
+        if (m_efs.ferror != 0) {
+          D_println(F("EEPROM bus not answering, leaving the chip untouched"));
+          m_mounted = false;
+          return;
+        }
+      }
+      const uint8_t want = sizeCode(m_efs.esize());
+      if (slots > 0 && !layoutMatches(want)) {
+        // The slot layout is derived from the chip capacity, so a filesystem
+        // written for a different one puts every slot at the wrong offset.
+        D_println("EEPROM capacity changed, reformatting...");
+        slots = 0;
+      }
       if (slots == 0) {
         // unformatted eeprom: create the filesystem once
         D_println("EEPROM unformatted, formatting...");
         m_efs.format(SLOTS);
         slots = m_efs.begin();
+        // only stamp a filesystem that actually mounted: with no EEPROM on the
+        // bus the detection failed and every write here would just NACK
+        if (slots > 0) {
+          markSize(sizeCode(m_efs.esize()));
+        }
       }
       m_mounted = slots > 0;
-      D_print("EEPROM filesystem mounted, slots: ");
-      D_println(slots);
+      // Report the detected capacity, not just the slot count: the slot count
+      // is 32 on every chip, so it says nothing about which part was found.
+      // This line is how a 64 KB module is confirmed to be detected as one.
+      D_print("EEPROM filesystem mounted: ");
+      D_print(m_efs.esize());
+      D_print(" B chip, ");
+      D_print(slots);
+      D_print(" slots, ");
+      D_print(slotBytes());
+      D_println(" B per day file");
       readdir();
     }
 
   bool mounted() {
     return m_mounted;
+  }
+
+  // Detected chip capacity in bytes; 0 when no EEPROM answered on the bus.
+  unsigned long capacityBytes() {
+    return m_efs.esize();
+  }
+
+  // Usable bytes in one day file: the slot size less the per-file header. This
+  // is what the chip capacity actually buys — ~1007 B on a 32 KB FT24C256A,
+  // ~2031 B on a 64 KB FT24C512A.
+  unsigned int slotBytes() {
+    const unsigned long capacity = capacityBytes();
+    if (capacity <= EFS_HEADERSIZE) {
+      return 0;
+    }
+    const unsigned long slot = (capacity - EFS_HEADERSIZE) / SLOTS;
+    return slot > EFS_FILEHEADERSIZE
+               ? (unsigned int)(slot - EFS_FILEHEADERSIZE)
+               : 0;
   }
 
   // Tell the log how slot numbers wrap so recycling picks the right "oldest"
@@ -75,8 +142,26 @@ class TeHyBugEeprom{
   // reset). Re-mounts afterwards so logging can resume without a reboot.
   void format() {
     D_println("Formatting EEPROM data log...");
+    // begin() first: it is what detects the chip capacity, and format() sizes
+    // its slots from that. The factory reset (20 s MODE-button hold) formats
+    // from a fresh object before setupSensors() has mounted anything, so the
+    // capacity was still zero there — the slot size came out as garbage and
+    // every slot header was cleared at a meaningless offset, leaving the old
+    // day files intact. A factory reset that keeps the log is the one outcome
+    // it must not have.
+    m_efs.begin();
+    if (m_efs.esize() == 0) {
+      m_mounted = false; // nothing answering on the bus, nothing to format
+      return;
+    }
     m_efs.format(SLOTS);
     m_mounted = m_efs.begin() > 0;
+    // format() zeroes the header, so the capacity marker has to be re-stamped
+    // or the next boot would read "laid out for an unknown chip" and reformat
+    // again — wiping the log on every single boot.
+    if (m_mounted) {
+      markSize(sizeCode(m_efs.esize()));
+    }
   }
 
   void readdir() {
@@ -311,6 +396,45 @@ class TeHyBugEeprom{
   bool m_mounted{false};
   // slot numbering wrap: 31 day-of-month slots, or 24 hour-of-day slots
   uint8_t m_slotWrap{31};
+
+  // Which chip capacity the slot layout on this filesystem was written for.
+  // The slot size is (capacity - header) / slots, recomputed from the detected
+  // capacity on every mount, so a filesystem laid out for a different chip puts
+  // every slot at the wrong offset. Byte 2 of the EepromFS header is free
+  // (format() zeroes the header and then writes only the magic and the slot
+  // count), so the capacity is recorded there and checked at mount.
+  static constexpr unsigned int SIZE_MARK_ADDR = 2;
+  static constexpr uint8_t SIZE_CODE_4K = 1;
+  static constexpr uint8_t SIZE_CODE_32K = 2;
+  static constexpr uint8_t SIZE_CODE_64K = 3;
+
+  static uint8_t sizeCode(unsigned long bytes) {
+    if (bytes >= 65536) return SIZE_CODE_64K;
+    if (bytes >= 32768) return SIZE_CODE_32K;
+    return SIZE_CODE_4K;
+  }
+
+  void markSize(uint8_t code) {
+    m_efs.rawwrite(SIZE_MARK_ADDR, code);
+    m_efs.rawflush();
+  }
+
+  // True when the mounted filesystem was laid out for the chip just detected.
+  bool layoutMatches(uint8_t want) {
+    const uint8_t have = m_efs.rawread(SIZE_MARK_ADDR);
+    if (have == want) {
+      return true;
+    }
+    // Filesystems written before this marker existed carry 0. Those were laid
+    // out for 32 KB, which is byte-for-byte the layout a 32 KB part still
+    // computes today, so adopt the marker and keep the logged data. Only a part
+    // that turns out to be larger was really laid out for the wrong capacity.
+    if (have == 0 && want == SIZE_CODE_32K) {
+      markSize(want);
+      return true;
+    }
+    return false;
+  }
 
 };
 #endif

@@ -1,15 +1,22 @@
 #pragma once
 // WiFi connection management, config portal (WiFiManager) and mDNS.
-//
-// Expects the following globals (defined in tehybug.ino before this
-// header is included): `tehybug`, `wifiManager`, `wifiSsid`,
-// `wifiPassword` — plus sleep_modes.h and sensors.h.
+#include "globals.h"
+#include "sleep_modes.h"
+#include "sensors.h"
 #include <ESP8266WiFi.h>
+// mDNS ("tehybug.local") is left out of the generic (1 MB) build: its ~20 KB
+// of flash is four times that build's entire remaining OTA headroom, for a
+// config-mode convenience. First-gen users reach the device by IP, which the
+// config page shows prominently. The ESP8285 builds keep it.
+#if !defined(ARDUINO_ESP8266_GENERIC)
 #include <ESP8266mDNS.h>
+#endif
 #include <WiFiManager.h>
 #include <FS.h>
 #include "debug.h"
 #include "fw_version.h"
+#include "wifi_policy.h"
+#include "wifi_hint.h"
 
 const IPAddress apIP(192, 168, 4, 1);
 
@@ -74,87 +81,16 @@ void saveConfigCallback() {
   tehybug.conf.saveConfigCallback();
 }
 
-/* WiFi fast reconnect ------------------------------------------------------
- *
- * A full scan + association + DHCP takes a few seconds at ~80 mA, and a
- * deep-sleep device pays it on every wake — which dominates its power budget,
- * since the sleep itself is only ~20 uA. Caching the channel, BSSID and IP
- * from the last successful connection lets the next wake skip both the scan
- * and DHCP, typically well under a second instead of several.
- *
- * The cache lives in RTC memory: it survives deep sleep and is wiped by a power
- * cycle, which is the right lifetime for it. Offsets 0-31 belong to eboot when
- * OTA is in play and 64+ holds the HA discovery memo, so this sits at 40.
- *
- * A hint goes stale whenever the AP changes channel, the router hands out a
- * different subnet, or another access point answers for the same SSID — so a
- * failed fast attempt clears the cache and falls back to the normal scan.
- * Otherwise this would trade battery life for a device that cannot reconnect.
- */
-constexpr uint32_t WIFI_HINT_RTC_SLOT = 40;
-constexpr uint32_t WIFI_HINT_MAGIC = 0x57494649;  // 'WIFI'
-constexpr unsigned long WIFI_HINT_TIMEOUT_MS = 4000;
-
-// How long to let the SDK's own auto-connect finish before taking over. It
-// starts at boot and normally associates well inside this.
-constexpr unsigned long WIFI_SDK_GRACE_MS = 1500;
-
-struct WifiHint {
-  uint32_t magic;
-  uint32_t crc;
-  uint32_t ip;
-  uint32_t gw;
-  uint32_t mask;
-  uint32_t dns;
-  uint8_t bssid[6];
-  uint8_t channel;
-  uint8_t reserved;
-};
-
-// RTC user memory is not checksummed by the SDK and holds garbage on a cold
-// boot, so the payload is verified before it is trusted.
-uint32_t wifiHintCrc(const WifiHint &h) {
-  const uint8_t *p = (const uint8_t *)&h.ip;
-  const size_t n = sizeof(WifiHint) - offsetof(WifiHint, ip);
-  uint32_t v = 2166136261u;
-  for (size_t i = 0; i < n; i++) {
-    v ^= p[i];
-    v *= 16777619u;
-  }
-  return v;
-}
-
-bool loadWifiHint(WifiHint &h) {
-  if (!ESP.rtcUserMemoryRead(WIFI_HINT_RTC_SLOT, (uint32_t *)&h, sizeof(h))) {
-    return false;
-  }
-  return h.magic == WIFI_HINT_MAGIC && h.crc == wifiHintCrc(h) &&
-         h.channel >= 1 && h.channel <= 14 && h.ip != 0;
-}
-
-void clearWifiHint() {
-  WifiHint h{};
-  ESP.rtcUserMemoryWrite(WIFI_HINT_RTC_SLOT, (uint32_t *)&h, sizeof(h));
-}
-
-// Remember what worked, so the next wake can skip the scan and DHCP.
-void saveWifiHint() {
-  WifiHint h{};
-  h.magic = WIFI_HINT_MAGIC;
-  h.ip = (uint32_t)WiFi.localIP();
-  h.gw = (uint32_t)WiFi.gatewayIP();
-  h.mask = (uint32_t)WiFi.subnetMask();
-  h.dns = (uint32_t)WiFi.dnsIP();
-  h.channel = WiFi.channel();
-  const uint8_t *bssid = WiFi.BSSID();
-  if (bssid != nullptr) {
-    memcpy(h.bssid, bssid, sizeof(h.bssid));
-  }
-  h.crc = wifiHintCrc(h);
-  ESP.rtcUserMemoryWrite(WIFI_HINT_RTC_SLOT, (uint32_t *)&h, sizeof(h));
-}
-
 bool tryFastConnect() {
+  // Loaded before anything else because every success path below has to carry
+  // the lease-renewal counter forward, including the two where the SDK got
+  // there on its own.
+  WifiHint h;
+  const bool haveHint = loadWifiHint(h);
+  if (!haveHint) {
+    h = WifiHint{};
+  }
+
   // Never disturb a link that is already up.
   //
   // The SDK auto-connects from its own stored config while the sketch is still
@@ -166,6 +102,10 @@ bool tryFastConnect() {
   // rest of that boot. That is also free speed: the SDK already did the work.
   if (WiFi.status() == WL_CONNECTED) {
     D_println(F("WiFi already up from the SDK auto-connect"));
+    // Counted as "no DHCP this wake": if the SDK reconnected with a static
+    // config of ours, none ran. If it did run one, the only cost of counting
+    // it anyway is renewing again a little sooner.
+    saveWifiHint(wifi_policy::nextWakeCount(h.wakesSinceDhcp, false));
     return true;
   }
 
@@ -186,12 +126,12 @@ bool tryFastConnect() {
     if (WiFi.status() == WL_CONNECTED) {
       D_print(F("WiFi up via the SDK auto-connect, ms: "));
       D_println(millis() - graceStart);
+      saveWifiHint(wifi_policy::nextWakeCount(h.wakesSinceDhcp, false));
       return true;
     }
   }
 
-  WifiHint h;
-  if (!loadWifiHint(h)) {
+  if (!haveHint) {
     return false; // cold boot, or nothing cached yet
   }
   const String ssid = WiFi.SSID();
@@ -207,18 +147,33 @@ bool tryFastConnect() {
   // config and every hostname lookup would fail — an MQTT broker given by name
   // then fails to connect (rc=-2) even though the link is up. Skipping the scan
   // is the larger saving anyway, so fall back to DHCP rather than risk that.
+  //
+  // Reusing it also means no DHCP exchange, so the lease is never renewed;
+  // wifi_policy takes one wake in DHCP_REFRESH_WAKES through DHCP to keep it
+  // alive. The scan is skipped either way, which is the larger saving.
+  const bool renewing = wifi_policy::renewLease(h.wakesSinceDhcp);
   const bool addressUsable =
-      h.ip != 0 && h.gw != 0 && h.mask != 0 && h.dns != 0 &&
+      !renewing && h.ip != 0 && h.gw != 0 && h.mask != 0 && h.dns != 0 &&
       ((h.ip & h.mask) == (h.gw & h.mask));
   if (addressUsable) {
     WiFi.config(IPAddress(h.ip), IPAddress(h.gw), IPAddress(h.mask),
                 IPAddress(h.dns));
   } else {
-    D_println(F("Cached address incomplete, keeping DHCP"));
+    D_println(renewing ? F("Renewing the DHCP lease this wake")
+                       : F("Cached address incomplete, keeping DHCP"));
     WiFi.config(0U, 0U, 0U);
   }
 
+  // This begin() hands back the very credentials the SDK already has stored, so
+  // with the core's default persistence it rewrites the same bytes to flash on
+  // every single wake — flash wear and awake time for nothing. Suppress it for
+  // this call only: WiFiManager still needs persistence on when it saves newly
+  // entered credentials, and the SDK's own stored copy (which the auto-connect
+  // above depends on) is left exactly as it was.
+  const bool wasPersistent = WiFi.getPersistent();
+  WiFi.persistent(false);
   WiFi.begin(ssid.c_str(), psk.c_str(), h.channel, h.bssid, true);
+  WiFi.persistent(wasPersistent);
 
   const unsigned long start = millis();
   while (WiFi.status() != WL_CONNECTED &&
@@ -238,7 +193,11 @@ bool tryFastConnect() {
     if (WiFi.dnsIP() == IPAddress(0, 0, 0, 0)) {
       D_println(F("  no DNS: dropping the cached address, DHCP on next boot"));
       clearWifiHint();
+      return true;
     }
+    // Re-cache: on a renewing wake this stores the freshly leased address and
+    // restarts the count, otherwise it just advances it.
+    saveWifiHint(wifi_policy::nextWakeCount(h.wakesSinceDhcp, renewing));
     return true;
   }
 
@@ -299,7 +258,7 @@ void setupWifi() {
   yield();
 
   if (!wifiManager.autoConnect(wifiSsid, wifiPassword)) {
-    Serial.println(F("Setup: Wifi failed to connect"));
+    D_println(F("Setup: Wifi failed to connect"));
     yield();
 
     // Never leave config mode just because the connection failed.
@@ -338,6 +297,7 @@ void setupWifi() {
 }
 
 void setupMdns() {
+#if !defined(ARDUINO_ESP8266_GENERIC)
   // generate module IDs
   String escapedMac = WiFi.macAddress();
   escapedMac.replace(":", "");
@@ -353,6 +313,7 @@ void setupMdns() {
   MDNS.addServiceTxt("http", "tcp", "device", "TeHyBug");
   MDNS.addServiceTxt("http", "tcp", "version", version);
   MDNS.addServiceTxt("http", "tcp", "endpoint", "/");
+#endif
 }
 
 // Mounts SPIFFS and loads the stored config. Must run before the WiFi

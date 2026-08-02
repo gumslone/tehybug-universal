@@ -194,8 +194,182 @@ static void test_wake_interval() {
   CHECK(wakeInterval(off) == 600);
 }
 
+static void test_scenario_condition() {
+  CASE("scenarioConditionMet");
+  CHECK(scenarioConditionMet("lt", 1.0f, 2.0f));
+  CHECK(!scenarioConditionMet("lt", 2.0f, 2.0f));
+  CHECK(scenarioConditionMet("gt", 3.0f, 2.0f));
+  CHECK(!scenarioConditionMet("gt", 2.0f, 2.0f));
+  CHECK(scenarioConditionMet("eq", 2.0f, 2.0f));
+  CHECK(!scenarioConditionMet("eq", 2.1f, 2.0f));
+  // an unknown operator matches nothing - it must never fire an action
+  CHECK(!scenarioConditionMet("", 1.0f, 2.0f));
+  CHECK(!scenarioConditionMet("ne", 1.0f, 2.0f));
+}
+
+static void test_serve_plan() {
+  CASE("servePlan");
+  DataServ s;
+  Device d;
+
+  // idle device, link up: nothing to send, nothing to sleep on
+  mode_logic::ServePlan p = servePlan(s, d, true);
+  CHECK(!p.sendGet && !p.sendPost && !p.sendMqtt && !p.sendHa);
+  CHECK(!p.connectMqtt && !p.sleep);
+
+  // live mode (no sleep configured): services send, pass never sleeps
+  s.get.active = true;
+  s.get.frequency = 60;
+  p = servePlan(s, d, true);
+  CHECK(p.sendGet);
+  CHECK(!p.sleep);
+
+  // link down: nothing sends, but a sleeping device still rests - skipping
+  // the sleep would busy-loop the radio against a dead network
+  d.sleepMode = true;
+  p = servePlan(s, d, false);
+  CHECK(!p.sendGet);
+  CHECK(p.sleep);
+  CHECK(p.sleepSeconds == 60);
+
+  // HTTP-only never touches the broker connection or pays the drain
+  p = servePlan(s, d, true);
+  CHECK(!p.connectMqtt && !p.disconnectMqtt && !p.drainMqtt);
+
+  // MQTT: connect up front, disconnect before sleep, drain only when linked.
+  // The unlinked case is the regression this table exists to pin: the drain
+  // once ran with no link, waiting 250 ms for packets that were never sent.
+  DataServ m;
+  m.mqtt.active = true;
+  m.mqtt.frequency = 300;
+  p = servePlan(m, d, true);
+  CHECK(p.sendMqtt && p.connectMqtt && p.disconnectMqtt && p.drainMqtt);
+  p = servePlan(m, d, false);
+  CHECK(!p.sendMqtt && !p.connectMqtt);
+  CHECK(p.disconnectMqtt);  // drop the session state either way
+  CHECK(!p.drainMqtt);      // but never wait on packets that were never sent
+
+  // HA rides the MQTT connection and interval
+  DataServ h;
+  h.ha.active = true;
+  h.mqtt.frequency = 600;
+  p = servePlan(h, d, true);
+  CHECK(p.sendHa && p.connectMqtt && p.disconnectMqtt);
+  CHECK(p.sleepSeconds == 600);
+
+  // the EEPROM log's shorter interval decides the sleep, not the network's
+  h.eeprom.active = true;
+  h.eeprom.frequency = 60;
+  p = servePlan(h, d, true);
+  CHECK(p.sleepSeconds == 60);
+
+  // sleep configured but no interval at all: stay awake, no timetable
+  DataServ none;
+  p = servePlan(none, d, true);
+  CHECK(!p.sleep);
+}
+
+static void test_sleep_judge() {
+  CASE("judgeSleepChunk");
+  using mode_logic::SleepJudge;
+  using mode_logic::SleepVerdict;
+
+  // a chunk that slept its time through: carry on, nothing counted
+  SleepJudge ok;
+  CHECK(judgeSleepChunk(ok, false, 60000) == SleepVerdict::Continue);
+  CHECK(ok.refusals == 0 && ok.shortReturns == 0);
+
+  // refusals: retry until the budget is spent, then give up for the interval
+  SleepJudge r;
+  for (int i = 0; i < mode_logic::SLEEP_MAX_REFUSALS - 1; i++) {
+    CHECK(judgeSleepChunk(r, true, 0) == SleepVerdict::RetryRefused);
+  }
+  CHECK(judgeSleepChunk(r, true, 0) == SleepVerdict::AbandonRefused);
+
+  // instant returns ("actually slept: 1" on hardware): tolerate a few
+  // re-arms, then stop before they spin the whole interval at full power
+  SleepJudge b;
+  for (int i = 0; i < mode_logic::SLEEP_MAX_SHORT_RETURNS - 1; i++) {
+    CHECK(judgeSleepChunk(b, false, 1) == SleepVerdict::Continue);
+  }
+  CHECK(judgeSleepChunk(b, false, 1) == SleepVerdict::AbandonBouncing);
+
+  // counters never reset within an interval: a sleep that bounces, works
+  // once, then bounces again is still a bouncing sleep
+  SleepJudge m;
+  judgeSleepChunk(m, false, 1);
+  judgeSleepChunk(m, false, 1);
+  CHECK(judgeSleepChunk(m, false, 60000) == SleepVerdict::Continue);
+  judgeSleepChunk(m, false, 1);
+  judgeSleepChunk(m, false, 1);
+  CHECK(judgeSleepChunk(m, false, 1) == SleepVerdict::AbandonBouncing);
+
+  // refusals and bounces are separate budgets
+  SleepJudge x;
+  judgeSleepChunk(x, true, 0);
+  CHECK(x.refusals == 1 && x.shortReturns == 0);
+  judgeSleepChunk(x, false, 1);
+  CHECK(x.refusals == 1 && x.shortReturns == 1);
+}
+
+static void test_boot_decisions() {
+  CASE("needsRadioRestart / mustForceConfig / setupPlan");
+  Device d;
+  DataServ s;
+
+  // radio restart: only the offline-wake-into-config combination
+  d.configMode = true;
+  d.offlineMode = true;
+  CHECK(needsRadioRestart(d, true));
+  CHECK(!needsRadioRestart(d, false));  // manual reset boots with RF anyway
+  d.offlineMode = false;
+  CHECK(!needsRadioRestart(d, true));   // online wake never disabled the radio
+  d.configMode = false;
+  d.offlineMode = true;
+  CHECK(!needsRadioRestart(d, true));   // staying offline needs no radio
+
+  // config is forced on a first start or when nothing is configured to run
+  CHECK(mustForceConfig(true, s));
+  CHECK(mustForceConfig(false, s));     // nothing active -> nothing to serve
+  s.get.active = true;
+  CHECK(!mustForceConfig(false, s));
+  CHECK(mustForceConfig(true, s));      // first start wins even when configured
+
+  // config mode runs the web UI and nothing that would fight it for heap
+  Device cfg;
+  cfg.configMode = true;
+  DataServ all;
+  all.mqtt.active = true;
+  all.ha.active = true;
+  mode_logic::SetupPlan p = setupPlan(cfg, all);
+  CHECK(p.webServer);
+  CHECK(!p.mqtt && !p.ha && !p.remoteControl && !p.tickers);
+
+  // serving: HA alone still brings the MQTT client up (it rides it)
+  Device live;
+  live.configMode = false;
+  DataServ haOnly;
+  haOnly.ha.active = true;
+  p = setupPlan(live, haOnly);
+  CHECK(!p.webServer && p.mqtt && p.ha && p.tickers);
+
+  // sleep modes serve from loop(), so no tickers - but MQTT still initialises
+  live.sleepMode = true;
+  p = setupPlan(live, haOnly);
+  CHECK(p.mqtt && !p.tickers);
+
+  // remote control follows its flag, outside config mode only
+  live.remoteControl.active = true;
+  p = setupPlan(live, haOnly);
+  CHECK(p.remoteControl);
+}
+
 int main() {
   std::printf("Running mode_logic tests...\n");
+  test_boot_decisions();
+  test_sleep_judge();
+  test_serve_plan();
+  test_scenario_condition();
   test_wake_interval();
   test_current_mode();
   test_sleep_enabled();

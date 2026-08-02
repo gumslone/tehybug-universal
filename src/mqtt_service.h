@@ -1,9 +1,7 @@
 #pragma once
 // MQTT publishing (plain and Home Assistant discovery).
-//
-// Expects the following globals (defined in tehybug.ino before this
-// header is included): `tehybug`, `mqttClient`, `wifiSsid` — plus
-// `Log()`/`getInfo()` from web_api.h and the `ha` namespace from ha.h.
+#include "globals.h"
+#include "web_api.h"
 #include <PubSubClient.h>
 #include "debug.h"
 #include <FS.h>
@@ -178,6 +176,9 @@ void haSyncDiscovery() {
   }
 
   ha::publishAutoConfig(mqttClient, version, tehybug.sensorData);
+  // Same cadence as discovery itself (memoized, so rare): sweep out what the
+  // old Lua firmware left retained on the broker.
+  ha::retireLegacyAutoConfig(mqttClient);
 
   if (current != previous) {
     File out = SPIFFS.open(HA_KEYS_FILE, "w");

@@ -26,7 +26,7 @@ This firmware is compatible with tehybug universal boards (without display) like
 ## Device Modes
 - Live mode: when your device is configured to serve data (via http/mqtt) and you enable the powersaving deep sleep and deactivate the config mode in the system settings. <img width="402" alt="Bildschirmfoto 2023-11-04 um 16 26 51" src="https://github.com/gumslone/tehybug/assets/12110353/2b2524da-0643-447a-abb0-873b50236c4e">
 
-- Config mode: TeHyBug serves a web interface at http://tehybug.local where you can configure everything.
+- Config mode: TeHyBug serves a web interface at http://tehybug.local where you can configure everything. (First-generation / 1 MB boards don't include mDNS — reach them by IP address instead; the device's own page at http://192.168.4.1 shows it.)
 
 - Offline mode (requires the RTC + EEPROM module): the device never connects to WiFi. It wakes on the log interval, measures, appends one entry to the on-device log and deep-sleeps again — the lowest possible power draw with no network. See [Offline data logging](#offline-data-logging-rtc--eeprom) below.
 
@@ -36,7 +36,7 @@ To return back to Config mode from the Live mode (or Offline mode):
 2. right after the device boots, push and hold the MODE button untill the LED turns blue
 3. release the MODE button.
 
-The device waits **1 second** after booting for a MODE press, in every mode except config mode (where there is nothing to switch to). Press MODE right after the device boots; the LED turns blue once config mode is on.
+The device waits **1 second** after a reset for a MODE press. Scheduled deep-sleep wake-ups skip this wait (it would cost battery on every wake, and nobody can time a press into one), and on some boards a RESET pressed **while the device is asleep** is indistinguishable from a timer wake — so if the LED never turns blue after step 2, **press RESET twice about a second apart**, then hold MODE. The second press is always recognised.
 
 ## Offline data logging (RTC + EEPROM)
 
@@ -47,7 +47,7 @@ With a DS3231 RTC + I²C EEPROM module attached, TeHyBug can store timestamped r
 - **Pick what to log.** Store the default measured set, or a custom placeholder template (e.g. `%temp% %humi%`) to keep only the fields you care about.
 - **Compact format.** To fit more into the small slots (~1 KB each) the date is omitted — it is implied by the file name — and each value is tagged with a short code, e.g. `07:55 22.6t 48.3h 1013.2p`. This roughly doubles the entries per day file versus a verbose `key=value` line.
 - **Own log interval.** The log frequency is independent of the data-serving intervals; in offline mode it also sets the deep-sleep interval. A day file holds a limited number of entries, so pick an interval that fits a full day — the Data Log page shows a capacity table. When a day file fills up it wraps: it clears and starts again from the top, overwriting that day's earlier entries (so logging never stops; you keep the most recent readings).
-- **Offline mode.** Enabling offline mode logs with WiFi completely off. The web interface is unavailable while offline; to read the data, press RESET then hold MODE until the LED turns blue to re-enter Config mode.
+- **Offline mode.** Enabling offline mode logs with WiFi completely off. The web interface is unavailable while offline; to read the data, press RESET then hold MODE until the LED turns blue to re-enter Config mode (press RESET twice if the LED doesn't react — see "Return to Config mode" above).
 
 > Available in the ESP8285 build (TeHyBug universal and Mini) when an RTC + EEPROM module is attached. The slim generic (1MB) build for old / first-generation boards omits the RTC/EEPROM driver entirely.
 

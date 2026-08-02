@@ -27,74 +27,8 @@ class TeHyBugConfig {
         return;
       }
 
-      // default-constructed structs provide the values we can omit from the file
-      const Calibration calibration{};
-      const Sensor sensor{};
-      const Device device{};
-      const DataServ serveData{};
-      const Scenario scenario{};
-
       DynamicJsonDocument json(3072);
-
-      json["key"] = m_device.key;
-
-      setIfNotDefault(json, "mqttActive", m_serveData.mqtt.active, serveData.mqtt.active);
-      setIfNotDefault(json, "mqttRetained", m_serveData.mqtt.retained, serveData.mqtt.retained);
-      setIfNotDefault(json, "mqttUser", m_serveData.mqtt.user, serveData.mqtt.user);
-      setIfNotDefault(json, "mqttPassword", m_serveData.mqtt.password, serveData.mqtt.password);
-      setIfNotDefault(json, "mqttServer", m_serveData.mqtt.server, serveData.mqtt.server);
-      setIfNotDefault(json, "mqttMasterTopic", m_serveData.mqtt.topic, serveData.mqtt.topic);
-      setIfNotDefault(json, "mqttMessage", m_serveData.mqtt.message,  serveData.mqtt.message);
-      setIfNotDefault(json, "mqttPort", m_serveData.mqtt.port, serveData.mqtt.port);
-      setIfNotDefault(json, "mqttFrequency", m_serveData.mqtt.frequency, serveData.mqtt.frequency);
-
-      setIfNotDefault(json, "haActive", m_serveData.ha.active, serveData.ha.active);
-
-      setIfNotDefault(json, "eepromLogActive", m_serveData.eeprom.active, serveData.eeprom.active);
-      setIfNotDefault(json, "eepromLogFrequency", m_serveData.eeprom.frequency, serveData.eeprom.frequency);
-      setIfNotDefault(json, "eepromLogMessage", m_serveData.eeprom.message, serveData.eeprom.message);
-      setIfNotDefault(json, "eepromLogHourly", m_serveData.eeprom.hourly, serveData.eeprom.hourly);
-      setIfNotDefault(json, "offlineModeActive", m_device.offlineMode, device.offlineMode);
-
-      setIfNotDefault(json, "httpGetURL", m_serveData.get.url,  serveData.get.url);
-      setIfNotDefault(json, "httpGetActive", m_serveData.get.active, serveData.get.active);
-      setIfNotDefault(json, "httpGetFrequency", m_serveData.get.frequency, serveData.get.frequency);
-
-      setIfNotDefault(json, "httpPostURL", m_serveData.post.url, serveData.post.url);
-      setIfNotDefault(json, "httpPostActive", m_serveData.post.active, serveData.post.active);
-      setIfNotDefault(json, "httpPostFrequency", m_serveData.post.frequency, serveData.post.frequency);
-      setIfNotDefault(json, "httpPostJson", m_serveData.post.message, serveData.post.message);
-
-      setIfNotDefault(json, "calibrationActive", m_calibration.active, calibration.active);
-      setIfNotDefault(json, "calibrationTemp",  m_calibration.temp, calibration.temp);
-      setIfNotDefault(json, "calibrationHumi", m_calibration.humi, calibration.humi);
-      setIfNotDefault(json, "calibrationQfe", m_calibration.qfe, calibration.qfe);
-
-      setIfNotDefault(json, "configModeActive", m_device.configMode, device.configMode); // true by default
-      setIfNotDefault(json, "sleepModeActive", m_device.sleepMode, device.sleepMode);
-      setIfNotDefault(json, "lightSleepModeActive", m_device.lightSleepMode, device.lightSleepMode);
-
-      setIfNotDefault(json, "dht_sensor", m_sensor.dht, sensor.dht);
-      setIfNotDefault(json, "second_dht_sensor", m_sensor.dht_2, sensor.dht_2);
-
-      setIfNotDefault(json, "ds18b20_sensor", m_sensor.ds18b20, sensor.ds18b20);
-      setIfNotDefault(json, "second_ds18b20_sensor", m_sensor.ds18b20_2, sensor.ds18b20_2);
-      setIfNotDefault(json, "adc_sensor", m_sensor.adc, sensor.adc);
-
-      for (uint8_t i = 0; i < Scenarios::count; i++) {
-        const String prefix = "sc" + String(i + 1) + "_";
-        Scenario &sc = m_scenarios.items[i];
-        setIfNotDefault(json, prefix + "active", sc.active, scenario.active);
-        setIfNotDefault(json, prefix + "type", sc.type, scenario.type);
-        setIfNotDefault(json, prefix + "url", sc.url, scenario.url);
-        setIfNotDefault(json, prefix + "data", sc.data, scenario.data);
-        setIfNotDefault(json, prefix + "condition", sc.condition, scenario.condition);
-        setIfNotDefault(json, prefix + "value", sc.value, scenario.value);
-        setIfNotDefault(json, prefix + "message", sc.message, scenario.message);
-      }
-
-      setIfNotDefault(json, "rc_active", m_device.remoteControl.active, device.remoteControl.active);
-      setIfNotDefault(json, "rc_url", m_device.remoteControl.url, device.remoteControl.url);
+      buildConfig(json, false); // only non-defaults: keeps the flash file small
 
       File configFile = SPIFFS.open("/config.json", "w");
       if (!configFile) {
@@ -112,6 +46,83 @@ class TeHyBugConfig {
       }
       m_shouldSaveConfig = false; // stored; nothing pending until the next change
       D_println(F("Config saved"));
+    }
+
+    // Builds the config document. full=false writes only values that differ
+    // from the compiled-in defaults, which keeps the flash file small.
+    // full=true writes every key: the UI needs that, because a value equal to
+    // its default is still a value - omitting it left fields showing
+    // "Loading or no data" and made a deliberately-set default look unsaved
+    // (set the MQTT topic to the default string and it "disappeared").
+    void buildConfig(DynamicJsonDocument &json, bool full) {
+      // default-constructed structs provide the values we may omit
+      const Calibration calibration{};
+      const Sensor sensor{};
+      const Device device{};
+      const DataServ serveData{};
+      const Scenario scenario{};
+
+      json["key"] = m_device.key;
+
+
+      put(json, full, "mqttActive", m_serveData.mqtt.active, serveData.mqtt.active);
+      put(json, full, "mqttRetained", m_serveData.mqtt.retained, serveData.mqtt.retained);
+      put(json, full, "mqttUser", m_serveData.mqtt.user, serveData.mqtt.user);
+      put(json, full, "mqttPassword", m_serveData.mqtt.password, serveData.mqtt.password);
+      put(json, full, "mqttServer", m_serveData.mqtt.server, serveData.mqtt.server);
+      put(json, full, "mqttMasterTopic", m_serveData.mqtt.topic, serveData.mqtt.topic);
+      put(json, full, "mqttMessage", m_serveData.mqtt.message,  serveData.mqtt.message);
+      put(json, full, "mqttPort", m_serveData.mqtt.port, serveData.mqtt.port);
+      put(json, full, "mqttFrequency", m_serveData.mqtt.frequency, serveData.mqtt.frequency);
+
+      put(json, full, "haActive", m_serveData.ha.active, serveData.ha.active);
+
+      put(json, full, "eepromLogActive", m_serveData.eeprom.active, serveData.eeprom.active);
+      put(json, full, "eepromLogFrequency", m_serveData.eeprom.frequency, serveData.eeprom.frequency);
+      put(json, full, "eepromLogMessage", m_serveData.eeprom.message, serveData.eeprom.message);
+      put(json, full, "eepromLogHourly", m_serveData.eeprom.hourly, serveData.eeprom.hourly);
+      put(json, full, "offlineModeActive", m_device.offlineMode, device.offlineMode);
+
+      put(json, full, "httpGetURL", m_serveData.get.url,  serveData.get.url);
+      put(json, full, "httpGetActive", m_serveData.get.active, serveData.get.active);
+      put(json, full, "httpGetFrequency", m_serveData.get.frequency, serveData.get.frequency);
+
+      put(json, full, "httpPostURL", m_serveData.post.url, serveData.post.url);
+      put(json, full, "httpPostActive", m_serveData.post.active, serveData.post.active);
+      put(json, full, "httpPostFrequency", m_serveData.post.frequency, serveData.post.frequency);
+      put(json, full, "httpPostJson", m_serveData.post.message, serveData.post.message);
+
+      put(json, full, "calibrationActive", m_calibration.active, calibration.active);
+      put(json, full, "calibrationTemp",  m_calibration.temp, calibration.temp);
+      put(json, full, "calibrationHumi", m_calibration.humi, calibration.humi);
+      put(json, full, "calibrationQfe", m_calibration.qfe, calibration.qfe);
+
+      put(json, full, "configModeActive", m_device.configMode, device.configMode); // true by default
+      put(json, full, "sleepModeActive", m_device.sleepMode, device.sleepMode);
+      put(json, full, "lightSleepModeActive", m_device.lightSleepMode, device.lightSleepMode);
+
+      put(json, full, "dht_sensor", m_sensor.dht, sensor.dht);
+      put(json, full, "second_dht_sensor", m_sensor.dht_2, sensor.dht_2);
+
+      put(json, full, "ds18b20_sensor", m_sensor.ds18b20, sensor.ds18b20);
+      put(json, full, "second_ds18b20_sensor", m_sensor.ds18b20_2, sensor.ds18b20_2);
+      put(json, full, "adc_sensor", m_sensor.adc, sensor.adc);
+
+      for (uint8_t i = 0; i < Scenarios::count; i++) {
+        const String prefix = "sc" + String(i + 1) + "_";
+        Scenario &sc = m_scenarios.items[i];
+        put(json, full, prefix + "active", sc.active, scenario.active);
+        put(json, full, prefix + "type", sc.type, scenario.type);
+        put(json, full, prefix + "url", sc.url, scenario.url);
+        put(json, full, prefix + "data", sc.data, scenario.data);
+        put(json, full, prefix + "condition", sc.condition, scenario.condition);
+        put(json, full, prefix + "value", sc.value, scenario.value);
+        put(json, full, prefix + "message", sc.message, scenario.message);
+      }
+
+      put(json, full, "rc_active", m_device.remoteControl.active, device.remoteControl.active);
+      put(json, full, "rc_url", m_device.remoteControl.url, device.remoteControl.url);
+
     }
 
     // Smallest reporting interval accepted. A read + send pass can hold the
@@ -182,22 +193,17 @@ class TeHyBugConfig {
     // re-serialize that into a String, i.e. hold the document, the file buffer
     // and the output at once — on every websocket connect (sendConfig) and
     // every GET /api/config, purely to reformat bytes we wrote ourselves.
+    // Serves the complete configuration, not the stored file: the file only
+    // holds non-default values, and the UI must also see the ones that equal
+    // their defaults (see buildConfig). Costs one 3 KB document per config
+    // page load, paid only in config mode where the heap is at its freest.
     String getConfig() {
-      File configFile = SPIFFS.open("/config.json", "r");
-      if (!configFile) {
-        return "{}";
-      }
-      String json;
-      json.reserve(configFile.size() + 1);
-      while (configFile.available()) {
-        json += (char)configFile.read();
-      }
-      configFile.close();
-      // an empty or truncated file must not be sent as invalid JSON
-      if (json.length() == 0 || json[0] != '{') {
-        return "{}";
-      }
-      return json;
+      DynamicJsonDocument json(3072);
+      buildConfig(json, true);
+      String out;
+      out.reserve(measureJson(json) + 1);
+      serializeJson(json, out);
+      return out;
     }
     bool firstStart()
     {
@@ -312,11 +318,13 @@ class TeHyBugConfig {
       }
     }
 
+    // One writer for both config shapes: full=true writes unconditionally
+    // (the UI dump), full=false only when the value differs from its
+    // compiled-in default (the flash file).
     template<typename T>
-    void setIfNotDefault(DynamicJsonDocument &json, const String& key, const T & var, const T & defaultVar)
+    void put(DynamicJsonDocument &json, bool full, const String& key, const T & var, const T & defaultVar)
     {
-      if(var != defaultVar)
-      {
+      if (full || var != defaultVar) {
         json[key] = var;
       }
     }

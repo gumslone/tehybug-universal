@@ -1,9 +1,7 @@
 #pragma once
 // Config-mode web interface: HTTP API, websocket push and logging.
-//
-// Expects the following globals (defined in tehybug.ino before this
-// header is included): `tehybug`, `server`, `webSocket`, `wifiManager`,
-// `httpUpdater` — plus `read_sensors()` from sensors.h.
+#include "globals.h"
+#include "sensors.h"
 #include <ESP8266WebServer.h>
 #include <WebSocketsServer.h>
 #include <ArduinoJson.h>
@@ -22,10 +20,22 @@ const char mainPage[] PROGMEM = R"=====(
 <!doctype html>
 <html>
 <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <title>TeHyBug</title>
+</head>
+<body>
+<div id="page">
+<h3>TeHyBug</h3>
+<b>On your own network this device is at: <span id="ip">tehybug.local</span></b>
+<br><br>Loading the full interface...
+<br>If it does not load, you are probably still on the TeHyBug access point,
+which has no internet. Rejoin your home WiFi and open the address above.
+</div>
 <script>
-// Fill in the device IP in the offline fallback message. Run after the DOM is
-// ready so the #ip element exists (on a local device the response can arrive
-// before the body is parsed), and assign onload before send.
+// Fill in the device address from the device itself. This is the only part of
+// the page that works on the TeHyBug access point, so it must not depend on
+// anything loading from the internet.
 function setBugIp() {
   var xhr = new XMLHttpRequest();
   xhr.open('GET', '/api/getip');
@@ -35,23 +45,15 @@ function setBugIp() {
   };
   xhr.send();
 }
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', setBugIp);
-} else {
-  setBugIp();
-}
+setBugIp();
 </script>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-    <link href="https://tehybug.com/tehybug/v1/css/style.php" rel="stylesheet">
-    <script src="https://tehybug.com/tehybug/v1/js/javascript.php"></script>
-    <title>TeHyBug</title>
-</head>
-<body>
-<div id="page">
-Loading...
-<br>If the page doesnt load: make sure that you are connected to your local home network and then open this ip: <span id="ip">tehybug.local</span> with your browser
-</div>
+<!-- The interface itself is hosted on tehybug.com, so it only loads once the
+     browser is back on a network with internet. Both are pulled in without
+     blocking: a stylesheet in <head> blocks painting and a plain <script src>
+     there blocks parsing, so on the access point (no internet) the browser
+     stalled before it drew anything at all and the page came up empty. -->
+<link rel="stylesheet" href="https://tehybug.com/tehybug/v1/css/style.php" media="print" onload="this.media='all'">
+<script src="https://tehybug.com/tehybug/v1/js/javascript.php" defer></script>
 </body>
 </html>
 )=====";
@@ -112,7 +114,9 @@ void sendDeviceInfo() {
 }
 
 void sendSensorData() {
-  sendToWebsocketClients(getSensor(), {"/main", "/settings"});
+  // "/datalog" included so its template field can offer "fill from my
+  // sensors" - the page needs to know which readings this device produces.
+  sendToWebsocketClients(getSensor(), {"/main", "/settings", "/datalog"});
 }
 
 void sendConfig() {
@@ -188,9 +192,18 @@ void handleGetSensor() {
   server.send(200, "application/json", getSensor());
 }
 
+// The address to reach the device on once you are back on your own network.
+// Served plain so the config-mode page can show it while you are still on the
+// device's own AP, where there is no internet and nothing else loads.
 void handleGetIp() {
   server.sendHeader("Connection", "close");
-  server.send(200, "text/html", WiFi.localIP().toString());
+  const IPAddress ip = WiFi.localIP();
+  // 0.0.0.0 means the device has not joined a network yet — printing that as an
+  // address to browse to just sends people to a dead end.
+  server.send(200, "text/html",
+              ip == IPAddress(0, 0, 0, 0)
+                  ? String(F("not on your network yet - set WiFi first"))
+                  : ip.toString());
 }
 
 // GET /api/datalog            -> {"active":...,"time":"...","files":[...]}
@@ -213,7 +226,12 @@ void handleGetDataLog() {
   const String json = "{\"active\":true,\"timeSet\":" +
                       String(tehybug.time.isTimeSet() ? "true" : "false") +
                       ",\"time\":\"" + tehybug.time.timestamp() +
-                      "\",\"files\":" + tehybug.eeprom.listFilesJson() + "}";
+                      // detected chip capacity and the resulting day-file size,
+                      // so the Data Log page can show which EEPROM was found
+                      // instead of the user having to read the serial log
+                      "\",\"capacity\":" + String(tehybug.eeprom.capacityBytes()) +
+                      ",\"slotBytes\":" + String(tehybug.eeprom.slotBytes()) +
+                      ",\"files\":" + tehybug.eeprom.listFilesJson() + "}";
   server.send(200, "application/json", json);
 }
 
