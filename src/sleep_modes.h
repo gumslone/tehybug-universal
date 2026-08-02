@@ -168,36 +168,18 @@ void startLightSleep(int freq)
   wifi_set_opmode_current(STATION_MODE);
   wifi_set_sleep_type(NONE_SLEEP_T);
 
-  // Re-associate straight to the AP we were on, instead of scanning for it.
-  //
-  // wifi_station_connect() starts a full scan on every wake — visible in the
-  // log as "scandone" before each reconnect, and measured at 300-900 ms of
-  // radio-on time per cycle. The channel and BSSID have not changed across a
-  // sleep of a few minutes, and they are already in RTC memory for the
-  // deep-sleep path, so pin them and skip the scan. If the hint is missing or
-  // the AP really did move, the association fails and the retry below falls
-  // back to a normal scan, which is the same recovery the boot path uses.
-  WifiHint hint;
-  bool pinned = false;
-  if (loadWifiHint(hint)) {
-    const String ssid = WiFi.SSID();
-    const String psk = WiFi.psk();
-    if (ssid.length() > 0) {
-      // Suppress persistence: these are the credentials the SDK already has,
-      // so letting the core write them back is a flash erase on every wake.
-      const bool wasPersistent = WiFi.getPersistent();
-      WiFi.persistent(false);
-      WiFi.begin(ssid.c_str(), psk.c_str(), hint.channel, hint.bssid, true);
-      WiFi.persistent(wasPersistent);
-      pinned = true;
-    }
-  }
-  if (!pinned) {
-    wifi_station_connect(); // re-associate with the credentials we kept
-  }
+  // Re-associate with the SDK's own reconnect, and do NOT pin the cached
+  // channel/BSSID here. Pinning was tried (b8ac824) and made the wake WORSE
+  // on hardware: restoring the opmode starts the SDK's auto-connect, a
+  // WiFi.begin() on top of that in-flight attempt stalls the association -
+  // the same "never begin() over an in-flight connect" lesson the boot path
+  // already documents - and every wake then cost a deterministic ~2.3 s
+  // (stall, 1 s nudge, full rescan) against the 0.3-0.9 s this plain
+  // reconnect measures. The hint stays maintained below for the deep-sleep
+  // boot path, which has the grace logic to use it safely.
+  wifi_station_connect(); // re-associate with the credentials we kept
 
-  D_print(F("Woke from light sleep, reconnecting WiFi"));
-  D_println(pinned ? F(" (pinned to the cached AP)") : F(" (scanning)"));
+  D_println(F("Woke from light sleep, reconnecting WiFi..."));
 
   // Wait for the link to come back before returning to the caller, which
   // serves data immediately.
@@ -211,15 +193,9 @@ void startLightSleep(int freq)
   bool retried = false;
   while (WiFi.status() != WL_CONNECTED &&
          (millis() - start) < LIGHT_SLEEP_RECONNECT_TIMEOUT_MS) {
-    // The SDK usually re-associates by itself; nudge it once if it has not.
-    // For a pinned attempt this is also the fallback when the AP has moved
-    // channel or BSSID: reconnect() drops the pinning and scans normally.
+    // the SDK usually re-associates by itself; nudge it once if it has not
     if (!retried && (millis() - start) > 1000) {
       retried = true;
-      if (pinned) {
-        D_println(F("  pinned reconnect stalled, falling back to a scan"));
-        clearWifiHint(); // it is stale; the boot path will rebuild it
-      }
       WiFi.reconnect();
     }
     delay(50);
