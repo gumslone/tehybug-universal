@@ -29,6 +29,41 @@ constexpr unsigned long FPM_SETTLE_MS = 20;
 constexpr unsigned long FPM_RETRY_MS = 50;
 constexpr uint8_t FPM_MAX_REFUSALS = 10;
 
+/* Boot mark ----------------------------------------------------------------
+ *
+ * One RTC word meaning "the previous boot never reached deep sleep". Written at
+ * boot, cleared as the very last thing before ESP.deepSleep().
+ *
+ * Why the reset reason is not enough on its own: on these boards a deep-sleep
+ * wake is a pulse on the same RST pin the reset button pulls, and a press
+ * while the device is asleep can be misreported as a deep-sleep wake - which
+ * is precisely when someone trying to reach config mode presses it, since a
+ * sleeping node is asleep almost all the time. A "going to sleep" flag cannot
+ * tell those apart either (it is set for both). This mark can: a timer wake
+ * always follows a completed sleep entry, so it always finds the mark cleared,
+ * while a second reset inside the short awake window finds it set - only a
+ * human resets twice within seconds. Worst case becomes "press reset twice,
+ * then MODE", instead of a window that never appears.
+ */
+constexpr uint32_t BOOT_MARK_RTC_SLOT = 50;  // WifiHint ends at 47, HA memo at 64
+constexpr uint32_t BOOT_MARK_MAGIC = 0x4D4F4445;  // 'MODE'
+
+bool bootMarkPresent() {
+  uint32_t v = 0;
+  return ESP.rtcUserMemoryRead(BOOT_MARK_RTC_SLOT, &v, sizeof(v)) &&
+         v == BOOT_MARK_MAGIC;
+}
+
+void setBootMark() {
+  uint32_t v = BOOT_MARK_MAGIC;
+  ESP.rtcUserMemoryWrite(BOOT_MARK_RTC_SLOT, &v, sizeof(v));
+}
+
+void clearBootMark() {
+  uint32_t v = 0;
+  ESP.rtcUserMemoryWrite(BOOT_MARK_RTC_SLOT, &v, sizeof(v));
+}
+
 void wakeupCallback()
 {
   D_println("Light sleep callback...");
@@ -228,6 +263,9 @@ void startModemSleep(int freq)
 // the radio on that boot resets first — see the guard in setup().
 void startDeepSleep(int freq, RFMode wakeMode = RF_DEFAULT) {
   D_println("Going to deep sleep...");
+  // Last thing before sleeping: the next boot finding this cleared is what
+  // certifies it as a timer wake (see the boot mark above).
+  clearBootMark();
   ESP.deepSleep(freq * 1000000ULL, wakeMode);
   yield();
 }

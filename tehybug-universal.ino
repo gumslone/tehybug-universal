@@ -142,8 +142,17 @@ void checkModeButton() {
   // ~1.1 s of radio-on time per cycle, which against a ~24 uA sleep floor is
   // roughly half the energy budget of a short wake. A button already held down
   // is still honoured below; only the waiting is skipped.
+  // A boot mark left over means the previous boot never reached deep sleep -
+  // either a human just reset the device (possibly the second press after one
+  // that was swallowed as a "deep-sleep wake"), or it crashed. Both deserve
+  // the window; only a certified timer wake skips it.
+  const bool humanReset = bootMarkPresent();
+  setBootMark();
   const bool fromDeepSleep =
+      !humanReset &&
       ESP.getResetInfoPtr()->reason == REASON_DEEP_SLEEP_AWAKE;
+  D_print(F("Reset reason: "));
+  D_println(ESP.getResetReason());
   if (!fromDeepSleep && !tehybug.device.configMode &&
       digitalRead(BUTTON_PIN) == HIGH) {
     const bool wakesOften = tehybug.sleepEnabled() || tehybug.device.offlineMode;
