@@ -14,18 +14,12 @@ constexpr unsigned long LIGHT_SLEEP_RECONNECT_TIMEOUT_MS = 8000;
 constexpr uint32_t FPM_MAX_SLEEP_US = 260UL * 1000000UL;
 constexpr unsigned long FPM_MAX_SLEEP_MS = 260UL * 1000UL;
 
-// A sleep that comes back faster than this did not really sleep; after a few of
-// those in a row, stop re-arming it and wait the interval out instead.
-constexpr unsigned long FPM_SHORT_RETURN_MS = 50;
-constexpr uint8_t FPM_MAX_SHORT_RETURNS = 5;
-
 // The SDK needs a moment after the association is torn down before it will
 // accept a forced sleep; without this the first call answers -1.
 constexpr unsigned long FPM_SETTLE_MS = 20;
-// A refusal is usually "not ready yet", so back off briefly and ask again
-// rather than abandoning the sleep and burning the whole interval awake.
+// Back-off before re-asking after a refusal. When to retry versus give up is
+// mode_logic::judgeSleepChunk()'s call, not this file's.
 constexpr unsigned long FPM_RETRY_MS = 50;
-constexpr uint8_t FPM_MAX_REFUSALS = 10;
 
 /* Boot mark ----------------------------------------------------------------
  *
@@ -122,38 +116,43 @@ void startLightSleep(int freq)
   // nothing.
   const unsigned long targetMs = (unsigned long)freq * 1000UL;
   const unsigned long sleepStart = millis();
-  uint8_t shortReturns = 0;
-  uint8_t refusals = 0;
-  while (millis() - sleepStart < targetMs) {
+  mode_logic::SleepJudge judge;
+  bool abandoned = false;
+  while (!abandoned && millis() - sleepStart < targetMs) {
     const unsigned long leftMs = targetMs - (millis() - sleepStart);
     const uint32_t chunkUs = (leftMs > FPM_MAX_SLEEP_MS)
                                  ? FPM_MAX_SLEEP_US
                                  : (uint32_t)leftMs * 1000UL;
     const unsigned long chunkStart = millis();
     const sint8 rc = wifi_fpm_do_sleep(chunkUs);
-    if (rc != 0) {
-      // Usually "not ready yet" rather than "never": back off and ask again.
-      if (++refusals < FPM_MAX_REFUSALS) {
+    if (rc == 0) {
+      delay(chunkUs / 1000UL + 1UL);
+    }
+    // The verdict logic is pure and host-tested (mode_logic::judgeSleepChunk);
+    // this loop only carries it out.
+    switch (mode_logic::judgeSleepChunk(judge, rc != 0,
+                                        millis() - chunkStart)) {
+      case mode_logic::SleepVerdict::Continue:
+        break;
+      case mode_logic::SleepVerdict::RetryRefused:
         delay(FPM_RETRY_MS);
-        continue;
-      }
-      // It really will not sleep. Waiting the rest out awake is wasteful, but
-      // it keeps the reporting interval honest, which matters more than the
-      // power for a mode the user can switch away from.
-      D_print(F("  fpm_do_sleep refused, rc: "));
-      D_println(rc);
-      delay(targetMs - (millis() - sleepStart));
-      break;
+        break;
+      case mode_logic::SleepVerdict::AbandonRefused:
+        D_print(F("  fpm_do_sleep refused, rc: "));
+        D_println(rc);
+        abandoned = true;
+        break;
+      case mode_logic::SleepVerdict::AbandonBouncing:
+        D_println(F("  light sleep keeps returning early, waiting it out"));
+        abandoned = true;
+        break;
     }
-    delay(chunkUs / 1000UL + 1UL);
-    // Give up re-arming if it keeps bouncing straight back, so this cannot spin
-    // at full power for the whole interval.
-    if ((millis() - chunkStart) < FPM_SHORT_RETURN_MS &&
-        ++shortReturns >= FPM_MAX_SHORT_RETURNS) {
-      D_println(F("  light sleep keeps returning early, waiting it out"));
-      delay(targetMs - (millis() - sleepStart));
-      break;
-    }
+  }
+  if (abandoned) {
+    // The SDK will not sleep this interval. Waiting the rest out awake is
+    // wasteful, but it keeps the reporting interval honest, which matters
+    // more than the power for a mode the user can switch away from.
+    delay(targetMs - (millis() - sleepStart));
   }
   // What the cycle actually cost, against what was asked for. A wake that comes
   // back far short of the target means the forced sleep is being cut off, and

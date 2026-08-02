@@ -136,6 +136,54 @@ inline int wakeInterval(const DataServ &s) {
   return freq;
 }
 
+/* The forced-light-sleep judge -----------------------------------------------
+ *
+ * wifi_fpm_do_sleep() has two observed failure modes, both invisible in the
+ * request itself: it can refuse outright (rc -1 while the association is
+ * still tearing down), and it can accept and come straight back (anything
+ * calling esp_schedule() releases the one delay() the sleep rides on). Both
+ * were found on hardware, as a 60 s interval collapsing to milliseconds.
+ *
+ * The loop's decisions live here, pure and host-tested; sleep_modes.h only
+ * executes them. One verdict per attempted chunk:
+ */
+enum class SleepVerdict : uint8_t {
+  Continue,         // chunk slept (or long enough) - carry on with the rest
+  RetryRefused,     // refused, likely "not ready yet": back off, ask again
+  AbandonRefused,   // refused too often: it will not sleep, wait the rest out
+  AbandonBouncing,  // keeps returning instantly: stop re-arming, wait it out
+};
+
+struct SleepJudge {
+  uint8_t refusals{0};
+  uint8_t shortReturns{0};
+};
+
+// A return faster than this did not really sleep.
+constexpr unsigned long SLEEP_SHORT_RETURN_MS = 50;
+// How many refusals / instant returns before giving up on the SDK for this
+// interval. Waiting the remainder out awake is wasteful but keeps the
+// reporting interval honest, which matters more than the power for a mode the
+// user can switch away from. Counters deliberately never reset within one
+// interval: a sleep that bounces, works once, then bounces again is still a
+// bouncing sleep.
+constexpr uint8_t SLEEP_MAX_REFUSALS = 10;
+constexpr uint8_t SLEEP_MAX_SHORT_RETURNS = 5;
+
+inline SleepVerdict judgeSleepChunk(SleepJudge &j, bool refused,
+                                    unsigned long chunkElapsedMs) {
+  if (refused) {
+    return ++j.refusals >= SLEEP_MAX_REFUSALS ? SleepVerdict::AbandonRefused
+                                              : SleepVerdict::RetryRefused;
+  }
+  if (chunkElapsedMs < SLEEP_SHORT_RETURN_MS) {
+    return ++j.shortReturns >= SLEEP_MAX_SHORT_RETURNS
+               ? SleepVerdict::AbandonBouncing
+               : SleepVerdict::Continue;
+  }
+  return SleepVerdict::Continue;
+}
+
 /* The plan for one serve pass: which targets get this measurement, what the
  * MQTT connection needs, and whether the pass ends in sleep. serve_data()
  * used to derive all of this inline, interleaved with the hardware calls -

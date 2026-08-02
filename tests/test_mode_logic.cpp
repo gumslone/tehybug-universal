@@ -269,8 +269,52 @@ static void test_serve_plan() {
   CHECK(!p.sleep);
 }
 
+static void test_sleep_judge() {
+  CASE("judgeSleepChunk");
+  using mode_logic::SleepJudge;
+  using mode_logic::SleepVerdict;
+
+  // a chunk that slept its time through: carry on, nothing counted
+  SleepJudge ok;
+  CHECK(judgeSleepChunk(ok, false, 60000) == SleepVerdict::Continue);
+  CHECK(ok.refusals == 0 && ok.shortReturns == 0);
+
+  // refusals: retry until the budget is spent, then give up for the interval
+  SleepJudge r;
+  for (int i = 0; i < mode_logic::SLEEP_MAX_REFUSALS - 1; i++) {
+    CHECK(judgeSleepChunk(r, true, 0) == SleepVerdict::RetryRefused);
+  }
+  CHECK(judgeSleepChunk(r, true, 0) == SleepVerdict::AbandonRefused);
+
+  // instant returns ("actually slept: 1" on hardware): tolerate a few
+  // re-arms, then stop before they spin the whole interval at full power
+  SleepJudge b;
+  for (int i = 0; i < mode_logic::SLEEP_MAX_SHORT_RETURNS - 1; i++) {
+    CHECK(judgeSleepChunk(b, false, 1) == SleepVerdict::Continue);
+  }
+  CHECK(judgeSleepChunk(b, false, 1) == SleepVerdict::AbandonBouncing);
+
+  // counters never reset within an interval: a sleep that bounces, works
+  // once, then bounces again is still a bouncing sleep
+  SleepJudge m;
+  judgeSleepChunk(m, false, 1);
+  judgeSleepChunk(m, false, 1);
+  CHECK(judgeSleepChunk(m, false, 60000) == SleepVerdict::Continue);
+  judgeSleepChunk(m, false, 1);
+  judgeSleepChunk(m, false, 1);
+  CHECK(judgeSleepChunk(m, false, 1) == SleepVerdict::AbandonBouncing);
+
+  // refusals and bounces are separate budgets
+  SleepJudge x;
+  judgeSleepChunk(x, true, 0);
+  CHECK(x.refusals == 1 && x.shortReturns == 0);
+  judgeSleepChunk(x, false, 1);
+  CHECK(x.refusals == 1 && x.shortReturns == 1);
+}
+
 int main() {
   std::printf("Running mode_logic tests...\n");
+  test_sleep_judge();
   test_serve_plan();
   test_scenario_condition();
   test_wake_interval();
