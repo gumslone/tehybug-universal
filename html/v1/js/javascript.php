@@ -17,15 +17,29 @@ $jsFiles = [
     './files/gumboard.js',
 ];
 
-// Set cache lifetime in seconds. 10 minutes = 600  seconds.
-$cacheDuration = 60 * 10; // 10 minutes
-
 // --- Asset Delivery ---
+//
+// Revalidate on every load instead of a fixed-lifetime cache: the device
+// pages load this bundle with no version parameter, so a max-age cache kept
+// serving stale scripts for its full lifetime after every deploy. An ETag
+// from the bundled files' mtimes makes the browser ask each time and get a
+// cheap 304 whenever nothing changed - fresh after deploys, near-free
+// otherwise.
+$etagSource = '';
+foreach ($jsFiles as $f) {
+    $etagSource .= $f . ':' . (string)@filemtime($f) . ';';
+}
+$etag = '"' . md5($etagSource) . '"';
 
-// Set content type and caching headers.
 header("Content-type: text/javascript; charset=utf-8");
-header("Cache-Control: max-age=" . $cacheDuration . ", public");
-header("Expires: " . gmdate("D, d M Y H:i:s", time() + $cacheDuration) . " GMT");
+header("Cache-Control: no-cache");
+header("ETag: " . $etag);
+
+if (isset($_SERVER['HTTP_IF_NONE_MATCH']) &&
+    trim($_SERVER['HTTP_IF_NONE_MATCH']) === $etag) {
+    http_response_code(304);
+    exit;
+}
 
 // Enable GZIP compression if supported by the client.
 if (isset($_SERVER['HTTP_ACCEPT_ENCODING']) && strpos($_SERVER['HTTP_ACCEPT_ENCODING'], 'gzip') !== false) {
