@@ -5,6 +5,54 @@ build on every release (see [`ci/changelog.sh`](ci/changelog.sh)). Firmware
 versions are date-based (`YYMMDDHHMM`); see the
 [releases](https://github.com/gumslone/tehybug-universal/releases) for the tags.
 
+## v2608021236 (2026-08-02)
+
+- Serve the full config to the UI; fill links and a cause on the Data Log page
+- Explain the port trade-offs on the sensor settings page
+- Give the second temperature sensor its own query parameter
+- Revalidate the JS bundle on every load instead of caching it for 10 min
+- Offer the sensor suggestions in metric or imperial
+- Suggestion links below the fields, never disabled
+- Let the portal build payloads and query strings from the device's sensors
+- Never format the data log over a bus that is not answering
+- Drop the light-sleep AP pinning - the bench proved it slower
+- Retire the Lua firmware's HA entities; average the ADC like it did
+- Run the test workflow on the restructure branch too
+- Probe both I2C orientations and settle a freshly grounded DHT
+- Bring the README's button and mDNS instructions up to date
+- Move the boot precedence rules into mode_logic
+- Slim the sketch to a composition root
+- Leave mDNS out of the generic build - 23 KB back, headroom 6x
+- Judge the forced-light-sleep chunks in mode_logic, execute in sleep_modes
+- Decide the serve pass in mode_logic, execute it in data_service
+- Move scenario conditions and the compact log line into the pure layer
+- Make every module self-sufficient; stop depending on include order
+- Revert "Measure the real sleep duration to catch a reset on the first press"
+- Measure the real sleep duration to catch a reset on the first press
+- Tell a reset button from a timer wake with an RTC boot mark
+- Only drain MQTT before sleep when there was a link to drain into
+- Drop the pre-sleep settle for HTTP; give MQTT a bounded drain instead
+- Never publish a truncated Home Assistant discovery document
+- Re-associate light sleep to the cached AP instead of scanning for it
+- Keep release builds quiet, and log the mode the device actually entered
+- Stop writing unresolved placeholders into the EEPROM data log
+- Name the DHT pins in board.h, back on the original mapping
+- Confirm the DHT model instead of reading a timeout as DHT11
+- Detect the DHT model, and power the sensor before probing it
+- Fix the I2C pin mapping on the generic build - SDA and SCL were crossed
+- Leave the LED pin alone in a generic debug build - it is the TX line
+- Rebuild firmware binaries
+- Draw the config-mode page before anything from the internet
+- Read the AHT20 on the generic build, and say when a DHT read fails
+- Let the SDK settle before asking it for a forced light sleep
+- Keep light sleep asleep for the interval it was asked for
+- Log what a light sleep actually cost, and whether the SDK refused it
+- Stop paying for a button window and a radio nobody uses on wake
+- Renew the DHCP lease periodically on the WiFi fast path
+- Report the detected EEPROM capacity so it can be verified
+- Make the factory reset actually clear the data log
+- Detect the FT24C512A so the data log uses the whole 64 KB chip
+
 ## v2607251755 (2026-07-25)
 
 - Stop the Data Serving page silently switching Home Assistant off
