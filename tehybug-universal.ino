@@ -15,7 +15,9 @@
 #include <ESP8266HTTPUpdateServer.h>
 #include <ESP8266WebServer.h>
 #include <ESP8266WiFi.h>
-#include <ESP8266mDNS.h>
+#if !defined(ARDUINO_ESP8266_GENERIC)
+#include <ESP8266mDNS.h>  // left out of the generic build, see wifi_service.h
+#endif
 #include <FS.h>
 
 // PubSubClient mallocs MQTT_MAX_PACKET_SIZE at construction (boot, before WiFi).
@@ -405,7 +407,9 @@ void loop() {
       return;
 
     case mode_logic::DeviceMode::Config:
+#if !defined(ARDUINO_ESP8266_GENERIC)
       MDNS.update();
+#endif
       server.handleClient();
       yield();
       webSocket.loop();

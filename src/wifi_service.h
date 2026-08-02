@@ -4,7 +4,13 @@
 #include "sleep_modes.h"
 #include "sensors.h"
 #include <ESP8266WiFi.h>
+// mDNS ("tehybug.local") is left out of the generic (1 MB) build: its ~20 KB
+// of flash is four times that build's entire remaining OTA headroom, for a
+// config-mode convenience. First-gen users reach the device by IP, which the
+// config page shows prominently. The ESP8285 builds keep it.
+#if !defined(ARDUINO_ESP8266_GENERIC)
 #include <ESP8266mDNS.h>
+#endif
 #include <WiFiManager.h>
 #include <FS.h>
 #include "debug.h"
@@ -291,6 +297,7 @@ void setupWifi() {
 }
 
 void setupMdns() {
+#if !defined(ARDUINO_ESP8266_GENERIC)
   // generate module IDs
   String escapedMac = WiFi.macAddress();
   escapedMac.replace(":", "");
@@ -306,6 +313,7 @@ void setupMdns() {
   MDNS.addServiceTxt("http", "tcp", "device", "TeHyBug");
   MDNS.addServiceTxt("http", "tcp", "version", version);
   MDNS.addServiceTxt("http", "tcp", "endpoint", "/");
+#endif
 }
 
 // Mounts SPIFFS and loads the stored config. Must run before the WiFi
