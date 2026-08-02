@@ -67,71 +67,57 @@ void serve_data() {
     D_println(F("No WiFi link, skipping this round"));
   }
 
+  // The decisions live in mode_logic::servePlan(), host-tested; this function
+  // only executes them against the hardware.
+  const mode_logic::ServePlan plan =
+      mode_logic::servePlan(tehybug.serveData, tehybug.device, linked);
+
   // Sleep modes send once and then sleep, so make the broker connection here
   // with a retry budget rather than relying on a next loop iteration.
-  if (linked &&
-      (tehybug.serveData.mqtt.active || tehybug.serveData.ha.active) &&
-      !mqttClient.connected()) {
+  if (plan.connectMqtt && !mqttClient.connected()) {
     mqttEnsureConnected(MQTT_WAKE_CONNECT_BUDGET_MS);
   }
 
-  if (linked && tehybug.serveData.get.active) {
+  if (plan.sendGet) {
     httpGet();
   }
-  if (linked && tehybug.serveData.post.active) {
+  if (plan.sendPost) {
     httpPost();
   }
-  if (linked && tehybug.serveData.mqtt.active) {
+  if (plan.sendMqtt) {
     mqttSendData();
   }
   // HA reports on the MQTT interval
-  if (linked && tehybug.serveData.ha.active) {
+  if (plan.sendHa) {
     haSendData();
   }
 
-  if (!tehybug.sleepEnabled()) {
+  if (!plan.sleep) {
     return;
   }
 
-  // Sleep on the shortest configured interval, so adding a second service can
-  // no longer starve the first. The EEPROM log is written on every wake (inside
-  // read_sensors), so it only needs to be considered when it is the shortest.
-  const int freq = tehybug.wakeIntervalSeconds();
-  if (freq <= 0) {
-    return;
-  }
-
-  if (tehybug.serveData.mqtt.active || tehybug.serveData.ha.active) {
+  if (plan.disconnectMqtt) {
     mqttClient.disconnect();
     // Give the QoS-0 publishes just written and the DISCONNECT packet a moment
     // to actually leave the radio - they sit in the TCP buffer, and sleeping
-    // now would drop them. A moment, not the old full second: this is a drain,
-    // not a ceremony. Only with a link: with none, nothing was published this
-    // wake and disconnect() had nothing to send, so there is nothing to drain
-    // - and an unreachable-network wake is when the battery can least afford
-    // 250 ms of standing around.
-    if (linked) {
+    // now would drop them. Skipped when nothing was sent this wake (no link):
+    // an unreachable-network wake is when the battery can least afford 250 ms
+    // of standing around.
+    if (plan.drainMqtt) {
       delay(MQTT_DRAIN_MS);
     }
   }
-  // Say what the device will actually do: "Minimum data frequency" above is
-  // only the network services' shortest interval, while the EEPROM log can be
-  // shorter still and then it decides how often the device wakes.
+  // Say what the device will actually do: the plan's interval is the shortest
+  // configured one, and the EEPROM log can be the one that decides it.
   D_print(F("Sleeping for (s): "));
-  D_print(freq);
+  D_print(plan.sleepSeconds);
   if (tehybug.serveData.eeprom.active &&
-      tehybug.serveData.eeprom.frequency == freq) {
+      tehybug.serveData.eeprom.frequency == plan.sleepSeconds) {
     D_print(F("  (set by the EEPROM log interval)"));
   }
   D_println();
 
-  // No settle window for HTTP: the "200" in the log is the response, so by
-  // this point the exchange has already made the full round trip and there is
-  // nothing left in flight. The old fixed delay(1000) here was measured on
-  // hardware as 1.00 s of a 2.45 s wake - 41% of the awake time, spent doing
-  // nothing. MQTT is different (QoS-0 bytes still in the TCP buffer) and gets
-  // its bounded drain above.
-  startSleep(freq);
+  startSleep(plan.sleepSeconds);
 }
 
 void checkScenario(Scenario &s) {

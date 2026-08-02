@@ -136,6 +136,55 @@ inline int wakeInterval(const DataServ &s) {
   return freq;
 }
 
+/* The plan for one serve pass: which targets get this measurement, what the
+ * MQTT connection needs, and whether the pass ends in sleep. serve_data()
+ * used to derive all of this inline, interleaved with the hardware calls -
+ * which is exactly where a "drain MQTT even with no link" regression slipped
+ * in unnoticed: the rules were not pinned anywhere. Now they are host-tested.
+ *
+ * The rules, in one place:
+ *  - a service sends only when it is active AND the link is up; a dead link
+ *    skips the round rather than watching every request fail
+ *  - the broker connection is made up front with a retry budget when MQTT or
+ *    HA will send (sleep modes get no second loop iteration to reconnect in)
+ *  - the pass ends in sleep only when a sleep mode is configured and some
+ *    interval is; the interval is the shortest configured one (wakeInterval)
+ *  - MQTT disconnects before sleeping whenever it is configured, but the
+ *    drain wait is only worth paying when something was actually sent
+ */
+struct ServePlan {
+  bool sendGet{false};
+  bool sendPost{false};
+  bool sendMqtt{false};
+  bool sendHa{false};
+  bool connectMqtt{false};     // ensure the broker connection, with a budget
+  bool disconnectMqtt{false};  // drop the broker connection before sleeping
+  bool drainMqtt{false};       // give the last publishes time to leave
+  bool sleep{false};
+  int sleepSeconds{0};
+};
+
+inline ServePlan servePlan(const DataServ &s, const Device &d, bool linked) {
+  ServePlan p;
+  p.sendGet = linked && s.get.active;
+  p.sendPost = linked && s.post.active;
+  p.sendMqtt = linked && s.mqtt.active;
+  p.sendHa = linked && s.ha.active;
+  p.connectMqtt = p.sendMqtt || p.sendHa;
+  if (!sleepEnabled(d)) {
+    return p;
+  }
+  const int freq = wakeInterval(s);
+  if (freq <= 0) {
+    return p; // nothing scheduled: do not sleep on no timetable
+  }
+  p.sleep = true;
+  p.sleepSeconds = freq;
+  p.disconnectMqtt = s.mqtt.active || s.ha.active;
+  p.drainMqtt = p.disconnectMqtt && linked;
+  return p;
+}
+
 // Whether an automation scenario's condition holds for the current reading.
 // Lifted out of checkScenario() so the operator semantics - including that an
 // unknown operator matches nothing rather than everything - are pinned by

@@ -207,8 +207,71 @@ static void test_scenario_condition() {
   CHECK(!scenarioConditionMet("ne", 1.0f, 2.0f));
 }
 
+static void test_serve_plan() {
+  CASE("servePlan");
+  DataServ s;
+  Device d;
+
+  // idle device, link up: nothing to send, nothing to sleep on
+  mode_logic::ServePlan p = servePlan(s, d, true);
+  CHECK(!p.sendGet && !p.sendPost && !p.sendMqtt && !p.sendHa);
+  CHECK(!p.connectMqtt && !p.sleep);
+
+  // live mode (no sleep configured): services send, pass never sleeps
+  s.get.active = true;
+  s.get.frequency = 60;
+  p = servePlan(s, d, true);
+  CHECK(p.sendGet);
+  CHECK(!p.sleep);
+
+  // link down: nothing sends, but a sleeping device still rests - skipping
+  // the sleep would busy-loop the radio against a dead network
+  d.sleepMode = true;
+  p = servePlan(s, d, false);
+  CHECK(!p.sendGet);
+  CHECK(p.sleep);
+  CHECK(p.sleepSeconds == 60);
+
+  // HTTP-only never touches the broker connection or pays the drain
+  p = servePlan(s, d, true);
+  CHECK(!p.connectMqtt && !p.disconnectMqtt && !p.drainMqtt);
+
+  // MQTT: connect up front, disconnect before sleep, drain only when linked.
+  // The unlinked case is the regression this table exists to pin: the drain
+  // once ran with no link, waiting 250 ms for packets that were never sent.
+  DataServ m;
+  m.mqtt.active = true;
+  m.mqtt.frequency = 300;
+  p = servePlan(m, d, true);
+  CHECK(p.sendMqtt && p.connectMqtt && p.disconnectMqtt && p.drainMqtt);
+  p = servePlan(m, d, false);
+  CHECK(!p.sendMqtt && !p.connectMqtt);
+  CHECK(p.disconnectMqtt);  // drop the session state either way
+  CHECK(!p.drainMqtt);      // but never wait on packets that were never sent
+
+  // HA rides the MQTT connection and interval
+  DataServ h;
+  h.ha.active = true;
+  h.mqtt.frequency = 600;
+  p = servePlan(h, d, true);
+  CHECK(p.sendHa && p.connectMqtt && p.disconnectMqtt);
+  CHECK(p.sleepSeconds == 600);
+
+  // the EEPROM log's shorter interval decides the sleep, not the network's
+  h.eeprom.active = true;
+  h.eeprom.frequency = 60;
+  p = servePlan(h, d, true);
+  CHECK(p.sleepSeconds == 60);
+
+  // sleep configured but no interval at all: stay awake, no timetable
+  DataServ none;
+  p = servePlan(none, d, true);
+  CHECK(!p.sleep);
+}
+
 int main() {
   std::printf("Running mode_logic tests...\n");
+  test_serve_plan();
   test_scenario_condition();
   test_wake_interval();
   test_current_mode();
