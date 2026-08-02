@@ -22,7 +22,13 @@ WiFiClient & getClient(const String & url)
     // its buffers only cost heap once HTTPS is actually needed.
     if (!espClient_ssl) {
       espClient_ssl = new BearSSL::WiFiClientSecure();
-      espClient_ssl->setBufferSizes(256, 256);  // shrink TLS buffers
+      // 512 is the smallest the core accepts - it silently clamps anything
+      // lower (this call used to ask for 256 and claim it worked). The small
+      // receive buffer only holds if the server negotiates MFLN; against one
+      // that does not, the handshake fails and the request reports -1. The
+      // default cloud endpoint is plain http, so this only affects
+      // user-configured https targets.
+      espClient_ssl->setBufferSizes(512, 512);
       espClient_ssl->setInsecure();             // skip cert verification
     }
     return *espClient_ssl;
@@ -101,8 +107,13 @@ void serve_data() {
     // Give the QoS-0 publishes just written and the DISCONNECT packet a moment
     // to actually leave the radio - they sit in the TCP buffer, and sleeping
     // now would drop them. A moment, not the old full second: this is a drain,
-    // not a ceremony.
-    delay(MQTT_DRAIN_MS);
+    // not a ceremony. Only with a link: with none, nothing was published this
+    // wake and disconnect() had nothing to send, so there is nothing to drain
+    // - and an unreachable-network wake is when the battery can least afford
+    // 250 ms of standing around.
+    if (linked) {
+      delay(MQTT_DRAIN_MS);
+    }
   }
   // Say what the device will actually do: "Minimum data frequency" above is
   // only the network services' shortest interval, while the EEPROM log can be
