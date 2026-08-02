@@ -64,6 +64,85 @@ void clearBootMark() {
   ESP.rtcUserMemoryWrite(BOOT_MARK_RTC_SLOT, &v, sizeof(v));
 }
 
+/* Wake record --------------------------------------------------------------
+ *
+ * On devices with the DS3231 the boot mark above can be improved on: the
+ * battery-backed clock measures how long the device actually slept, and a
+ * wake that arrives well short of the programmed interval was the reset
+ * button, not the timer - caught on the FIRST press, no double-tap needed.
+ * The chip alone cannot do this: millis() dies across deep sleep and the
+ * on-chip RTC counter is cleared by the same RST pulse that wakes it.
+ */
+constexpr uint32_t WAKE_RECORD_RTC_SLOT = 52;  // boot mark at 50, HA memo at 64
+constexpr uint32_t WAKE_RECORD_MAGIC = 0x57414B45;  // 'WAKE'
+
+struct WakeRecord {
+  uint32_t magic;
+  uint32_t sleepStart;  // epochFromCivil() at sleep entry
+  uint32_t freq;        // programmed interval, seconds
+  uint32_t check;       // ~(sleepStart ^ freq), RTC memory has no checksum
+};
+
+void clearWakeRecord() {
+  WakeRecord r{};
+  ESP.rtcUserMemoryWrite(WAKE_RECORD_RTC_SLOT, (uint32_t *)&r, sizeof(r));
+}
+
+// Called at deep-sleep entry, when the RTC (if present) has long been probed.
+void saveWakeRecord(uint32_t freq) {
+#if !defined(ARDUINO_ESP8266_GENERIC)
+  tehybug.time.update();
+  if (!tehybug.conf.rtcActive() || !tehybug.time.isTimeSet()) {
+    clearWakeRecord();  // no clock to compare against on the next boot
+    return;
+  }
+  WakeRecord r{};
+  r.magic = WAKE_RECORD_MAGIC;
+  r.sleepStart = mode_logic::epochFromCivil(
+      tehybug.time.getYear(), tehybug.time.getMonth(),
+      tehybug.time.getMonthDay(), tehybug.time.getHours(),
+      tehybug.time.getMinutes(), tehybug.time.getSeconds());
+  r.freq = freq;
+  r.check = ~(r.sleepStart ^ r.freq);
+  ESP.rtcUserMemoryWrite(WAKE_RECORD_RTC_SLOT, (uint32_t *)&r, sizeof(r));
+#else
+  (void)freq;
+#endif
+}
+
+// Whether the battery-backed clock says this boot came well before the
+// programmed wake. Reads the DS3231 directly - it runs before the sensor
+// probe, so nothing has called Wire.begin() yet, and BUTTON_PIN doubles as an
+// I2C line, so the caller re-runs pinMode() for the button afterwards.
+bool resetDuringSleep() {
+#if !defined(ARDUINO_ESP8266_GENERIC)
+  WakeRecord r{};
+  if (!ESP.rtcUserMemoryRead(WAKE_RECORD_RTC_SLOT, (uint32_t *)&r, sizeof(r)) ||
+      r.magic != WAKE_RECORD_MAGIC || r.check != ~(r.sleepStart ^ r.freq) ||
+      r.freq == 0) {
+    return false;
+  }
+  Wire.begin(I2C_SDA, I2C_SCL);
+  Wire.beginTransmission(0x68);
+  if (Wire.endTransmission() != 0) {
+    return false;  // no DS3231 on the bus
+  }
+  struct ts now {};
+  DS3231_get(&now);
+  if (now.year < RTC_MIN_VALID_YEAR) {
+    return false;  // clock lost or never set
+  }
+  const uint32_t nowEpoch = mode_logic::epochFromCivil(
+      now.year, now.mon, now.mday, now.hour, now.min, now.sec);
+  if (nowEpoch <= r.sleepStart) {
+    return false;  // clock moved backwards; trust nothing
+  }
+  return mode_logic::wokeEarly(nowEpoch - r.sleepStart, r.freq);
+#else
+  return false;
+#endif
+}
+
 void wakeupCallback()
 {
   D_println("Light sleep callback...");
@@ -263,6 +342,9 @@ void startModemSleep(int freq)
 // the radio on that boot resets first — see the guard in setup().
 void startDeepSleep(int freq, RFMode wakeMode = RF_DEFAULT) {
   D_println("Going to deep sleep...");
+  // Note when the sleep began, so the next boot can measure how long it
+  // really lasted (devices with a DS3231 only).
+  saveWakeRecord((uint32_t)freq);
   // Last thing before sleeping: the next boot finding this cleared is what
   // certifies it as a timer wake (see the boot mark above).
   clearBootMark();

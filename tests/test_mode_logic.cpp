@@ -194,8 +194,44 @@ static void test_wake_interval() {
   CHECK(wakeInterval(off) == 600);
 }
 
+static void test_epoch_from_civil() {
+  CASE("epochFromCivil");
+  // epoch zero and one plain day
+  CHECK(epochFromCivil(2000, 1, 1, 0, 0, 0) == 0);
+  CHECK(epochFromCivil(2000, 1, 2, 0, 0, 0) == 86400);
+  // time-of-day components
+  CHECK(epochFromCivil(2000, 1, 1, 1, 2, 3) == 3723);
+  // across the leap day: 2024 is a leap year, so Mar 1 is 8826 days in
+  // (24 years = 8766 days incl. six leap days, + 31 + 29)
+  CHECK(epochFromCivil(2024, 3, 1, 0, 0, 0) == 8826UL * 86400UL);
+  // a real sleep measurement: across a month boundary, 60 s apart
+  const uint32_t before = epochFromCivil(2026, 7, 31, 23, 59, 30);
+  const uint32_t after = epochFromCivil(2026, 8, 1, 0, 0, 30);
+  CHECK(after - before == 60);
+  // across a year boundary
+  CHECK(epochFromCivil(2027, 1, 1, 0, 0, 0) -
+        epochFromCivil(2026, 12, 31, 23, 0, 0) == 3600);
+}
+
+static void test_woke_early() {
+  CASE("wokeEarly tolerates drift, catches presses");
+  // 60 s interval: margin is the 10 s floor
+  CHECK(wokeEarly(45, 60));    // clearly early -> reset button
+  CHECK(!wokeEarly(55, 60));   // within drift tolerance
+  CHECK(!wokeEarly(60, 60));   // on time
+  CHECK(!wokeEarly(90, 60));   // late is never a press
+  // hourly: margin scales to interval/6 = 600 s, because the sleep timer
+  // drifts a few percent and an hour waking a minute short is normal
+  CHECK(!wokeEarly(3100, 3600));  // ~14% early: drift territory, tolerated
+  CHECK(wokeEarly(2900, 3600));   // beyond the margin -> a press
+  CHECK(wokeEarly(0, 3600));      // immediate reset
+  CHECK(wokeEarly(1800, 3600));   // mid-interval, the typical press
+}
+
 int main() {
   std::printf("Running mode_logic tests...\n");
+  test_epoch_from_civil();
+  test_woke_early();
   test_wake_interval();
   test_current_mode();
   test_sleep_enabled();
