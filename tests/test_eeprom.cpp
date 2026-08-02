@@ -151,6 +151,29 @@ static void test_factory_reset_from_unmounted() {
   CHECK_EQ_STR(after.read("13.txt").c_str(), "09:00 20.0t\n");
 }
 
+static void test_dead_bus_never_formats() {
+  CASE("a silent bus never triggers a format");
+  // healthy chip with data
+  TeHyBugEeprom fs = freshFsAt(FakeWire::SIZE_32K);
+  CHECK(fs.appendLine("13.txt", "07:55 22.6t\n", 13));
+  CHECK_EQ_STR(fs.read("13.txt").c_str(), "07:55 22.6t\n");
+
+  // the chip stops answering (transient bus failure at mount time): setup()
+  // must not read that as "blank chip" and format - the hardware incident
+  // this pins showed "EEPROM unformatted, formatting..." over an intact log
+  Wire.setPresent({});
+  TeHyBugEeprom during(g_rtc);
+  during.setup();
+  CHECK(!during.mounted()); // no log this wake, but nothing touched
+
+  // bus comes back: the data must still be there
+  Wire.setPresent({0x50});
+  TeHyBugEeprom after(g_rtc);
+  after.setup();
+  CHECK(after.mounted());
+  CHECK_EQ_STR(after.read("13.txt").c_str(), "07:55 22.6t\n");
+}
+
 static void test_format_and_capacity() {
   CASE("format/capacity");
   TeHyBugEeprom fs = freshFs();
@@ -327,6 +350,7 @@ static void test_slot_wrap_recycles_by_period() {
 
 int main() {
   std::printf("Running eeprom tests...\n");
+  test_dead_bus_never_formats();
   test_detects_chip_capacity();
   test_capacity_change_reformats_once();
   test_legacy_filesystem_keeps_its_data();

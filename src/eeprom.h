@@ -52,8 +52,31 @@ class TeHyBugEeprom{
 
   TeHyBugEeprom(RtcTime & time): m_efs(0x50, 0), m_time(time) {}
 
+  // One settle before retrying a mount whose bus transactions failed.
+  static constexpr unsigned long BUS_RETRY_DELAY_MS = 50;
+
   void setup(){
       uint8_t slots = m_efs.begin();
+      // A transient bus failure at mount time must not be mistaken for a
+      // blank chip: begin() returns 0 both for "no filesystem" and for "the
+      // chip did not answer", and formatting on the latter erases a healthy
+      // log. Observed on hardware: two deep-sleep wakes logged "unformatted,
+      // formatting..." with bus error status 17/21 over an intact,
+      // month-old filesystem - only the format writes failing on the same
+      // dead bus saved the data. ferror records failed transactions, so a
+      // genuinely blank chip reads clean; if the bus is erroring, give it
+      // one settle-and-retry, and if it still errors leave the chip alone
+      // this wake - a skipped log entry beats an erased log.
+      if (m_efs.ferror != 0) {
+        delay(BUS_RETRY_DELAY_MS);
+        m_efs.ferror = 0;
+        slots = m_efs.begin();
+        if (m_efs.ferror != 0) {
+          D_println(F("EEPROM bus not answering, leaving the chip untouched"));
+          m_mounted = false;
+          return;
+        }
+      }
       const uint8_t want = sizeCode(m_efs.esize());
       if (slots > 0 && !layoutMatches(want)) {
         // The slot layout is derived from the chip capacity, so a filesystem
