@@ -146,10 +146,7 @@ void checkModeButton() {
   // either a human just reset the device (possibly the second press after one
   // that was swallowed as a "deep-sleep wake"), or it crashed. Both deserve
   // the window; only a certified timer wake skips it.
-  // resetDuringSleep() may talk I2C, and BUTTON_PIN doubles as an I2C line -
-  // so it runs before the button pin is (re)configured below.
-  const bool humanReset = bootMarkPresent() || resetDuringSleep();
-  pinMode(BUTTON_PIN, INPUT_PULLUP);
+  const bool humanReset = bootMarkPresent();
   setBootMark();
   const bool fromDeepSleep =
       !humanReset &&
