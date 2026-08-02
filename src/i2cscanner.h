@@ -11,6 +11,13 @@ class Scanner {
   // Probes the bus, at most twice for the lifetime of this scanner. Two passes
   // are needed because some sensors (the AM2320) only answer after a first
   // transaction has woken them; a third pass would just cost time.
+  // Allow a fresh pair of scans after the bus is re-initialised (e.g. in the
+  // mirrored orientation) - the two-attempt cap is per bus setup, not per
+  // boot: its point is only to stop redundant back-to-back rescans.
+  void resetAttempts() {
+    scanCount_ = 0;
+  }
+
   void scan() {
     if (scanCount_ >= 2) {
       D_println("I2C scan skipped: max 2 attempts reached");

@@ -288,13 +288,26 @@ void read_dht_custom(DHTesp &sensor, const String &temp, const String &humi) {
 // GPIO0 gates the DHT's supply, low being "on". Driving it also takes over the
 // I2C line the pin doubles as, which is why a DHT and I2C sensors are
 // alternatives on this hardware rather than a combination.
-void dhtPowerOn() {
+// Returns true when the line was just asserted: the sensor was unpowered
+// until now and needs its settle time before it answers. The old Lua
+// firmware waited 2 s after grounding on every single read - it could afford
+// to, because in its deep-sleep flow every read was a fresh boot. Here the
+// state is tracked so live mode pays the wait once, not per read.
+bool dhtPowerOn() {
   pinMode(DHT_POWER_PIN, OUTPUT);
   digitalWrite(DHT_POWER_PIN, LOW);
+  static bool grounded = false; // per boot, like the pin state itself
+  if (grounded) {
+    return false;
+  }
+  grounded = true;
+  return true;
 }
 
 void read_dht() {
-  dhtPowerOn();
+  if (dhtPowerOn()) {
+    delay(DHT_POWER_UP_MS); // freshly grounded: give it its power-up time
+  }
   read_dht_custom(dht, "temp", "humi");
 }
 
@@ -399,12 +412,49 @@ void read_sensors() {
   tehybug.shouldSensorDataBeGarbageCollected(true);
 }
 
-uint8_t findI2Csensors() {
-  Wire.begin(I2C_SDA, I2C_SCL);
-  // required to scan twice to find sensors like am2320
+// Bring up the I2C bus in whichever line orientation the sensor is actually
+// reachable on, and remember the answer for the rest of the session.
+//
+// The old Lua firmware set the bus up per sensor script, and they did not all
+// agree: bme280/bme680/sgp30 used SDA=GPIO0/SCL=GPIO2 while the AM2320 script
+// used the mirror image - which worked because the TeHyBug ports are wired as
+// mirror images of each other, so whichever way a sensor was attached, one
+// script's orientation fit. A single fixed orientation therefore loses
+// sensors that the old firmware found. Probe the configured orientation
+// first, and only when the bus looks empty try the mirrored one. (Two scans
+// per orientation: some sensors, the AM2320 included, only answer after a
+// first transaction has woken them.)
+void i2cBusBegin() {
+  static int8_t mirrored = -1; // -1 undecided, 0 configured, 1 mirrored
   i2cScanner::Scanner &scanner = i2cScanner::shared();
+  scanner.resetAttempts();
+  if (mirrored == 1) {
+    Wire.begin(I2C_SCL, I2C_SDA);
+  } else {
+    Wire.begin(I2C_SDA, I2C_SCL);
+  }
   scanner.scan();
   scanner.scan();
+  if (mirrored == -1) {
+    if (scanner.devicesFound() > 0) {
+      mirrored = 0;
+    } else {
+      Wire.begin(I2C_SCL, I2C_SDA);
+      scanner.resetAttempts();
+      scanner.scan();
+      scanner.scan();
+      if (scanner.devicesFound() > 0) {
+        mirrored = 1;
+        D_println(F("I2C devices found on the mirrored orientation"));
+      }
+      // still nothing: leave undecided, so a later call probes both again
+    }
+  }
+}
+
+uint8_t findI2Csensors() {
+  i2cScanner::Scanner &scanner = i2cScanner::shared();
+  i2cBusBegin();
 
   // 0x77 is ambiguous: a BME680 and a BMP280/BME280 both answer there, so both
   // flags are set here on purpose and setupBmx280() resolves it by probing —
@@ -547,8 +597,9 @@ void setupSensors() {
   }
   if (tehybug.sensor.dht) {
     // Power the sensor before probing it, not just before each read.
-    dhtPowerOn();
-    delay(DHT_POWER_UP_MS);
+    if (dhtPowerOn()) {
+      delay(DHT_POWER_UP_MS);
+    }
     setupDht(dht, DHT_PIN);
   }
   else

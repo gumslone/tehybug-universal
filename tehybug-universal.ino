@@ -94,9 +94,10 @@ constexpr unsigned long LIVE_LOOP_IDLE_MS = 150;
 // since the MODE button shares GPIO0 with the I2C SDA line.
 void detectDataLogModule() {
 #if !defined(ARDUINO_ESP8266_GENERIC)
-  Wire.begin(I2C_SDA, I2C_SCL);
+  // i2cBusBegin probes both port orientations (see sensors.h), so a data-log
+  // module attached the mirrored way round is found too.
+  i2cBusBegin();
   i2cScanner::Scanner &scanner = i2cScanner::shared();
-  scanner.scan();
   if (scanner.addressExists(0x50)) {
     tehybug.peripherals.eeprom = true;
   }
