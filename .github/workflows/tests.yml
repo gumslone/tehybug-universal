@@ -3,7 +3,8 @@ name: Tests
 on:
   pull_request:
   push:
-    branches: [main, development]
+    branches: [main, development, restructure]
+  workflow_dispatch:
 
 jobs:
   native-tests:
