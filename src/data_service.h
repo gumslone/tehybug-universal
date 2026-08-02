@@ -143,10 +143,7 @@ void checkScenario(Scenario &s) {
   if (tehybug.sensorData.containsKey(s.data)) {
     val = tehybug.sensorData[s.data];
   }
-  const bool conditionMet = (s.condition == "lt" && val < s.value)
-                            || (s.condition == "gt" && val > s.value)
-                            || (s.condition == "eq" && val == s.value);
-  if (!conditionMet) {
+  if (!mode_logic::scenarioConditionMet(s.condition, val, s.value)) {
     return;
   }
 

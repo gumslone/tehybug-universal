@@ -150,6 +150,23 @@ static void test_expand_placeholders() {
   CHECK_EQ_STR(expandPlaceholders("[%temp%%humi%]", v).c_str(), "[22.648.3]");
 }
 
+static void test_compact_log_line() {
+  CASE("compactLogLine");
+  DynamicJsonDocument doc(512);
+  JsonObject v = doc.to<JsonObject>();
+  CHECK_EQ_STR(compactLogLine(v).c_str(), ""); // nothing measured yet
+  v["temp"] = "22.6";
+  v["humi"] = "48.3";
+  CHECK_EQ_STR(compactLogLine(v).c_str(), "22.6t 48.3h");
+  // field order is the table's, not the insertion order
+  v["qfe"] = "1013.2";
+  CHECK_EQ_STR(compactLogLine(v).c_str(), "22.6t 48.3h 1013.2p");
+  // keys outside the table (the device key, derived values) never leak in
+  v["key"] = "abc";
+  v["hi"] = "23.0";
+  CHECK_EQ_STR(compactLogLine(v).c_str(), "22.6t 48.3h 1013.2p");
+}
+
 int main() {
   std::printf("Running common_functions tests...\n");
   test_int_format();
@@ -161,5 +178,6 @@ int main() {
   test_comfort_state_name();
   test_second_sensor_metadata();
   test_expand_placeholders();
+  test_compact_log_line();
   return SUMMARY();
 }

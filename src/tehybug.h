@@ -275,21 +275,7 @@ class TeHyBug {
         // hundreds of bytes.
         line += replacePlaceholders(serveData.eeprom.message, true);
       } else {
-        static const struct { const char *key; const char *code; } loggedFields[] = {
-          {"temp", "t"},  {"humi", "h"},  {"temp2", "t2"}, {"humi2", "h2"},
-          {"qfe", "p"},   {"alt", "al"},  {"lux", "l"},    {"adc", "x"},
-          {"iaq", "q"},   {"eco2", "c"},  {"bvoc", "v"},   {"air", "a"}
-        };
-        bool first = true;
-        for (const auto & f : loggedFields) {
-          if (sensorData.containsKey(f.key)) {
-            if (!first) {
-              line += " ";
-            }
-            first = false;
-            line += sensorData[f.key].as<String>() + f.code;
-          }
-        }
+        line += compactLogLine(sensorData.as<JsonObject>());
       }
       // A dropped placeholder can leave the separator that preceded it
       // stranded at the end of the line.

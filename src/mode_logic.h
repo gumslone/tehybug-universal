@@ -136,4 +136,16 @@ inline int wakeInterval(const DataServ &s) {
   return freq;
 }
 
+// Whether an automation scenario's condition holds for the current reading.
+// Lifted out of checkScenario() so the operator semantics - including that an
+// unknown operator matches nothing rather than everything - are pinned by
+// host tests instead of implied by a boolean chain at the call site.
+inline bool scenarioConditionMet(const String &condition, float value,
+                                 float threshold) {
+  if (condition == "lt") return value < threshold;
+  if (condition == "gt") return value > threshold;
+  if (condition == "eq") return value == threshold;
+  return false;
+}
+
 } // namespace mode_logic

@@ -194,8 +194,22 @@ static void test_wake_interval() {
   CHECK(wakeInterval(off) == 600);
 }
 
+static void test_scenario_condition() {
+  CASE("scenarioConditionMet");
+  CHECK(scenarioConditionMet("lt", 1.0f, 2.0f));
+  CHECK(!scenarioConditionMet("lt", 2.0f, 2.0f));
+  CHECK(scenarioConditionMet("gt", 3.0f, 2.0f));
+  CHECK(!scenarioConditionMet("gt", 2.0f, 2.0f));
+  CHECK(scenarioConditionMet("eq", 2.0f, 2.0f));
+  CHECK(!scenarioConditionMet("eq", 2.1f, 2.0f));
+  // an unknown operator matches nothing - it must never fire an action
+  CHECK(!scenarioConditionMet("", 1.0f, 2.0f));
+  CHECK(!scenarioConditionMet("ne", 1.0f, 2.0f));
+}
+
 int main() {
   std::printf("Running mode_logic tests...\n");
+  test_scenario_condition();
   test_wake_interval();
   test_current_mode();
   test_sleep_enabled();
