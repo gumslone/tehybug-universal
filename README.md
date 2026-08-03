@@ -42,16 +42,19 @@ The device waits **1 second** after a reset for a MODE press. Scheduled deep-sle
 
 With a DS3231 RTC + I²C EEPROM module attached, TeHyBug can store timestamped readings on the device itself — no server, broker or network required. Configure and read the log on the **Data Log** page of the web interface.
 
-- **One file per day, a full month retained.** A file per day of month is written. The 32 KB EEPROM (FT24C256A) is split into 32 slots of ~1 KB each, so every day of the month gets its own file; when no free slot is left the oldest day file is recycled.
+- **One file per day, a full month retained.** A file per day of month is written. The EEPROM is split into 32 slots, so every day of the month gets its own file; when no free slot is left the oldest day file is recycled. The chip size is detected at boot: current modules carry a 64 KB FT24C512A (~2 KB per day file), earlier ones a 32 KB FT24C256A (~1 KB). The Data Log page shows which was found. **Upgrading a 64 KB module from an older firmware re-lays out the log once and erases what was stored — download anything you want to keep first.**
 - **Log period (month or day).** The default keeps a rolling month (one file per day of month). Switch to **per-hour** logging on the Data Log page for a rolling 24 hours at finer detail (one file per hour of day, reused the next day). Changing the period wipes the log automatically so it starts clean in the new layout.
 - **Pick what to log.** Store the default measured set, or a custom placeholder template (e.g. `%temp% %humi%`) to keep only the fields you care about.
-- **Compact format.** To fit more into the small slots (~1 KB each) the date is omitted — it is implied by the file name — and each value is tagged with a short code, e.g. `07:55 22.6t 48.3h 1013.2p`. This roughly doubles the entries per day file versus a verbose `key=value` line.
+- **Compact format.** To fit more into the small slots the date is omitted — it is implied by the file name — and each value is tagged with a short code, e.g. `07:55 22.6t 48.3h 1013.2p`. This roughly doubles the entries per day file versus a verbose `key=value` line.
 - **Own log interval.** The log frequency is independent of the data-serving intervals; in offline mode it also sets the deep-sleep interval. A day file holds a limited number of entries, so pick an interval that fits a full day — the Data Log page shows a capacity table. When a day file fills up it wraps: it clears and starts again from the top, overwriting that day's earlier entries (so logging never stops; you keep the most recent readings).
 - **Offline mode.** Enabling offline mode logs with WiFi completely off. The web interface is unavailable while offline; to read the data, press RESET then hold MODE until the LED turns blue to re-enter Config mode (press RESET twice if the LED doesn't react — see "Return to Config mode" above).
 
 > Available in the ESP8285 build (TeHyBug universal and Mini) when an RTC + EEPROM module is attached. The slim generic (1MB) build for old / first-generation boards omits the RTC/EEPROM driver entirely.
 
 ## Port B (green) supported sensors:
+
+> Port B shares its pins with the I²C bus. While a DHT or DS18B20 is enabled here, I²C sensors **and the RTC + EEPROM data-log module are not detected** — put the sensor on Port A if you want the data log alongside it. Readings appear as `%temp%` / `%humi%`.
+
 * BME680
 * BME280/BMP280
 * DHT21/DHT22/AM2032 (in dht simulation mode)
@@ -65,6 +68,9 @@ With a DS3231 RTC + I²C EEPROM module attached, TeHyBug can store timestamped r
 <img src="images/tehybug_port_b_pinmapping.png" width="300">
 
 ## Port A (black) supported sensors:
+
+> Port A has its own pin, so it leaves the I²C bus free — the data-log module keeps working alongside. It fits **one** sensor (DHT, DS18B20 *or* ADC). Readings appear as `%temp2%` / `%humi2%`.
+
 * DHT21/DHT22/AM2032 (in dht simulation mode)
 * DS18B20
 * ADC soil moisture sensor
@@ -151,8 +157,14 @@ Demo web configuration page: https://tehybug.com/tehybug/v1/html/demo.html
 - Provide credentials of your WIFI network and save them
 - If your credentials were correct, the TeHyBug WIFI network will disapear
 - TeHyBug will connect to your network and boot in a configuration mode with solid blue LED light
-- open with your browser http://tehybug.local/ and the configuration page should open. (if this didnt work. Find out the TeHyBug IP Addres from your router and open it with yoour browser)
-- Follow the instructions on the configuration page.
+- open with your browser http://tehybug.local/ and the configuration page should open. (if this didnt work. Find out the TeHyBug IP Addres from your router and open it with your browser. First-generation / 1MB boards have no mDNS, so always use the IP there — the device's own page at http://192.168.4.1/ shows it.)
+
+Then, on the web interface:
+
+1. **Sensor Settings** — switch on the sensor(s) you attached (I²C sensors are detected automatically), and check the readings appear on the Dashboard.
+2. **Pick one way to send data** — TeHyBug Cloud, Home Assistant, or your own server on the Data Serving page. The *"Fill from my sensors"* links build the MQTT payload / POST body / GET query from the sensors this device actually reports, in metric or imperial. Save the page.
+3. **Go live — System Settings** — choose a power mode (Deep Sleep for battery), switch **off** "Config Mode Active", keep "Reboot device after saving" ticked, and Save. The device restarts and starts serving; the web interface stops being served, which is expected.
+4. **Getting back in later** — press RESET, then MODE within a second (see "Return to Config mode" above). A device that has nothing configured to serve always starts its setup portal, so it can't lock you out.
 
 ## Factory reset
 To delete all the configs, reset the wifi configuration and erase the on-device data log (the RTC + EEPROM module, if attached).
