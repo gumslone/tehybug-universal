@@ -5,6 +5,10 @@ build on every release (see [`ci/changelog.sh`](ci/changelog.sh)). Firmware
 versions are date-based (`YYMMDDHHMM`); see the
 [releases](https://github.com/gumslone/tehybug-universal/releases) for the tags.
 
+## v2608031837 (2026-08-03)
+
+- Reach the portal when the saved network is gone; sleep without crashing
+
 ## v2608021236 (2026-08-02)
 
 - Serve the full config to the UI; fill links and a cause on the Data Log page
