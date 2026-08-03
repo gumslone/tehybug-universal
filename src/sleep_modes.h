@@ -236,6 +236,14 @@ void startModemSleep(int freq)
 // the radio on that boot resets first — see the guard in setup().
 void startDeepSleep(int freq, RFMode wakeMode = RF_DEFAULT) {
   D_println("Going to deep sleep...");
+  // Drop any soft-AP before sleeping. Decoded from a crash on hardware
+  // (LoadStoreError in umm_free inside ESP.deepSleep): the WiFi-retry path
+  // slept while WiFiManager's AP was still up with a station attached, and
+  // the SDK's teardown corrupted the heap mid-free. WiFiManager leaves AP
+  // remnants even with its portal disabled, so this is unconditional; on
+  // paths with no AP it is a no-op.
+  WiFi.softAPdisconnect(true);
+  delay(20); // let the disassoc/teardown drain before the SDK powers down
   // Last thing before sleeping: the next boot finding this cleared is what
   // certifies it as a timer wake (see the boot mark above).
   clearBootMark();

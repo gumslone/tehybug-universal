@@ -162,6 +162,18 @@ void setup() {
   // fails with "no <SSID> found". setupNetwork() brings the AP up afterwards.
   // Sensors, SSL buffers and MQTT are intentionally set up only *after* the
   // WiFi connect/portal below, to keep the heap free for the scan/portal page.
+  // Force config BEFORE the WiFi decision, not after: a device with nothing
+  // configured to serve used to reach the serving-mode failure branch when its
+  // saved network was gone - deep-sleeping and retrying forever, never
+  // arriving at this check, with no way into the portal to pick a new network.
+  // Deciding here sends it down the config path instead, where WiFiManager's
+  // portal offers the network list.
+  if (mode_logic::mustForceConfig(tehybug.conf.firstStart(),
+                                  tehybug.serveData)) {
+    tehybug.device.configMode = true;
+    D_println(F("Data serving mode not selected or first start"));
+  }
+
   yield();
   setupWifi();
   D_println(wifiSsid);
@@ -170,13 +182,6 @@ void setup() {
 
   // The TLS client (espClient_ssl) is set up lazily on first HTTPS push in
   // getClient(), not here, to keep its buffers off the heap until needed.
-
-  // force config when no data serving mode is selected
-  if (mode_logic::mustForceConfig(tehybug.conf.firstStart(),
-                                  tehybug.serveData)) {
-    tehybug.device.configMode = true;
-    D_println(F("Data serving mode not selected or first start"));
-  }
 
   // From here on the decisions are the plan's (mode_logic::setupPlan, host-
   // tested); setup() only executes them.
