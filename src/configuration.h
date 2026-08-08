@@ -187,12 +187,6 @@ class TeHyBugConfig {
       }
     }
 
-    // The stored file is already the JSON we serve, so hand it back as-is.
-    //
-    // This used to parse it into a 3072-byte DynamicJsonDocument and
-    // re-serialize that into a String, i.e. hold the document, the file buffer
-    // and the output at once — on every websocket connect (sendConfig) and
-    // every GET /api/config, purely to reformat bytes we wrote ourselves.
     // Serves the complete configuration, not the stored file: the file only
     // holds non-default values, and the UI must also see the ones that equal
     // their defaults (see buildConfig). Costs one 3 KB document per config

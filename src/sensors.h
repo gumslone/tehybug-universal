@@ -318,8 +318,11 @@ void read_second_dht() {
 #endif
 
 void read_am2320() {
-  Wire.begin(I2C_SDA, I2C_SCL);
-
+  // Deliberately NO Wire.begin() here: the bus is already up in whichever
+  // orientation i2cBusBegin() locked in, and re-beginning with the configured
+  // pins flipped it back - so an AM2320 found on the mirrored orientation
+  // (the very sensor the mirror probe exists for; its Lua script was the
+  // mirrored one) was detected and then could never be read.
   for (uint8_t attempt = 0; attempt < 10; attempt++) {
     if (am2320.update() == 0) {
       tehybug.addTempHumi("temp", am2320.temperatureC, "humi", am2320.humidity);
@@ -619,7 +622,7 @@ void setupSensors() {
   }
 #if !defined(ARDUINO_ESP8266_GENERIC)
   if (tehybug.sensor.dht_2) {
-    setupDht(dht2, 13);
+    setupDht(dht2, SECOND_ONE_WIRE_BUS); // Port A data pin, shared with 1-Wire
   }
 #endif
   if (tehybug.peripherals.eeprom) {

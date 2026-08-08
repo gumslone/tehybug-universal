@@ -273,9 +273,11 @@ void handleFactoryReset() {
   while (digitalRead(BUTTON_PIN) == LOW && (millis() - releaseStart) < 5000) {
     delay(10);
   }
-  Wire.begin(I2C_SDA, I2C_SCL);
+  // i2cBusBegin probes both port orientations - a data-log module attached
+  // the mirrored way round must not survive a factory reset with its log
+  // intact. (It also scans twice, which sensors like the AM2320 need.)
+  i2cBusBegin();
   i2cScanner::Scanner &scanner = i2cScanner::shared();
-  scanner.scan();
   if (scanner.addressExists(0x50)) {
     tehybug.peripherals.eeprom = true;
     tehybug.eeprom.format();
