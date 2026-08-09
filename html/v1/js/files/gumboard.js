@@ -276,6 +276,8 @@ function RefreshData(input) {
             };
             const label = boardNames[window.deviceBoard] || window.deviceBoard;
             $('#boardName').text(label);
+            $('#boardRow').removeClass('d-none'); // see main.php
+
             // firmware page: name the build to keep to when updating
             if ($('#firmware_board_name').length) {
                 $('#firmware_board_name').text(label);

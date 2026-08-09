@@ -6,6 +6,32 @@
 #include "data_types.h"
 #include "pixel.h"
 
+// Pool for the whole configuration document (stored file, UI dump, load).
+//
+// ArduinoJson drops members silently once the pool is full, so being tight
+// here does not fail loudly — it loses settings. Both the key and the value
+// of every entry written through put() are copied into the pool (they are
+// Arduino Strings, which ArduinoJson duplicates; only string *literals*
+// passed as const char* are stored by pointer), so the keys alone account
+// for the best part of a kilobyte.
+//
+// The sizes below come from measuring a deliberately fully-configured device
+// — long cloud URLs, a "fill from my sensors" MQTT and POST payload, three
+// populated scenarios — in tests/test_config_size.cpp, which fails if the
+// inventory ever outgrows them again:
+//
+//   universal   3694 bytes needed
+//   display     4616 bytes needed (three template lines, clock options and
+//               three alarms on top)
+//
+// The old 3072 was therefore already too small for a heavily configured
+// device, on every board, before the display keys were added at all.
+#if TEHYBUG_DISPLAY
+static constexpr size_t CONFIG_DOC_SIZE = 5632;
+#else
+static constexpr size_t CONFIG_DOC_SIZE = 4608;
+#endif
+
 class TeHyBugConfig {
   public:
 
@@ -29,8 +55,17 @@ class TeHyBugConfig {
         return;
       }
 
-      DynamicJsonDocument json(3072);
+      DynamicJsonDocument json(CONFIG_DOC_SIZE);
       buildConfig(json, false); // only non-defaults: keeps the flash file small
+
+      // Check BEFORE opening the file: "w" truncates it on open, so bailing
+      // out afterwards would already have destroyed the stored settings.
+      // A document that did not fit its pool is missing members, and writing
+      // it would silently drop whatever was cut — keep the last good file.
+      if (json.overflowed()) {
+        D_println(F("Config save aborted: does not fit CONFIG_DOC_SIZE"));
+        return;
+      }
 
       File configFile = SPIFFS.open("/config.json", "w");
       if (!configFile) {
@@ -185,7 +220,7 @@ class TeHyBugConfig {
         if (configFile) {
           D_println(F("opened config file"));
 
-          DynamicJsonDocument json(3072);
+          DynamicJsonDocument json(CONFIG_DOC_SIZE);
           const auto error = deserializeJson(json, configFile);
 
           if (!error) {
@@ -223,8 +258,14 @@ class TeHyBugConfig {
     // their defaults (see buildConfig). Costs one 3 KB document per config
     // page load, paid only in config mode where the heap is at its freest.
     String getConfig() {
-      DynamicJsonDocument json(3072);
+      DynamicJsonDocument json(CONFIG_DOC_SIZE);
       buildConfig(json, true);
+      // Not fatal for the UI the way it is for a save (nothing is written),
+      // but the page would show stale defaults for the missing keys, so say
+      // so rather than let it look like the device forgot them.
+      if (json.overflowed()) {
+        D_println(F("Config dump truncated: does not fit CONFIG_DOC_SIZE"));
+      }
       String out;
       out.reserve(measureJson(json) + 1);
       serializeJson(json, out);

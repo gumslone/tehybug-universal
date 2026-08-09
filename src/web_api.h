@@ -174,7 +174,7 @@ void handleNotFound() {
 }
 
 void handleSetConfig() {
-  DynamicJsonDocument json(3072);
+  DynamicJsonDocument json(CONFIG_DOC_SIZE);
   const auto error = deserializeJson(json, server.arg("plain"));
   server.sendHeader("Connection", "close");
   if (!error) {
@@ -341,12 +341,21 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload,
       }
     case WStype_TEXT: {
         if (((char *)payload)[0] == '{') {
-          // 2048, not 1024: the Display & Alarms page saves ~25 keys (three
-          // template lines, clock options, three alarms) and the whole page
-          // dump no longer fit a 1 KB pool, so the save was silently dropped.
-          // Only alive in config mode, where the heap is at its freest.
-          DynamicJsonDocument json(2048);
-          deserializeJson(json, payload);
+          // Sized like the configuration itself (it was 1 KB): a whole-page
+          // save carries every input on that page, and the Display & Alarms
+          // page alone posts ~25 keys. Only alive in config mode, where the
+          // heap is at its freest.
+          DynamicJsonDocument json(CONFIG_DOC_SIZE);
+          const auto error = deserializeJson(json, payload);
+          // The result used to be ignored, so a payload that did not fit was
+          // applied in part and the rest of the user's edits vanished with no
+          // sign that anything went wrong. Refuse the whole save instead.
+          if (error) {
+            Log(F("WebSocketEvent"),
+                String(F("Ignored a config that could not be parsed: ")) +
+                    error.c_str());
+            break;
+          }
           Log("WebSocketEvent",
               "Incoming Json length: " + String(measureJson(json)));
           if (websocketConnection[num] == "/setConfig") {

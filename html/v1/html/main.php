@@ -229,9 +229,12 @@
                                         <td class="font-weight-bold">Version:</td>
                                         <td id="gumboardVersion">Loading...</td>
                                     </tr>
-                                    <tr>
+                                    <!-- Hidden until the device reports a board. Firmware older
+                                         than this field sends neither key, and the row would sit
+                                         on "Loading..." for ever on every existing device. -->
+                                    <tr id="boardRow" class="d-none">
                                         <td class="font-weight-bold">Board / build:</td>
-                                        <td><span id="boardName">Loading...</span>
+                                        <td><span id="boardName"></span>
                                             <small class="text-muted">(build <span id="fwBuild">&mdash;</span>)</small></td>
                                     </tr>
                                     <tr>
