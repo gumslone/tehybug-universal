@@ -65,7 +65,8 @@ inline String compactLogLine(JsonObject values) {
   static const struct { const char *key; const char *code; } loggedFields[] = {
     {"temp", "t"},  {"humi", "h"},  {"temp2", "t2"}, {"humi2", "h2"},
     {"qfe", "p"},   {"alt", "al"},  {"lux", "l"},    {"adc", "x"},
-    {"iaq", "q"},   {"eco2", "c"},  {"bvoc", "v"},   {"air", "a"}
+    {"iaq", "q"},   {"eco2", "c"},  {"bvoc", "v"},   {"air", "a"},
+    {"tvoc", "tv"}
   };
   String line;
   for (const auto &f : loggedFields) {
@@ -176,6 +177,8 @@ String key2unit(const String & rawKey)
     return "ADC";
   else if (key == "co2" || key == "eco2" || key == "bvoc")
     return "ppm";
+  else if (key == "tvoc")
+    return "ppb";
   else if (key == "cr")
     return "%";
 
@@ -238,6 +241,8 @@ String key2nameBase(const String & key)
     return "CO2";
   else if (key == "bvoc")
     return "breath VOC equivalent";
+  else if (key == "tvoc")
+    return "Total VOC";
   else if (key == "uv")
     return "UV index";
   else if (key == "lux")
@@ -286,7 +291,7 @@ String key2icon(const String & rawKey)
     return "mdi:resistor";
   else if (key == "co2" || key == "eco2")
     return "mdi:molecule-co2";
-  else if (key == "bvoc")
+  else if (key == "bvoc" || key == "tvoc")
     return "mdi:molecule";
   else if (key == "iaq")
     return "mdi:airballoon-outline";

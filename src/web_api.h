@@ -63,6 +63,9 @@ setBugIp();
 String getInfo() {
   DynamicJsonDocument root(1024);
   root["gumboardVersion"] = version;
+  // which board this binary targets ("universal" / "generic" / "display"), so
+  // the web UI can show board-specific pages only where they apply
+  root["board"] = BOARD_NAME;
   root["sketchSize"] = ESP.getSketchSize();
   root["freeSketchSpace"] = ESP.getFreeSketchSpace();
   root["wifiRSSI"] = String(WiFi.RSSI());
@@ -114,14 +117,17 @@ void sendDeviceInfo() {
 }
 
 void sendSensorData() {
-  // "/datalog" included so its template field can offer "fill from my
-  // sensors" - the page needs to know which readings this device produces.
-  sendToWebsocketClients(getSensor(), {"/main", "/settings", "/datalog"});
+  // "/datalog" and "/display_settings" included so their template fields can
+  // offer "fill from my sensors" - those pages need to know which readings
+  // this device produces.
+  sendToWebsocketClients(getSensor(),
+                         {"/main", "/settings", "/datalog", "/display_settings"});
 }
 
 void sendConfig() {
   sendToWebsocketClients(tehybug.conf.getConfig(),
-                         {"/settings", "/setsensor", "/scenarios", "/setsystem", "/datalog"});
+                         {"/settings", "/setsensor", "/scenarios", "/setsystem",
+                          "/datalog", "/display_settings"});
 }
 
 // Sends a log line to the dashboard websocket.
@@ -235,6 +241,23 @@ void handleGetDataLog() {
   server.send(200, "application/json", json);
 }
 
+// GET /api/time -> {"rtc":true,"timeSet":...,"time":"YYYY-MM-DD HH:MM"}
+// The DS3231 clock on its own — /api/datalog also reports the time, but only
+// with the EEPROM module attached; the display board has an RTC regardless.
+void handleGetTime() {
+  server.sendHeader("Access-Control-Allow-Origin", "*");
+  server.sendHeader("Connection", "close");
+  if (!tehybug.peripherals.ds3231) {
+    server.send(200, "application/json", "{\"rtc\":false}");
+    return;
+  }
+  tehybug.time.update();
+  server.send(200, "application/json",
+              "{\"rtc\":true,\"timeSet\":" +
+                  String(tehybug.time.isTimeSet() ? "true" : "false") +
+                  ",\"time\":\"" + tehybug.time.timestamp() + "\"}");
+}
+
 // GET /api/settime?y=2026&mo=6&d=10&wd=4&h=18&mi=45&s=30
 // sets the DS3231 clock (usually from the browser's local time)
 void handleSetTime() {
@@ -313,7 +336,11 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload,
       }
     case WStype_TEXT: {
         if (((char *)payload)[0] == '{') {
-          DynamicJsonDocument json(1024);
+          // 2048, not 1024: the Display & Alarms page saves ~25 keys (three
+          // template lines, clock options, three alarms) and the whole page
+          // dump no longer fit a 1 KB pool, so the save was silently dropped.
+          // Only alive in config mode, where the heap is at its freest.
+          DynamicJsonDocument json(2048);
           deserializeJson(json, payload);
           Log("WebSocketEvent",
               "Incoming Json length: " + String(measureJson(json)));
@@ -337,6 +364,7 @@ void setupWebServer() {
   server.on(F("/api/config"), HTTP_GET, handleGetConfig);
   server.on(F("/api/sensor"), HTTP_GET, handleGetSensor);
   server.on(F("/api/datalog"), HTTP_GET, handleGetDataLog);
+  server.on(F("/api/time"), HTTP_GET, handleGetTime);
   server.on(F("/api/settime"), HTTP_GET, handleSetTime);
   server.on(F("/api/getip"), HTTP_GET, handleGetIp);
   server.on(F("/"), HTTP_GET, handleGetMainPage);

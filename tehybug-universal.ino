@@ -73,6 +73,7 @@ TickerScheduler ticker(6);
 /* Modules (alphabetical — order-independent, see the note at the top) */
 
 #include "src/data_service.h"
+#include "src/display.h"
 #include "src/ha.h"
 #include "src/http_request.h"
 #include "src/mode_button.h"
@@ -85,7 +86,13 @@ TickerScheduler ticker(6);
 
 // Idle pause at the end of each live-mode loop. Keeps the loop from spinning
 // flat out (which costs power) while staying far below any service interval.
+// The display board pauses much less: its UP/DOWN buttons are polled from the
+// loop and must catch a quick tap, and it is mains powered anyway.
+#if TEHYBUG_DISPLAY
+constexpr unsigned long LIVE_LOOP_IDLE_MS = 20;
+#else
 constexpr unsigned long LIVE_LOOP_IDLE_MS = 150;
+#endif
 
 // Probe the RTC + EEPROM module before the offline-mode decision in setup().
 // offlineEnabled() depends on peripherals.eeprom, which is otherwise only set
@@ -128,6 +135,13 @@ void setup() {
   // a held MODE button forces config mode (WiFi on) even from offline mode
   checkModeButton();
 
+#if TEHYBUG_DISPLAY
+  // Bring the OLED up right away (after checkModeButton — GPIO0 doubles as
+  // I2C SDA) so the splash covers the WiFi connect wait.
+  i2cBusBegin();
+  displaySetup();
+#endif
+
   // Why an offline wake that just entered config mode must reboot first is
   // needsRadioRestart's comment (mode_logic.h): the short version is that the
   // radio was left uninitialised by RF_DISABLED and only a reset brings it up.
@@ -146,6 +160,19 @@ void setup() {
     detectDataLogModule();
   }
 
+#if TEHYBUG_DISPLAY
+  // Offline display mode: WiFi stays off, but unlike the battery boards the
+  // device stays awake — the clock keeps drawing and the tickers still drive
+  // the EEPROM log (module attached or not) and the IO scenarios.
+  if (tehybug.inOfflineLiveMode()) {
+    D_println(F("Starting offline display mode"));
+    WiFi.mode(WIFI_OFF);
+    detectDataLogModule();
+    setupSensors();
+    setupServeTickers();
+    return;
+  }
+#else
   // Offline mode: never bring up WiFi. Just set up the sensors; the loop
   // measures, appends to the EEPROM log and deep-sleeps on the log
   // frequency. A MODE-button press above takes the normal path instead.
@@ -155,6 +182,7 @@ void setup() {
     setupSensors();
     return;
   }
+#endif
 
   // Let WiFiManager manage the radio mode: it connects in STA and only brings
   // up AP_STA for the config portal. Forcing WIFI_AP_STA here pins the single
@@ -186,7 +214,8 @@ void setup() {
   // From here on the decisions are the plan's (mode_logic::setupPlan, host-
   // tested); setup() only executes them.
   const mode_logic::SetupPlan plan =
-      mode_logic::setupPlan(tehybug.device, tehybug.serveData);
+      mode_logic::setupPlan(tehybug.device, tehybug.serveData,
+                            TEHYBUG_DISPLAY != 0);
 
   if (plan.webServer) {
     D_println(F("Starting config mode"));
@@ -242,6 +271,12 @@ void setup() {
 }
 
 void loop() {
+#if TEHYBUG_DISPLAY
+  // Buttons every pass, RTC/alarms/redraw at 1 Hz — in every mode: the clock
+  // must keep running in config mode and in offline display mode too.
+  displayTick();
+#endif
+
   // One decision, resolved in mode_logic.h, instead of re-deriving the mode
   // from boolean combinations here.
   switch (tehybug.mode()) {
@@ -282,6 +317,11 @@ void loop() {
     case mode_logic::DeviceMode::Live:
       // served by the tickers below
       break;
+
+    case mode_logic::DeviceMode::OfflineLive:
+      // display board, WiFi off: the tickers below still run the EEPROM log
+      // and IO scenarios; the panel is handled by displayTick() above
+      break;
   }
 
   if (tehybug.tickerStop && tehybug.inConfigMode())
@@ -309,6 +349,8 @@ void loop() {
       mqttClient.loop();
     }
     delay(LIVE_LOOP_IDLE_MS); // reduce power consumption
+  } else if (tehybug.inOfflineLiveMode()) {
+    delay(LIVE_LOOP_IDLE_MS); // no WiFi to tend, just don't spin flat out
   }
   yield();
   tehybug.finalizeLoop();

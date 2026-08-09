@@ -1,0 +1,289 @@
+#pragma once
+// The display board's OLED (SH1106 128x64 over I2C), page cycling buttons and
+// weekday alarms. Compiled only into the `display` build variant; the page
+// content and alarm decisions live in display_logic.h (pure, host-tested),
+// this file executes them against the RTC, the buttons and the U8G2 driver.
+#include "board.h"
+
+#if TEHYBUG_DISPLAY
+
+#include <U8g2lib.h>
+#include "globals.h"
+#include "buzzer.h"
+#include "common_functions.h"
+#include "display_buttons.h"
+#include "display_logic.h"
+#include "i2cscanner.h"
+#include "sensors.h"
+#include "web_api.h" // Log()
+#include "debug.h"
+
+// Page-buffer mode (the _1_ variant): one 128-byte stripe instead of a 1 KB
+// frame buffer, the right trade on a ~40 KB heap that also runs TLS.
+U8G2_SH1106_128X64_NONAME_1_HW_I2C u8g2(U8G2_R0, /* reset= */ U8X8_PIN_NONE);
+
+// Holding UP for 10 s toggles offline mode (WiFi off, display stays on) —
+// the display board's equivalent of the original firmware's WiFi toggle.
+constexpr unsigned long OFFLINE_TOGGLE_HOLD_MS = 10000;
+PollButton upButton(UP_BUTTON_PIN, OFFLINE_TOGGLE_HOLD_MS);
+PollButton downButton(DOWN_BUTTON_PIN);
+
+// How often the panel redraws (and the RTC is read): the clock's colon
+// blinks on this cadence.
+constexpr unsigned long DISPLAY_RENDER_MS = 1000;
+
+// How often the display itself triggers a sensor read when no data service
+// is doing it more often. Floor of the EEPROM log frequency so the display
+// refresh cannot densify the offline log beyond what the user configured.
+constexpr int DISPLAY_SENSOR_REFRESH_S = 30;
+
+byte displayPage = display_logic::PAGE_CLOCK;
+bool alarmFired[Alarms::count] = {false, false, false};
+bool clockColonVisible = true;
+
+const char *const WEEKDAY_NAMES[8] = {"", "Sun", "Mon", "Tue",
+                                      "Wed", "Thu", "Fri", "Sat"};
+
+bool anyAlarmFired() {
+  for (uint8_t i = 0; i < Alarms::count; i++) {
+    if (alarmFired[i]) {
+      return true;
+    }
+  }
+  return false;
+}
+
+void muteAlarms() {
+  for (uint8_t i = 0; i < Alarms::count; i++) {
+    alarmFired[i] = false;
+  }
+  buzzerOff();
+}
+
+/* Page rendering ----------------------------------------------------------- */
+
+void drawAlarmPage(const String &message) {
+  u8g2.firstPage();
+  do {
+    u8g2.setFont(u8g2_font_7x14_tf);
+    u8g2.setCursor(0, 15);
+    u8g2.print(message);
+  } while (u8g2.nextPage());
+}
+
+// Right edge, printed bottom-up in the tiny font: the IP address in online
+// modes, a wifi-off marker otherwise (the original showed "wifi inactive").
+String edgeStatus() {
+  if (tehybug.device.offlineMode) {
+    return String(F("wifi off"));
+  }
+  if (!tehybug.displayConf.showIp) {
+    return String();
+  }
+  return WiFi.localIP().toString();
+}
+
+void drawClockPage() {
+  const String date = String(WEEKDAY_NAMES[tehybug.time.getDay() & 7]) + " " +
+                      String(tehybug.time.getYear()) + "-" +
+                      IntFormat(tehybug.time.getMonth()) + "-" +
+                      IntFormat(tehybug.time.getMonthDay());
+  const String timeText = display_logic::formatClockTime(
+      tehybug.time.getHours(), tehybug.time.getMinutes(),
+      tehybug.displayConf.clock12h);
+  const String amPm = display_logic::formatAmPm(tehybug.time.getHours(),
+                                                tehybug.displayConf.clock12h);
+  const String footer =
+      tehybug.replacePlaceholders(tehybug.displayConf.line1) + "  " +
+      tehybug.replacePlaceholders(tehybug.displayConf.line2);
+  const String edge = edgeStatus();
+
+  u8g2.firstPage();
+  do {
+    u8g2.setFont(u8g2_font_7x14_tf);
+    u8g2.drawUTF8((u8g2.getDisplayWidth() - u8g2.getUTF8Width(date.c_str())) / 2,
+                  15, date.c_str());
+    u8g2.setFont(u8g2_font_freedoomr25_mn);
+    const int timeX =
+        (u8g2.getDisplayWidth() - u8g2.getUTF8Width(timeText.c_str())) / 2;
+    u8g2.drawStr(timeX, 50, timeText.c_str());
+    if (clockColonVisible) {
+      u8g2.drawStr((u8g2.getDisplayWidth() - u8g2.getUTF8Width(":")) / 2, 46,
+                   ":");
+    }
+    if (amPm.length() > 0) {
+      u8g2.setFont(u8g2_font_profont10_tr);
+      u8g2.drawStr(u8g2.getDisplayWidth() - u8g2.getUTF8Width(amPm.c_str()),
+                   30, amPm.c_str());
+    }
+    if (edge.length() > 0) {
+      u8g2.setFont(u8g2_font_micro_tr);
+      u8g2.setFontDirection(3); // bottom-up along the right edge
+      u8g2.drawStr(128, 63, edge.c_str());
+      u8g2.setFontDirection(0);
+    }
+    u8g2.setFont(u8g2_font_5x7_tf);
+    u8g2.setCursor(0, 63);
+    u8g2.print(footer);
+  } while (u8g2.nextPage());
+}
+
+void drawSensorPage() {
+  const String line1 = tehybug.replacePlaceholders(tehybug.displayConf.line1);
+  const String line2 = tehybug.replacePlaceholders(tehybug.displayConf.line2);
+  const String line3 = tehybug.replacePlaceholders(tehybug.displayConf.line3);
+  u8g2.firstPage();
+  do {
+    u8g2.setFont(u8g2_font_7x14_tf);
+    u8g2.setCursor(0, 15);
+    u8g2.print(line1);
+    u8g2.setCursor(0, 33);
+    u8g2.print(line2);
+    u8g2.setCursor(0, 51);
+    u8g2.print(line3);
+  } while (u8g2.nextPage());
+}
+
+/* Buttons, alarms, the 1 Hz tick ------------------------------------------- */
+
+void handleDisplayButtons() {
+  upButton.poll();
+  downButton.poll();
+
+  if (upButton.longPressed()) {
+    // Toggle offline mode and reboot: WiFi and its services are wired up in
+    // setup(), so a clean restart is how the radio state actually changes.
+    // Purple LED as the acknowledgement, like the original firmware.
+    tehybug.device.offlineMode = !tehybug.device.offlineMode;
+    tehybug.conf.saveConfigCallback();
+    tehybug.conf.saveConfig();
+    tehybug.pixel.on(128, 0, 128);
+    delay(1000);
+    ESP.restart();
+    return;
+  }
+
+  const bool up = upButton.clicked();
+  const bool down = downButton.clicked();
+  if (!up && !down) {
+    return;
+  }
+  buzzerClick();
+  if (anyAlarmFired()) {
+    // While the siren sounds, the first press of any button just mutes it.
+    muteAlarms();
+    return;
+  }
+  displayPage = display_logic::nextPage(displayPage, up ? 1 : -1);
+}
+
+void checkAlarms() {
+  const uint8_t weekday = display_logic::isoWeekday(tehybug.time.getDay());
+  for (uint8_t i = 0; i < Alarms::count; i++) {
+    if (display_logic::alarmDue(tehybug.alarms.items[i], weekday,
+                                tehybug.time.getHours(),
+                                tehybug.time.getMinutes(),
+                                tehybug.time.getSeconds())) {
+      alarmFired[i] = true;
+      Log(F("Alarm"), "Alarm " + String(i + 1) + " fired");
+    }
+  }
+  if (anyAlarmFired()) {
+    buzzerAlarmTick();
+  }
+}
+
+// Display-triggered sensor refresh, so the pages show readings even when no
+// data service is scheduled (config mode, offline mode with no log). Rate
+// limited so it cannot densify the EEPROM log beyond its configured
+// frequency (read_sensors() is also the log writer).
+void refreshDisplaySensors() {
+  static unsigned long lastReadMs = 0;
+  int refreshS = DISPLAY_SENSOR_REFRESH_S;
+  if (tehybug.serveData.eeprom.active &&
+      tehybug.serveData.eeprom.frequency > refreshS) {
+    refreshS = tehybug.serveData.eeprom.frequency;
+  }
+  const unsigned long now = millis();
+  if (lastReadMs != 0 && (now - lastReadMs) < (unsigned long)refreshS * 1000) {
+    return;
+  }
+  lastReadMs = now;
+  read_sensors();
+}
+
+// Call from every loop() iteration, in every mode: polls the buttons each
+// pass and does the 1 Hz work (RTC read, alarm check, redraw) on its own
+// schedule.
+void displayTick() {
+  handleDisplayButtons();
+
+  static unsigned long lastRenderMs = 0;
+  const unsigned long now = millis();
+  if (now - lastRenderMs < DISPLAY_RENDER_MS) {
+    return;
+  }
+  lastRenderMs = now;
+
+  tehybug.time.update();
+  checkAlarms();
+  refreshDisplaySensors();
+
+  // Night mode: blank the panel inside the configured window. Alarms still
+  // fire and the buttons still work (mute, page changes) — only the pixels
+  // rest. An active siren overrides the blanking so the message is readable.
+  if (tehybug.displayConf.nightMode && !anyAlarmFired() &&
+      display_logic::inNightWindow(tehybug.displayConf.nightStart,
+                                   tehybug.displayConf.nightEnd,
+                                   tehybug.time.getHours(),
+                                   tehybug.time.getMinutes())) {
+    u8g2.setPowerSave(1);
+    return;
+  }
+  u8g2.setPowerSave(0);
+
+  const String alarmMessage =
+      display_logic::firedAlarmMessage(tehybug.alarms, alarmFired);
+  if (alarmMessage.length() > 0) {
+    drawAlarmPage(alarmMessage);
+  } else if (displayPage == display_logic::PAGE_CLOCK) {
+    drawClockPage();
+    clockColonVisible = !clockColonVisible;
+  } else {
+    drawSensorPage();
+  }
+}
+
+// Bring the panel up and show the boot splash. Call after checkModeButton()
+// (GPIO0 doubles as I2C SDA) and after the I2C bus scan, so the splash can
+// list what was found.
+void displaySetup() {
+  upButton.begin();
+  downButton.begin();
+
+  u8g2.begin();
+  u8g2.enableUTF8Print();
+
+  String addresses;
+  i2cScanner::Scanner &scanner = i2cScanner::shared();
+  for (uint8_t address = 1; address < 127; address++) {
+    if (scanner.addressExists(address)) {
+      if (addresses.length() > 0) {
+        addresses += " ";
+      }
+      addresses += "0x" + String(address, HEX);
+    }
+  }
+
+  u8g2.firstPage();
+  do {
+    u8g2.setFont(u8g2_font_7x14_tf);
+    u8g2.drawStr(0, 20, "TeHyBug starting...");
+    u8g2.setFont(u8g2_font_profont10_tr);
+    u8g2.drawStr(0, 35, wifiSsid);
+    u8g2.drawStr(0, 53, "I2C devices:");
+    u8g2.drawStr(0, 63, addresses.c_str());
+  } while (u8g2.nextPage());
+}
+
+#endif // TEHYBUG_DISPLAY

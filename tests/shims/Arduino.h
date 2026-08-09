@@ -55,6 +55,11 @@ class String {
   void reserve(unsigned int n) { m_s.reserve(n); }
   void clear() { m_s.clear(); }
   char operator[](int i) const { return m_s[(size_t)i]; }
+  // Arduino's charAt returns 0 out of range rather than reading past the end
+  char charAt(unsigned int i) const {
+    return i < m_s.size() ? m_s[(size_t)i] : '\0';
+  }
+  long toInt() const { return atol(m_s.c_str()); }
 
   int indexOf(char c, int from = 0) const {
     size_t p = m_s.find(c, (size_t)from);

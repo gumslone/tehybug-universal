@@ -9,13 +9,15 @@
 class TeHyBugConfig {
   public:
 
-    TeHyBugConfig(Calibration & calibration, Sensor & sensor, Peripherals & peripherals, Device & device, DataServ & serveData, Scenarios & scenarios, TeHyBugPixel & pixel) :
+    TeHyBugConfig(Calibration & calibration, Sensor & sensor, Peripherals & peripherals, Device & device, DataServ & serveData, Scenarios & scenarios, DisplayConf & displayConf, Alarms & alarms, TeHyBugPixel & pixel) :
       m_calibration(calibration),
       m_sensor(sensor),
       m_peripherals(peripherals),
       m_device(device),
       m_serveData(serveData),
       m_scenarios(scenarios),
+      m_displayConf(displayConf),
+      m_alarms(alarms),
       m_pixel(pixel)
     {}
     void saveConfigCallback() {
@@ -63,6 +65,12 @@ class TeHyBugConfig {
       const Scenario scenario{};
 
       json["key"] = m_device.key;
+      // Which board this binary targets — for the UI dump only, never
+      // persisted (it is a build fact, not a setting). The web UI uses it to
+      // show board-specific pages (the Display page) only where they apply.
+      if (full) {
+        json["board"] = BOARD_NAME;
+      }
 
 
       put(json, full, "mqttActive", m_serveData.mqtt.active, serveData.mqtt.active);
@@ -123,6 +131,29 @@ class TeHyBugConfig {
       put(json, full, "rc_active", m_device.remoteControl.active, device.remoteControl.active);
       put(json, full, "rc_url", m_device.remoteControl.url, device.remoteControl.url);
 
+#if TEHYBUG_DISPLAY
+      // Display board only. The key names are the original display
+      // firmware's, so a device upgraded from it keeps its stored pages,
+      // clock options and alarms.
+      const DisplayConf displayConf{};
+      const AlarmConf alarmConf{};
+      put(json, full, "line1", m_displayConf.line1, displayConf.line1);
+      put(json, full, "line2", m_displayConf.line2, displayConf.line2);
+      put(json, full, "line3", m_displayConf.line3, displayConf.line3);
+      put(json, full, "clock_12h", m_displayConf.clock12h, displayConf.clock12h);
+      put(json, full, "clock_show_ip", m_displayConf.showIp, displayConf.showIp);
+      put(json, full, "clock_sleep", m_displayConf.nightMode, displayConf.nightMode);
+      put(json, full, "clock_sleep_start", m_displayConf.nightStart, displayConf.nightStart);
+      put(json, full, "clock_sleep_finish", m_displayConf.nightEnd, displayConf.nightEnd);
+      for (uint8_t i = 0; i < Alarms::count; i++) {
+        const String prefix = "alarm" + String(i + 1);
+        AlarmConf &alarm = m_alarms.items[i];
+        put(json, full, prefix + "Active", alarm.active, alarmConf.active);
+        put(json, full, prefix + "Time", alarm.time, alarmConf.time);
+        put(json, full, prefix + "Message", alarm.message, alarmConf.message);
+        put(json, full, prefix + "Weekdays", alarm.weekdays, alarmConf.weekdays);
+      }
+#endif
     }
 
     // Smallest reporting interval accepted. A read + send pass can hold the
@@ -222,6 +253,8 @@ class TeHyBugConfig {
     Device & m_device;
     DataServ & m_serveData;
     Scenarios & m_scenarios;
+    DisplayConf & m_displayConf;
+    Alarms & m_alarms;
     Peripherals & m_peripherals;
     TeHyBugPixel & m_pixel;
 
@@ -294,6 +327,39 @@ class TeHyBugConfig {
       // saveConfig() writes "key", so it must be read back here too — without
       // this the stored device key was ignored and regenerated on every boot.
       setData(json, "key", m_device.key);
+
+#if TEHYBUG_DISPLAY
+      setData(json, "line1", m_displayConf.line1);
+      setData(json, "line2", m_displayConf.line2);
+      setData(json, "line3", m_displayConf.line3);
+      setData(json, "clock_12h", m_displayConf.clock12h);
+      setData(json, "clock_show_ip", m_displayConf.showIp);
+      setData(json, "clock_sleep", m_displayConf.nightMode);
+      setData(json, "clock_sleep_start", m_displayConf.nightStart);
+      setData(json, "clock_sleep_finish", m_displayConf.nightEnd);
+      for (uint8_t i = 0; i < Alarms::count; i++) {
+        const String prefix = "alarm" + String(i + 1);
+        AlarmConf &alarm = m_alarms.items[i];
+        setData(json, prefix + "Active", alarm.active);
+        setData(json, prefix + "Time", alarm.time);
+        setData(json, prefix + "Message", alarm.message);
+        setData(json, prefix + "Weekdays", alarm.weekdays);
+      }
+      // The original display firmware stored "wifiActive"; its false is this
+      // firmware's offline mode, so an upgraded device that was running
+      // display-only keeps doing that instead of silently joining WiFi.
+      if (json.containsKey("wifiActive") && !json["wifiActive"].as<bool>()) {
+        m_device.offlineMode = true;
+      }
+
+      // A display board is mains powered and its panel must keep drawing:
+      // ignore sleep modes a shared or upgraded config may carry, and drop
+      // the Port B pin sensors — GPIO0/GPIO2 are the OLED's I2C bus here.
+      m_device.sleepMode = false;
+      m_device.lightSleepMode = false;
+      m_sensor.dht = false;
+      m_sensor.ds18b20 = false;
+#endif
     }
 
     template<typename T>

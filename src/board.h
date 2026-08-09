@@ -1,10 +1,38 @@
 #pragma once
 
+// TeHyBug Display Weatherstation (ESP8285 + SH1106 OLED): set by the
+// `display` build variant (-DTEHYBUG_DISPLAY=1); 0 everywhere else so the
+// display modules compile away on the universal and generic builds.
+#ifndef TEHYBUG_DISPLAY
+#define TEHYBUG_DISPLAY 0
+#endif
+
+// Which board this binary was built for, reported in /api/info so the web UI
+// can show board-specific pages (the Display page) only where they apply.
+#if TEHYBUG_DISPLAY
+#define BOARD_NAME "display"
+#elif defined(ARDUINO_ESP8266_GENERIC)
+#define BOARD_NAME "generic"
+#else
+#define BOARD_NAME "universal"
+#endif
+
 // The indicator differs between the generic 1MB build (old / first-gen
 // TeHyBug, esp-01 based) and the ESP8285 build (TeHyBug universal and Mini).
 #if defined(ARDUINO_ESP8266_GENERIC)
 #define PIXEL_ACTIVE 0
 #define SIGNAL_LED_PIN 1
+#endif
+
+#if TEHYBUG_DISPLAY
+// The display board's WS2812B is permanently powered (no supply-gating pin);
+// GPIO4 drives the buzzer instead, so the pixel must never touch it.
+#define PIXEL_POWER_GATED 0
+#define BUZZER_PIN 4
+// Page-cycling buttons left/right of the OLED. The MODE button (GPIO0,
+// BUTTON_PIN below) is the third, on the top.
+#define UP_BUTTON_PIN 5
+#define DOWN_BUTTON_PIN 14
 #endif
 
 // I2C is wired the same way on both boards. The generic build used to declare

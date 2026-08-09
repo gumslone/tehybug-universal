@@ -26,17 +26,21 @@ void addServeTicker(uint8_t slot, int frequencySeconds, std::function<void()> se
 }
 
 void setupServeTickers() {
+  // Display board with WiFi switched off: the network services must not
+  // fire (every send would fail), but the EEPROM log and the scenarios —
+  // which include local IO — still run on their tickers.
+  const bool network = !tehybug.inOfflineLiveMode();
   uint8_t slot = 0;
-  if (tehybug.serveData.get.active) {
+  if (network && tehybug.serveData.get.active) {
     addServeTicker(slot++, tehybug.serveData.get.frequency, httpGet);
   }
-  if (tehybug.serveData.post.active) {
+  if (network && tehybug.serveData.post.active) {
     addServeTicker(slot++, tehybug.serveData.post.frequency, httpPost);
   }
-  if (tehybug.serveData.mqtt.active) {
+  if (network && tehybug.serveData.mqtt.active) {
     addServeTicker(slot++, tehybug.serveData.mqtt.frequency, mqttSendData);
   }
-  if (tehybug.serveData.ha.active) {
+  if (network && tehybug.serveData.ha.active) {
     // HA reports on the MQTT interval
     addServeTicker(slot++, tehybug.serveData.mqtt.frequency, haSendData);
   }
