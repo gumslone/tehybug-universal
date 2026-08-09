@@ -107,6 +107,16 @@
                         </a>
                     </li>
 
+                    <!-- Only shown when the device reports board:"display"
+                         (TeHyBug Display Weatherstation) - see gumboard.js -->
+                    <li class="nav-item display-only d-none">
+                        <a class="nav-link" href="javascript:void(0);"
+                           onclick="ChangeContent(this, 'display_settings', '#right-content');">
+                            <span data-feather="monitor"></span>
+                            Display &amp; Alarms
+                        </a>
+                    </li>
+
                     <li><hr class="dropdown-divider"></li>
                     <li class="nav-item">
                         <small class="text-muted px-3">MAINTENANCE</small>
