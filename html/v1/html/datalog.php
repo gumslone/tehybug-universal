@@ -57,9 +57,10 @@
             <div class="card-body">
                 <div class="form-check form-switch mb-3">
                     <input type="checkbox" class="form-check-input" id="offlineModeActive">
-                    <label class="form-check-label" for="offlineModeActive">Offline mode (no WiFi, EEPROM only)</label>
+                    <label class="form-check-label" for="offlineModeActive">Offline mode (no WiFi)</label>
                 </div>
-                <p class="small">In offline mode the device never connects to WiFi. It wakes on the log frequency, measures, appends one entry to the EEPROM log and deep-sleeps again &mdash; the lowest possible power draw and no network needed.</p>
+                <p class="small display-hidden">In offline mode the device never connects to WiFi. It wakes on the log frequency, measures, appends one entry to the EEPROM log and deep-sleeps again &mdash; the lowest possible power draw and no network needed.</p>
+                <p class="small display-only d-none">On the Display Weatherstation offline mode works differently: the device <strong>stays awake</strong> &mdash; screen, clock and alarms keep running &mdash; it simply never connects to WiFi, and keeps logging if EEPROM logging is on below. You can also toggle it on the device itself by holding the <strong>right button for 10&nbsp;seconds</strong> (the LED turns purple and it restarts).</p>
                 <div class="alert alert-warning small mb-0">
                     <strong><span data-feather="alert-triangle"></span> Reading the log:</strong> the web interface is unavailable while offline. To read the stored data, press and release <strong>RESET</strong> (do <strong>not</strong> hold MODE during reset &mdash; that boots the ESP into flash mode), then within about 1 second press and hold <strong>MODE</strong> until the LED turns <strong>blue</strong> to re-enter config mode (WiFi on), and come back to this page.
                 </div>

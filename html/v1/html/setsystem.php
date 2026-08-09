@@ -9,6 +9,13 @@
         <div class="card h-100">
             <div class="card-header" style="background-color: #34495e; color: white;">System</div>
             <div class="card-body">
+                <div class="alert alert-secondary small display-only d-none" role="alert">
+                    <span data-feather="monitor"></span> The sleep modes below <strong>do not apply to the Display
+                    Weatherstation</strong> — it is mains powered and its screen and clock have to keep running, so the
+                    device ignores them. To run it without WiFi, use offline display mode (hold the right button for
+                    10&nbsp;seconds, or see <a href="javascript:void(0);" onclick="ChangeContent(this, 'display_settings', '#right-content');">Display &amp; Alarms</a>).
+                </div>
+                <div class="display-not-applicable">
                 <div class="form-check form-switch mb-2">
                     <input type="checkbox" class="form-check-input" id="sleepModeActive">
                     <label class="form-check-label" for="sleepModeActive">Deep Sleep (powersaving for battery operations)</label>
@@ -18,6 +25,7 @@
                     <input type="checkbox" class="form-check-input" id="lightSleepModeActive">
                     <label class="form-check-label" for="lightSleepModeActive">Light Sleep (WiFi sleep only)</label>
                     <small class="text-muted d-block">CPU sleeps between readings; WiFi stays connected so the device stays reachable.</small>
+                </div>
                 </div>
                 <div class="form-check form-switch mb-2">
                     <input type="checkbox" class="form-check-input" id="configModeActive" checked>
@@ -37,8 +45,9 @@
             <div class="card-header" style="background-color: #34495e; color: white;">Mode Information</div>
             <div class="card-body">
                 <p><strong>Normal Mode (low frequency light sleep):</strong> WiFi is always on. Best for AC-powered devices requiring constant connectivity (e.g., BME680 air quality monitoring).</p>
-                <p><strong>Light Sleep:</strong> WiFi sleeps between data transmissions. Good for balancing power saving and frequent updates.</p>
-                <p><strong>Deep Sleep:</strong> The device almost completely powers down between transmissions. Ideal for long-term battery operation.</p>
+                <p class="display-hidden"><strong>Light Sleep:</strong> WiFi sleeps between data transmissions. Good for balancing power saving and frequent updates.</p>
+                <p class="display-hidden"><strong>Deep Sleep:</strong> The device almost completely powers down between transmissions. Ideal for long-term battery operation.</p>
+                <p class="display-only d-none"><strong>Offline display mode:</strong> WiFi off, everything else running &mdash; the screen, clock, alarms and (if enabled) the data log carry on. The Display Weatherstation's alternative to the sleep modes.</p>
                 <p><strong>Config Mode:</strong> The device stays active with WiFi on, allowing for configuration. Live data transmission is paused.</p>
             </div>
         </div>

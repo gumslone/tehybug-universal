@@ -259,6 +259,15 @@ function RefreshData(input) {
             window.deviceBoard = val.toString();
             if (window.deviceBoard === 'display') {
                 $('.display-only').removeClass('d-none');
+                // its counterpart: text that is only true for the battery
+                // boards (e.g. "offline mode deep-sleeps")
+                $('.display-hidden').addClass('d-none');
+                // Settings the display build ignores (the sleep modes): grey
+                // them out rather than let someone set one and wonder why
+                // nothing happened. They still submit as false, which is what
+                // the firmware stores anyway.
+                $('.display-not-applicable').css('opacity', 0.5)
+                    .find('input').prop('disabled', true);
             }
             const boardNames = {
                 'universal': 'TeHyBug universal / Mini (esp8285 build)',

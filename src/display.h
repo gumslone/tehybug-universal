@@ -104,7 +104,48 @@ String edgeStatus() {
   return WiFi.localIP().toString();
 }
 
+// Shown instead of the clock when the RTC has never been set — a fresh
+// module, a flat backup battery, or no RTC fitted at all. Rendering the raw
+// registers there put "0-00-00 / 00 00" on the panel forever, which looks
+// like a broken device rather than one waiting to be told the time; the
+// readings still show, so the station stays useful meanwhile.
+void drawClockUnsetPage() {
+  const String footer =
+      tehybug.replacePlaceholders(tehybug.displayConf.line1) + "  " +
+      tehybug.replacePlaceholders(tehybug.displayConf.line2);
+  // Two lines of what to do next, in reading order: the action, then why.
+  // Offline mode has no web interface to point at, so it names the button
+  // that brings WiFi back instead of an address that would not answer.
+  const String action = tehybug.device.offlineMode
+                            ? String(F("hold right btn 10s"))
+                            : String(F("set it in the web app:"));
+  const String detail = tehybug.device.offlineMode
+                            ? String(F("for WiFi, then set it"))
+                            : WiFi.localIP().toString();
+
+  u8g2.firstPage();
+  do {
+    u8g2.setFont(u8g2_font_7x14_tf);
+    const char *title = "Clock not set";
+    u8g2.drawStr((u8g2.getDisplayWidth() - u8g2.getUTF8Width(title)) / 2, 20,
+                 title);
+    u8g2.setFont(u8g2_font_5x7_tf);
+    u8g2.drawStr(
+        (u8g2.getDisplayWidth() - u8g2.getUTF8Width(action.c_str())) / 2, 36,
+        action.c_str());
+    u8g2.drawStr(
+        (u8g2.getDisplayWidth() - u8g2.getUTF8Width(detail.c_str())) / 2, 47,
+        detail.c_str());
+    u8g2.setCursor(0, 63);
+    u8g2.print(footer);
+  } while (u8g2.nextPage());
+}
+
 void drawClockPage() {
+  if (!tehybug.time.isTimeSet()) {
+    drawClockUnsetPage();
+    return;
+  }
   const String date = String(WEEKDAY_NAMES[tehybug.time.getDay() & 7]) + " " +
                       String(tehybug.time.getYear()) + "-" +
                       IntFormat(tehybug.time.getMonth()) + "-" +

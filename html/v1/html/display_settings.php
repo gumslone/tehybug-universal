@@ -211,7 +211,13 @@ for ($i = 1; $i <= 3; $i++) {
         pillsToWeekdays($(this).data('alarm'));
     });
     var lastWeekdayCsv = '';
-    setInterval(function () {
+    var weekdaySync = setInterval(function () {
+        // The page lives in #right-content and is replaced wholesale when you
+        // navigate; stop then, or every visit leaves another timer running.
+        if (!$('#alarm1Weekdays').length) {
+            clearInterval(weekdaySync);
+            return;
+        }
         var csv = $('#alarm1Weekdays').val() + '|' + $('#alarm2Weekdays').val() + '|' + $('#alarm3Weekdays').val();
         if (csv !== lastWeekdayCsv) {
             lastWeekdayCsv = csv;
