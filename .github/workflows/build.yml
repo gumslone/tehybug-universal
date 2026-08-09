@@ -44,6 +44,7 @@ jobs:
         run: |
           ./build.sh all
           ./build.sh esp8285 debug
+          ./build.sh display debug
 
       # Fails if a binary grows past the size at which it can still update
       # itself over the air — the 1MB generic build has very little headroom.
@@ -67,7 +68,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add firmware/tehybug.ino.esp8285.bin firmware/tehybug.ino.esp8285_debug.bin firmware/tehybug.ino.generic.bin CHANGELOG.md
+          git add firmware/tehybug.ino.esp8285.bin firmware/tehybug.ino.esp8285_debug.bin firmware/tehybug.ino.display.bin firmware/tehybug.ino.display_debug.bin firmware/tehybug.ino.generic.bin CHANGELOG.md
           if git diff --cached --quiet; then
             echo "Nothing to commit."
           else
@@ -88,4 +89,6 @@ jobs:
             --notes-file release-notes.md \
             firmware/tehybug.ino.esp8285.bin \
             firmware/tehybug.ino.esp8285_debug.bin \
+            firmware/tehybug.ino.display.bin \
+            firmware/tehybug.ino.display_debug.bin \
             firmware/tehybug.ino.generic.bin

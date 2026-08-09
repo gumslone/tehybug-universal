@@ -6,7 +6,7 @@ set -euo pipefail
 # TOOL=platformio to build the same variant(s) with PlatformIO instead (output
 # stays in PlatformIO's .pio/build/<env>/firmware.bin).
 #
-# Usage: ./build.sh [esp8285|generic|all] [nodebug|debug]
+# Usage: ./build.sh [esp8285|display|generic|all] [nodebug|debug]
 #   variant  board to build for (default: esp8285)
 #   mode     debug enables the sketch's serial debug output (D_print*)
 #            and sets the core debug port to Serial; binaries get a
@@ -63,9 +63,9 @@ if [ "$TOOL" = "platformio" ] || [ "$TOOL" = "pio" ]; then
   PIO="${PIO:-pio}"
   command -v "$PIO" >/dev/null 2>&1 || PIO="python3 -m platformio"
   case "$TARGET" in
-    esp8285|generic) PIO_ENVS=("$TARGET$SUFFIX") ;;
-    all) PIO_ENVS=("esp8285$SUFFIX" "generic$SUFFIX") ;;
-    *) echo "Usage: $0 [esp8285|generic|all] [nodebug|debug]" >&2; exit 1 ;;
+    esp8285|display|generic) PIO_ENVS=("$TARGET$SUFFIX") ;;
+    all) PIO_ENVS=("esp8285$SUFFIX" "display$SUFFIX" "generic$SUFFIX") ;;
+    *) echo "Usage: $0 [esp8285|display|generic|all] [nodebug|debug]" >&2; exit 1 ;;
   esac
   echo "==> Building with PlatformIO: ${PIO_ENVS[*]}"
   pio_args=()
@@ -77,9 +77,11 @@ if [ "$TOOL" = "platformio" ] || [ "$TOOL" = "pio" ]; then
   exit 0
 fi
 
-EXTRA_ARGS=(--build-property "compiler.cpp.extra_flags=$CPP_FLAGS")
-
 ESP8285_FQBN="esp8266:esp8266:esp8285:$ESP8285_OPTS,$DBG_OPT"
+
+# TeHyBug Display Weatherstation: the same ESP8285 module and board options,
+# plus the display feature gate (SH1106 OLED, buzzer, UP/DOWN buttons).
+DISPLAY_FQBN="$ESP8285_FQBN"
 
 # Old / first-generation TeHyBug boards (esp-01 based, generic ESP8266):
 # 1MB flash, so the smallest FS (64KB) leaves ~470KB for OTA updates — the
@@ -90,13 +92,17 @@ GENERIC_FQBN="esp8266:esp8266:generic:eesz=1M64,ip=lm2n,ssl=basic,$DBG_OPT"
 build() {
   local variant="$1" fqbn="$2"
   local build_dir="$SKETCH_DIR/.build/$variant$SUFFIX"
+  local cpp_flags="$CPP_FLAGS"
+  if [ "$variant" = "display" ]; then
+    cpp_flags="$cpp_flags -DTEHYBUG_DISPLAY=1"
+  fi
 
   echo "==> Building $variant ($MODE)"
   arduino-cli compile \
     --fqbn "$fqbn" \
     --libraries "$SKETCH_DIR/libraries" \
     --build-path "$build_dir" \
-    ${EXTRA_ARGS[@]+"${EXTRA_ARGS[@]}"} \
+    --build-property "compiler.cpp.extra_flags=$cpp_flags" \
     "$SKETCH_DIR"
 
   # arduino-cli names the binary after the sketch (tehybug-universal.ino);
@@ -108,13 +114,15 @@ build() {
 
 case "$TARGET" in
   esp8285) build esp8285 "$ESP8285_FQBN" ;;
+  display) build display "$DISPLAY_FQBN" ;;
   generic) build generic "$GENERIC_FQBN" ;;
   all)
     build esp8285 "$ESP8285_FQBN"
+    build display "$DISPLAY_FQBN"
     build generic "$GENERIC_FQBN"
     ;;
   *)
-    echo "Usage: $0 [esp8285|generic|all] [nodebug|debug]" >&2
+    echo "Usage: $0 [esp8285|display|generic|all] [nodebug|debug]" >&2
     exit 1
     ;;
 esac

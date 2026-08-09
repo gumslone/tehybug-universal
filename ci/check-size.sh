@@ -30,6 +30,8 @@ LIMITS=(
   "generic|firmware/tehybug.ino.generic.bin|958448|962560"
   "esp8285|firmware/tehybug.ino.esp8285.bin|1044464|2031616"
   "esp8285_debug|firmware/tehybug.ino.esp8285_debug.bin|1044464|2031616"
+  "display|firmware/tehybug.ino.display.bin|1044464|2031616"
+  "display_debug|firmware/tehybug.ino.display_debug.bin|1044464|2031616"
 )
 
 WARN_PCT=95   # warn when the image is within 5% of its ceiling
