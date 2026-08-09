@@ -20,7 +20,16 @@
 
 // Page-buffer mode (the _1_ variant): one 128-byte stripe instead of a 1 KB
 // frame buffer, the right trade on a ~40 KB heap that also runs TLS.
-U8G2_SH1106_128X64_NONAME_1_HW_I2C u8g2(U8G2_R0, /* reset= */ U8X8_PIN_NONE);
+//
+// The clock/data pins MUST be passed. u8g2.begin() re-runs Wire.begin(), and
+// with the pins left at U8X8_PIN_NONE it calls the no-argument form, which on
+// ESP8266 re-points the bus at the core defaults (GPIO4/5) — taking the OLED,
+// the RTC, the EEPROM and every I2C sensor off the bus that i2cBusBegin() had
+// just brought up on GPIO0/2. Passing them makes its Wire.begin(data, clock)
+// agree with ours instead.
+U8G2_SH1106_128X64_NONAME_1_HW_I2C u8g2(U8G2_R0, /* reset= */ U8X8_PIN_NONE,
+                                        /* clock= */ I2C_SCL,
+                                        /* data= */ I2C_SDA);
 
 // Holding UP for 10 s toggles offline mode (WiFi off, display stays on) —
 // the display board's equivalent of the original firmware's WiFi toggle.
@@ -37,8 +46,20 @@ constexpr unsigned long DISPLAY_RENDER_MS = 1000;
 // refresh cannot densify the offline log beyond what the user configured.
 constexpr int DISPLAY_SENSOR_REFRESH_S = 30;
 
+// The bus clock the sensors are talked to at, restored after every frame.
+//
+// U8g2 calls Wire.setClock() at the start of each of its transfers and the
+// SH1106's descriptor asks for 400 kHz — which then stays set for whatever
+// touches the bus next. Most parts here tolerate that, but the AM2320 is a
+// 100 kHz device, so leaving the bus overclocked 4x makes exactly one
+// supported sensor unreliable. One call per second puts it back.
+constexpr uint32_t SENSOR_BUS_CLOCK_HZ = 100000;
+
 byte displayPage = display_logic::PAGE_CLOCK;
 bool alarmFired[Alarms::count] = {false, false, false};
+// minute-resolution timestamp each alarm last fired at, so one match rings
+// once (see display_logic::alarmDue)
+String alarmLastFired[Alarms::count];
 bool clockColonVisible = true;
 
 const char *const WEEKDAY_NAMES[8] = {"", "Sun", "Mon", "Tue",
@@ -178,12 +199,18 @@ void handleDisplayButtons() {
 }
 
 void checkAlarms() {
+  // An unset clock (fresh DS3231, or none fitted) would sit at a fixed bogus
+  // time and could match an alarm forever.
+  if (!tehybug.time.isTimeSet()) {
+    return;
+  }
   const uint8_t weekday = display_logic::isoWeekday(tehybug.time.getDay());
+  const String stamp = tehybug.time.timestamp();
   for (uint8_t i = 0; i < Alarms::count; i++) {
     if (display_logic::alarmDue(tehybug.alarms.items[i], weekday,
                                 tehybug.time.getHours(),
-                                tehybug.time.getMinutes(),
-                                tehybug.time.getSeconds())) {
+                                tehybug.time.getMinutes(), stamp,
+                                alarmLastFired[i])) {
       alarmFired[i] = true;
       Log(F("Alarm"), "Alarm " + String(i + 1) + " fired");
     }
@@ -194,22 +221,26 @@ void checkAlarms() {
 }
 
 // Display-triggered sensor refresh, so the pages show readings even when no
-// data service is scheduled (config mode, offline mode with no log). Rate
-// limited so it cannot densify the EEPROM log beyond its configured
-// frequency (read_sensors() is also the log writer).
+// data service is scheduled (config mode, offline mode with no log).
+//
+// Gated on lastSensorReadMs — the last read by anyone — so a device already
+// measuring on a serve ticker does not also pay a second blocking read here
+// (a DHT sample alone holds the loop for seconds, which the clock would show
+// as a stutter). Also floored at the log frequency, since read_sensors() is
+// what writes the EEPROM log: a faster display refresh would otherwise
+// densify the log beyond what was configured.
 void refreshDisplaySensors() {
-  static unsigned long lastReadMs = 0;
   int refreshS = DISPLAY_SENSOR_REFRESH_S;
   if (tehybug.serveData.eeprom.active &&
       tehybug.serveData.eeprom.frequency > refreshS) {
     refreshS = tehybug.serveData.eeprom.frequency;
   }
   const unsigned long now = millis();
-  if (lastReadMs != 0 && (now - lastReadMs) < (unsigned long)refreshS * 1000) {
+  if (lastSensorReadMs != 0 &&
+      (now - lastSensorReadMs) < (unsigned long)refreshS * 1000) {
     return;
   }
-  lastReadMs = now;
-  read_sensors();
+  read_sensors(); // updates lastSensorReadMs itself
 }
 
 // Call from every loop() iteration, in every mode: polls the buttons each
@@ -252,6 +283,9 @@ void displayTick() {
   } else {
     drawSensorPage();
   }
+
+  // hand the bus back to the sensors at their clock (see the constant)
+  Wire.setClock(SENSOR_BUS_CLOCK_HZ);
 }
 
 // Bring the panel up and show the boot splash. Call after checkModeButton()

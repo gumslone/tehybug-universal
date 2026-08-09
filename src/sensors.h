@@ -426,6 +426,13 @@ void read_adc() {
 }
 #endif
 
+// millis() of the last completed read_sensors(), whoever asked for it (a
+// serve ticker, the web API, the display). 0 until the first read. The
+// display uses it to top the readings up only when nothing else has, instead
+// of adding a second, redundant blocking read to a device that is already
+// measuring on a ticker.
+unsigned long lastSensorReadMs = 0;
+
 void read_sensors() {
   if (tehybug.sensor.bmx) {
     read_bmx280();
@@ -470,6 +477,7 @@ void read_sensors() {
   // offline data log to EEPROM (no-op without RTC + EEPROM module)
   tehybug.logSensorData();
   tehybug.shouldSensorDataBeGarbageCollected(true);
+  lastSensorReadMs = millis();
 }
 
 // Bring up the I2C bus in whichever line orientation the sensor is actually

@@ -64,31 +64,61 @@ static AlarmConf makeAlarm(const char *time, const char *weekdays) {
   return a;
 }
 
-static void test_alarm_due() {
-  CASE("alarmDue fires on the matching minute, weekday and second 0");
+static void test_alarm_matches() {
+  CASE("alarmMatches: the schedule alone");
   const AlarmConf a = makeAlarm("07:30", "1,0,0,0,0,0,0"); // Monday only
-  CHECK(alarmDue(a, 1, 7, 30, 0));   // Monday 07:30:00
-  CHECK(!alarmDue(a, 1, 7, 30, 1));  // only in second 0, else it re-fires
-  CHECK(!alarmDue(a, 1, 7, 31, 0));  // wrong minute
-  CHECK(!alarmDue(a, 1, 8, 30, 0));  // wrong hour
-  CHECK(!alarmDue(a, 2, 7, 30, 0));  // Tuesday: not scheduled
+  CHECK(alarmMatches(a, 1, 7, 30));
+  CHECK(!alarmMatches(a, 1, 7, 31));  // wrong minute
+  CHECK(!alarmMatches(a, 1, 8, 30));  // wrong hour
+  CHECK(!alarmMatches(a, 2, 7, 30));  // Tuesday: not scheduled
 
-  CASE("alarmDue: Sunday sits at the CSV's last slot");
+  CASE("alarmMatches: Sunday sits at the CSV's last slot");
   const AlarmConf sunday = makeAlarm("09:00", "0,0,0,0,0,0,1");
-  CHECK(alarmDue(sunday, 7, 9, 0, 0));  // ISO 7 = Sunday
-  CHECK(!alarmDue(sunday, 6, 9, 0, 0)); // Saturday
+  CHECK(alarmMatches(sunday, 7, 9, 0));  // ISO 7 = Sunday
+  CHECK(!alarmMatches(sunday, 6, 9, 0)); // Saturday
 
-  CASE("alarmDue: inactive, malformed and out-of-range never fire");
+  CASE("alarmMatches: inactive, malformed and out-of-range never match");
   AlarmConf off = makeAlarm("07:30", "1,1,1,1,1,1,1");
   off.active = false;
-  CHECK(!alarmDue(off, 1, 7, 30, 0));
+  CHECK(!alarmMatches(off, 1, 7, 30));
   const AlarmConf junkTime = makeAlarm("junk", "1,1,1,1,1,1,1");
-  CHECK(!alarmDue(junkTime, 1, 7, 30, 0));
+  CHECK(!alarmMatches(junkTime, 1, 7, 30));
   const AlarmConf empty = makeAlarm("07:30", "");
-  CHECK(!alarmDue(empty, 1, 7, 30, 0));   // no weekday CSV: never
+  CHECK(!alarmMatches(empty, 1, 7, 30));   // no weekday CSV: never
   const AlarmConf all = makeAlarm("07:30", "1,1,1,1,1,1,1");
-  CHECK(!alarmDue(all, 0, 7, 30, 0));     // unknown weekday (isoWeekday 0)
-  CHECK(!alarmDue(all, 8, 7, 30, 0));
+  CHECK(!alarmMatches(all, 0, 7, 30));     // unknown weekday (isoWeekday 0)
+  CHECK(!alarmMatches(all, 8, 7, 30));
+}
+
+static void test_alarm_due() {
+  const AlarmConf a = makeAlarm("07:30", "1,0,0,0,0,0,0"); // Monday only
+
+  CASE("alarmDue fires once per matching minute");
+  String last;
+  CHECK(alarmDue(a, 1, 7, 30, "2026-06-08 07:30", last));
+  CHECK_EQ_STR(last.c_str(), "2026-06-08 07:30"); // stamp advanced
+  // same minute, a later tick: must not ring again
+  CHECK(!alarmDue(a, 1, 7, 30, "2026-06-08 07:30", last));
+  CHECK(!alarmDue(a, 1, 7, 30, "2026-06-08 07:30", last));
+  // the next week's Monday is a different stamp, so it rings again
+  CHECK(alarmDue(a, 1, 7, 30, "2026-06-15 07:30", last));
+
+  CASE("alarmDue does not depend on any single second being observed");
+  // The regression this replaced: the render tick drifts past 1 Hz, so
+  // second 0 of the matching minute can go unseen. Any tick inside the
+  // minute must still fire it.
+  String drifted;
+  CHECK(alarmDue(a, 1, 7, 30, "2026-06-08 07:30", drifted));
+
+  CASE("alarmDue: no stamp (clock never set) never fires");
+  String noClock;
+  CHECK(!alarmDue(a, 1, 7, 30, "", noClock));
+  CHECK_EQ_STR(noClock.c_str(), "");
+
+  CASE("alarmDue: a non-matching schedule leaves the stamp alone");
+  String untouched = "2026-06-01 07:30";
+  CHECK(!alarmDue(a, 2, 7, 30, "2026-06-09 07:30", untouched)); // Tuesday
+  CHECK_EQ_STR(untouched.c_str(), "2026-06-01 07:30");
 }
 
 static void test_night_window() {
@@ -205,6 +235,7 @@ int main() {
   test_next_page();
   test_parse_hhmm();
   test_iso_weekday();
+  test_alarm_matches();
   test_alarm_due();
   test_night_window();
   test_clock_format();

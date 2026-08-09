@@ -56,13 +56,11 @@ inline uint8_t isoWeekday(uint8_t rtcWday) {
   return rtcWday == 1 ? 7 : rtcWday - 1;
 }
 
-// Whether an alarm fires at this moment. `weekday` is ISO: 1=Monday..7=Sunday
-// (the DS3231 driver's wday convention, set from the browser via
-// /api/settime). Fires only in second 0 so one match cannot re-trigger for a
-// whole minute; the caller ticks at 1 Hz, so second 0 is always observed.
-inline bool alarmDue(const AlarmConf &alarm, uint8_t weekday, uint8_t hour,
-                     uint8_t minute, uint8_t second) {
-  if (!alarm.active || second != 0 || weekday < 1 || weekday > 7) {
+// Whether an alarm's schedule matches this moment. `weekday` is ISO:
+// 1=Monday..7=Sunday (mapped from the DS3231's wday by isoWeekday above).
+inline bool alarmMatches(const AlarmConf &alarm, uint8_t weekday, uint8_t hour,
+                         uint8_t minute) {
+  if (!alarm.active || weekday < 1 || weekday > 7) {
     return false;
   }
   uint8_t alarmHour = 0;
@@ -76,6 +74,29 @@ inline bool alarmDue(const AlarmConf &alarm, uint8_t weekday, uint8_t hour,
   // weekdays is "1,0,0,1,0,0,0" Monday..Sunday; flag n sits at index 2n
   const unsigned int idx = (weekday - 1) * 2;
   return idx < alarm.weekdays.length() && alarm.weekdays.charAt(idx) == '1';
+}
+
+// Whether the alarm should fire now, at most once per matching minute.
+// `nowStamp` is the current minute-resolution timestamp and `lastFired` the
+// one this alarm last fired at; on a fire, lastFired is advanced.
+//
+// The dedup is a stamp rather than "only in second 0" (which is what the
+// original firmware effectively did): drawing a frame over I2C takes long
+// enough that the caller's 1 Hz tick drifts, so an individual second is not
+// guaranteed to ever be observed — and an alarm gated on second 0 would
+// silently not go off. Muting an alarm also leaves the stamp set, so it does
+// not immediately re-fire within the same minute.
+inline bool alarmDue(const AlarmConf &alarm, uint8_t weekday, uint8_t hour,
+                     uint8_t minute, const String &nowStamp,
+                     String &lastFired) {
+  if (!alarmMatches(alarm, weekday, hour, minute)) {
+    return false;
+  }
+  if (nowStamp.length() == 0 || nowStamp == lastFired) {
+    return false;
+  }
+  lastFired = nowStamp;
+  return true;
 }
 
 // Whether `now` falls inside the night window [start, end), where a window
