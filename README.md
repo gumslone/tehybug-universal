@@ -286,5 +286,9 @@ Every pull request to `main` is also built by the [build workflow](.github/workf
 (arduino-cli) and the resulting binaries are attached as workflow artifacts. After a merge to
 `main`, that workflow rebuilds all firmware variants, commits the updated binaries back to
 the repository and publishes a [release](https://github.com/gumslone/tehybug-universal/releases)
-with the binaries attached. The release tag (`vYYMMDDHHMM`) matches the firmware version
-reported by the device.
+with the binaries attached. The release tag (`v1.0.0`, `v1.1.0`, ...) matches the
+semantic firmware version the device reports (`FW_VERSION` in
+[`src/fw_version.h`](src/fw_version.h)) — bump it as part of a change to publish a
+release; a merge that leaves it unchanged only refreshes the committed binaries.
+(Releases before v1.0.0 used compile-timestamp tags, `vYYMMDDHHMM`; the device
+still reports that timestamp separately as its exact build id.)

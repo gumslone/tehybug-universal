@@ -63,6 +63,8 @@ setBugIp();
 String getInfo() {
   DynamicJsonDocument root(1024);
   root["gumboardVersion"] = version;
+  // exact build (YYMMDDHHMM): tells two builds of the same version apart
+  root["fwBuild"] = buildTimestamp;
   // which board this binary targets ("universal" / "generic" / "display"), so
   // the web UI can show board-specific pages only where they apply
   root["board"] = BOARD_NAME;
