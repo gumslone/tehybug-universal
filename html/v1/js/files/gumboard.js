@@ -260,6 +260,18 @@ function RefreshData(input) {
             if (window.deviceBoard === 'display') {
                 $('.display-only').removeClass('d-none');
             }
+            const boardNames = {
+                'universal': 'TeHyBug universal / Mini (esp8285 build)',
+                'display': 'Display Weatherstation (display build)',
+                'generic': 'Old / first-generation TeHyBug (generic build)'
+            };
+            const label = boardNames[window.deviceBoard] || window.deviceBoard;
+            $('#boardName').text(label);
+            // firmware page: name the build to keep to when updating
+            if ($('#firmware_board_name').length) {
+                $('#firmware_board_name').text(label);
+                $('#firmware_board_hint').removeClass('d-none');
+            }
             return;
         }
 

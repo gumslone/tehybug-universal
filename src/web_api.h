@@ -114,8 +114,11 @@ void sendDeviceInfo() {
   // connect under that websocket url (see connectionStart in gumboard.js) and
   // display the device key. Without it those pages never received the info
   // message and their key field stayed on "Loading...".
-  sendToWebsocketClients(getInfo(),
-                         {"/main", "/firststart", "/api/info", "/settings"});
+  // "/firmware" included so the Downloads page can name the build this
+  // device actually runs, rather than leaving the choice to guesswork.
+  sendToWebsocketClients(
+      getInfo(),
+      {"/main", "/firststart", "/api/info", "/settings", "/firmware"});
 }
 
 void sendSensorData() {

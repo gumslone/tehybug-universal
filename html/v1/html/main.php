@@ -230,6 +230,11 @@
                                         <td id="gumboardVersion">Loading...</td>
                                     </tr>
                                     <tr>
+                                        <td class="font-weight-bold">Board / build:</td>
+                                        <td><span id="boardName">Loading...</span>
+                                            <small class="text-muted">(build <span id="fwBuild">&mdash;</span>)</small></td>
+                                    </tr>
+                                    <tr>
                                         <td class="font-weight-bold">Sketch Size:</td>
                                         <td id="sketchSize">Loading...</td>
                                     </tr>
