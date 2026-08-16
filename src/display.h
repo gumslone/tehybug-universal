@@ -310,6 +310,12 @@ void displayTick() {
                                    tehybug.time.getHours(),
                                    tehybug.time.getMinutes())) {
     u8g2.setPowerSave(1);
+    // setPowerSave is itself an I2C transfer, so u8g2 has just left the bus at
+    // its own 400 kHz — restore the sensor clock before returning. Without
+    // this, the whole night window ran the bus overclocked (the restore at the
+    // end of this function was never reached), which is precisely what the
+    // 100 kHz AM2320 cannot take.
+    Wire.setClock(SENSOR_BUS_CLOCK_HZ);
     return;
   }
   u8g2.setPowerSave(0);
