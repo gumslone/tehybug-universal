@@ -202,6 +202,12 @@ inline SetupPlan setupPlan(const Device &d, const DataServ &s,
     p.tickers = true;
     return p;
   }
+  // The display board is mains powered and never sleeps, so its web UI stays
+  // up in live mode too: no RESET+MODE dance just to tweak a setting on a
+  // device that is awake anyway (only the setup access point goes away).
+  // Battery boards keep the web server config-only - their live mode exists
+  // to spend as little time awake as possible.
+  p.webServer = alwaysOnDisplay;
   p.mqtt = s.mqtt.active || s.ha.active;
   p.ha = s.ha.active;
   p.remoteControl = d.remoteControl.active;

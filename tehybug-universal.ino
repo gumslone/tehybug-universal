@@ -217,17 +217,20 @@ void setup() {
       mode_logic::setupPlan(tehybug.device, tehybug.serveData,
                             TEHYBUG_DISPLAY != 0);
 
-  if (plan.webServer) {
-    D_println(F("Starting config mode"));
-    setupWebServer();
-  } else {
+  // The soft-AP is a config-mode thing; outside config mode it goes away even
+  // when the web server stays up (the display board serves the UI over the
+  // LAN in live mode too).
+  if (!tehybug.device.configMode) {
     WiFi.softAPdisconnect(true);
-    // Name the mode actually resolved, not "live": a device configured for
-    // deep or light sleep announced "Starting live mode" and then went to
-    // sleep, which is confusing in exactly the logs used to debug sleep.
-    D_print(F("Starting "));
-    D_print(tehybug.modeName());
-    D_println(F(" mode"));
+  }
+  // Name the mode actually resolved, not "live": a device configured for
+  // deep or light sleep announced "Starting live mode" and then went to
+  // sleep, which is confusing in exactly the logs used to debug sleep.
+  D_print(F("Starting "));
+  D_print(tehybug.modeName());
+  D_println(F(" mode"));
+  if (plan.webServer) {
+    setupWebServer();
   }
 
   // setup mqtt / homeassistant
@@ -315,7 +318,15 @@ void loop() {
       break;
 
     case mode_logic::DeviceMode::Live:
-      // served by the tickers below
+#if TEHYBUG_DISPLAY
+      // The display board's web UI stays up in live mode (see setupPlan), so
+      // its plumbing has to be serviced here just like in config mode.
+      MDNS.update();
+      server.handleClient();
+      yield();
+      webSocket.loop();
+#endif
+      // network sends are served by the tickers below
       break;
 
     case mode_logic::DeviceMode::OfflineLive:

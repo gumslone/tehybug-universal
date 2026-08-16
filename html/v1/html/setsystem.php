@@ -31,7 +31,7 @@
                     <input type="checkbox" class="form-check-input" id="configModeActive" checked>
                     <label class="form-check-label" for="configModeActive">Config Mode Active (disable config mode to activate live mode)</label>
                     <small class="text-muted d-block display-hidden">This is the go-live switch: turn it off and Save (with Reboot ticked) and the device starts serving data. This web interface then goes away — to get back, press RESET then MODE within a second (RESET twice if the LED stays dark); blue LED = config mode.</small>
-                    <small class="text-muted d-block display-only d-none">On the Display Weatherstation the <strong>screen, clock and alarms run in every mode</strong> — this switch only controls data sending. Turn it off and Save (with Reboot ticked) to start sending to MQTT / HTTP / Home Assistant; this web interface then goes away while the clock keeps showing. To configure again: press RESET, then MODE within a second.</small>
+                    <small class="text-muted d-block display-only d-none">On the Display Weatherstation the <strong>screen, clock, alarms and this web interface keep running in every mode</strong> — this switch only controls data sending. Turn it off and Save (with Reboot ticked) to start sending to MQTT / HTTP / Home Assistant. Only the TEHYBUG setup access point goes away; reach this page at the device's normal IP address any time.</small>
                 </div>
                 <div class="form-check form-switch">
                     <input type="checkbox" class="form-check-input" id="reboot">
