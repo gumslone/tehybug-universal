@@ -174,7 +174,7 @@ Replace /dev/cu.usbserial-1410 with your usb2serial port.
   
 <img src="images/webgui.png" width="800">
 
-Demo web configuration page: https://tehybug.com/tehybug/v1/html/demo.html
+Demo of the web interface (a simulated device, nothing to flash): https://tehybug.com/tehybug/v2/demo.html — add `?board=display` for the Display Weatherstation pages.
 
 ## Configuration first steps
 - Connect an external sensor to the board 3,5mm audio jack connector.
@@ -191,9 +191,9 @@ Demo web configuration page: https://tehybug.com/tehybug/v1/html/demo.html
 
 Then, on the web interface:
 
-1. **Sensor Settings** — switch on the sensor(s) you attached (I²C sensors are detected automatically), and check the readings appear on the Dashboard.
-2. **Pick one way to send data** — TeHyBug Cloud, Home Assistant, or your own server on the Data Serving page. The *"Fill from my sensors"* links build the MQTT payload / POST body / GET query from the sensors this device actually reports, in metric or imperial. Save the page.
-3. **Go live — System Settings** — choose a power mode (Deep Sleep for battery), switch **off** "Config Mode Active", keep "Reboot device after saving" ticked, and Save. The device restarts and starts serving; the web interface stops being served, which is expected.
+1. **Sensors** — switch on the sensor(s) you attached (I²C sensors are detected automatically), and check the readings appear on the Dashboard.
+2. **Send data** — TeHyBug Cloud, Home Assistant, MQTT, or your own server by HTTP, all on one page. The *"Fill from my sensors"* links build the MQTT payload / POST body / GET query from the sensors this device actually reports, in °C or °F. Save.
+3. **Go live** — the button on the Dashboard (or on *Power & go live*): pick the power mode (Deep sleep for battery) and confirm. The device restarts and starts sending; on battery boards the web interface stops being served, which is expected. The Dashboard's set-up checklist shows which of the three steps are done.
 4. **Getting back in later** — press RESET, then MODE within a second (see "Return to Config mode" above). A device that has nothing configured to serve always starts its setup portal, so it can't lock you out.
 
 ## Factory reset
