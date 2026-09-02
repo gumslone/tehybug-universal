@@ -18,19 +18,29 @@ String websocketConnection[MAX_WEBSOCKET_CLIENTS];
 
 const char mainPage[] PROGMEM = R"=====(
 <!doctype html>
-<html>
+<html lang="en">
 <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-    <title>TeHyBug</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#158f68">
+<title>TeHyBug</title>
+<style>
+body{margin:0;font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:#eef1f4;color:#182029}
+#page{max-width:520px;margin:0 auto;padding:24px 16px}
+.hello{background:#fff;border:1px solid #dde3e9;border-radius:14px;padding:20px}
+.hello h1{font-size:1.3rem;margin:0 0 8px;color:#158f68}
+.hello code{background:#f4f6f8;padding:2px 6px;border-radius:6px}
+@media(prefers-color-scheme:dark){body{background:#0d1218;color:#e7ecf1}.hello{background:#161c23;border-color:#28323c}.hello code{background:#1d252e}}
+</style>
 </head>
 <body>
 <div id="page">
-<h3>TeHyBug</h3>
-<b>On your own network this device is at: <span id="ip">tehybug.local</span></b>
-<br><br>Loading the full interface...
-<br>If it does not load, you are probably still on the TeHyBug access point,
-which has no internet. Rejoin your home WiFi and open the address above.
+<div class="hello">
+<h1>TeHyBug</h1>
+<p>On your own network this device is at <b><span id="ip">tehybug.local</span></b>.</p>
+<p>Loading the full interface&hellip;</p>
+<p>If it does not appear, you are probably still on the TeHyBug access point, which has no internet. Rejoin your home WiFi and open the address above.</p>
+</div>
 </div>
 <script>
 // Fill in the device address from the device itself. This is the only part of
@@ -41,7 +51,7 @@ function setBugIp() {
   xhr.open('GET', '/api/getip');
   xhr.onload = function() {
     var el = document.getElementById("ip");
-    if (xhr.status == 200 && el) { el.innerHTML = xhr.responseText; }
+    if (xhr.status == 200 && el) { el.textContent = xhr.responseText; }
   };
   xhr.send();
 }
@@ -52,8 +62,8 @@ setBugIp();
      blocking: a stylesheet in <head> blocks painting and a plain <script src>
      there blocks parsing, so on the access point (no internet) the browser
      stalled before it drew anything at all and the page came up empty. -->
-<link rel="stylesheet" href="https://tehybug.com/tehybug/v1/css/style.php" media="print" onload="this.media='all'">
-<script src="https://tehybug.com/tehybug/v1/js/javascript.php" defer></script>
+<link rel="stylesheet" href="https://tehybug.com/tehybug/v2/css/style.php" media="print" onload="this.media='all'">
+<script src="https://tehybug.com/tehybug/v2/js/javascript.php" defer></script>
 </body>
 </html>
 )=====";
@@ -61,7 +71,7 @@ setBugIp();
 /* Device info / sensor JSON */
 
 String getInfo() {
-  DynamicJsonDocument root(1024);
+  DynamicJsonDocument root(1280);
   root["gumboardVersion"] = version;
   // exact build (YYMMDDHHMM): tells two builds of the same version apart
   root["fwBuild"] = buildTimestamp;
@@ -80,6 +90,19 @@ String getInfo() {
   root["sleepModeActive"] = tehybug.sleepEnabled();
   root["deepSleepMax"] = (int)(ESP.deepSleepMax() / 1000000);
   root["key"] = tehybug.device.key;
+  root["uptimeS"] = millis() / 1000;
+  // What the start-up I2C scan found, so the UI can say which sensors and
+  // modules are attached instead of leaving that to be inferred from which
+  // readings happen to arrive.
+  JsonObject detected = root.createNestedObject("detected");
+  detected["bmx"] = tehybug.sensor.bmx;
+  detected["bme680"] = tehybug.sensor.bme680;
+  detected["aht20"] = tehybug.sensor.aht20;
+  detected["am2320"] = tehybug.sensor.am2320;
+  detected["max44009"] = tehybug.sensor.max44009;
+  detected["sgp30"] = tehybug.sensor.sgp30;
+  detected["ds3231"] = tehybug.peripherals.ds3231;
+  detected["eeprom"] = tehybug.peripherals.eeprom;
   String json;
   serializeJson(root, json);
   return json;
@@ -177,14 +200,28 @@ void handleSetConfig() {
   DynamicJsonDocument json(CONFIG_DOC_SIZE);
   const auto error = deserializeJson(json, server.arg("plain"));
   server.sendHeader("Connection", "close");
-  if (!error) {
-    Log(("SetConfig"), ("Incoming Json length: " + String(measureJson(json))));
-    // extract the data
-    JsonObject object = json.as<JsonObject>();
-    tehybug.conf.setConfig(object);
-    server.send(200, "application/json", "{\"response\":\"OK\"}");
-  } else {
+  if (error) {
     server.send(406, "application/json", "{\"response\":\"Not Acceptable\"}");
+    return;
+  }
+  Log(F("SetConfig"), "Incoming Json length: " + String(measureJson(json)));
+  JsonObject object = json.as<JsonObject>();
+  // Answer before restarting. setConfig() restarts the chip itself when the
+  // save carries reboot:true, and that used to happen before this handler
+  // ever sent its response - so the browser saw the connection drop on every
+  // successful save and could not tell it from a failed one. Take the flag
+  // out, apply the rest, confirm, then restart.
+  const bool reboot = object["reboot"] | false;
+  object.remove("reboot");
+  tehybug.conf.setConfig(object);
+  server.send(200, "application/json",
+              reboot ? "{\"response\":\"OK\",\"reboot\":true}"
+                     : "{\"response\":\"OK\"}");
+  if (reboot) {
+    server.client().stop(); // the response is out and the socket closed cleanly
+    tehybug.pixel.off();
+    delay(200);
+    ESP.restart();
   }
 }
 
