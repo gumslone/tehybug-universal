@@ -9,13 +9,18 @@
  * version parameter, so a fixed max-age kept serving stale code for its
  * whole lifetime after every deploy. no-cache + ETag makes each load a
  * cheap 304 until something actually changes.
+ *
+ * Plain PHP 5 syntax on purpose: the web server runs an older PHP than
+ * the command line does (type declarations made it die with a parse error).
  */
-function serveBundle(string $kind, string $contentType, string $separator): void
+function serveBundle($kind, $contentType, $separator)
 {
     $manifest = json_decode((string)file_get_contents(__DIR__ . '/../manifest.json'), true);
-    $files = [];
-    foreach ($manifest[$kind] ?? [] as $relative) {
-        $files[] = __DIR__ . '/../' . $kind . '/' . $relative;
+    $files = array();
+    if (isset($manifest[$kind]) && is_array($manifest[$kind])) {
+        foreach ($manifest[$kind] as $relative) {
+            $files[] = __DIR__ . '/../' . $kind . '/' . $relative;
+        }
     }
 
     $etagSource = '';
@@ -32,7 +37,7 @@ function serveBundle(string $kind, string $contentType, string $separator): void
     header('Access-Control-Allow-Origin: *');
 
     if (isset($_SERVER['HTTP_IF_NONE_MATCH']) && trim($_SERVER['HTTP_IF_NONE_MATCH']) === $etag) {
-        http_response_code(304);
+        header('HTTP/1.1 304 Not Modified');
         exit;
     }
 
