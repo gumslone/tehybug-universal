@@ -11,11 +11,25 @@
   ];
   const CONDITIONS = [{ value: 'gt', label: 'is above' }, { value: 'lt', label: 'is below' }, { value: 'eq', label: 'equals' }];
 
-  function dataOptions() {
-    // whatever this device measures, with the two classics always present
+  // whatever this device measures, the two classics, and whatever the scenario
+  // already refers to — a stored key must never be swapped for the first
+  // option just because its sensor has not reported yet
+  function dataOptions(stored) {
     const keys = T.Readings.known().filter(k => !/^cs2?$/.test(k));
     ['temp', 'humi'].forEach(k => { if (keys.indexOf(k) < 0) keys.push(k); });
+    if (stored && keys.indexOf(stored) < 0) keys.push(stored);
     return keys.map(k => ({ value: k, label: T.Readings.name(k) + (T.Readings.unit(k) ? ' (' + T.Readings.unit(k) + ')' : '') }));
+  }
+  // readings arrived after the page was drawn: grow the lists in place
+  function refreshDataOptions() {
+    for (let n = 1; n <= COUNT; n++) {
+      const sel = document.getElementById('sc' + n + '_data');
+      if (!sel || document.activeElement === sel) continue;
+      const current = sel.value;
+      const opts = dataOptions(current);
+      if (opts.length === sel.options.length) continue;
+      T.render(sel, html`${opts.map(o => html`<option value="${o.value}" ${o.value === current ? 'selected' : ''}>${o.label}</option>`)}`);
+    }
   }
 
   function scenarioCard(n, c) {
@@ -25,10 +39,10 @@
     return UI.card({ title: 'Scenario ' + n, icon: 'layers', body: html`
       ${UI.toggle({ id: p + 'active', label: 'Enabled', checked: !!c[p + 'active'] })}
       <div class="fields-inline mt">
-        ${UI.select({ id: p + 'data', label: 'When', options: dataOptions(), value: c[p + 'data'] || 'temp' })}
-        ${UI.select({ id: p + 'condition', label: '', options: CONDITIONS, value: c[p + 'condition'] || 'gt' })}
+        ${UI.select({ id: p + 'data', label: 'When', options: dataOptions(c[p + 'data']), value: c[p + 'data'] || 'temp' })}
+        ${UI.select({ id: p + 'condition', label: 'Condition', options: CONDITIONS, value: c[p + 'condition'] || 'gt' })}
       </div>
-      ${UI.field({ id: p + 'value', label: 'Value', type: 'number', value: c[p + 'value'] == null ? '' : c[p + 'value'], attrs: 'step="any" inputmode="decimal"', placeholder: '25' })}
+      ${UI.field({ id: p + 'value', label: 'Value', type: 'number', value: c[p + 'value'] == null ? '' : c[p + 'value'], attrs: 'step="any"', placeholder: '25' })}
       ${UI.select({ id: p + 'type', label: 'Then', options: TYPES, value: type })}
       <div data-http="${n}" ${isHttp ? '' : 'hidden'}>
         ${UI.field({ id: p + 'url', label: 'URL', type: 'url', value: c[p + 'url'], placeholder: 'https://maker.ifttt.com/trigger/high_temp/with/key/…', attrs: 'inputmode="url" autocomplete="off"' })}
@@ -54,6 +68,7 @@
             <li>Scenarios are checked while the device is live and sending. HTTP actions need the network; on the Display Weatherstation the pin actions keep working in offline mode too.</li>
           </ul>` })}`;
     },
+    on: { sensors() { refreshDataOptions(); } },
     mount(root) {
       root.addEventListener('change', e => {
         const m = /^sc(\d)_type$/.exec(e.target.id || '');

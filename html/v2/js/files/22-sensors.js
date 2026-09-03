@@ -65,9 +65,9 @@
           <p class="hint">Offsets added to the readings. Compare with a reference — a good thermometer, a salt test for humidity (75 %RH over saturated NaCl), the local pressure at your altitude — and enter the difference.</p>
           ${UI.toggle({ id: 'calibrationActive', label: 'Apply the offsets', checked: !!c.calibrationActive })}
           <div class="grid-3 mt">
-            ${UI.field({ id: 'calibrationTemp', label: 'Temperature', labelHint: '°C', type: 'number', value: c.calibrationTemp == null ? 0 : c.calibrationTemp, attrs: 'step="0.1" inputmode="decimal"', hint: 'e.g. 1.5 if the sensor reads 22 when it is 23.5' })}
-            ${UI.field({ id: 'calibrationHumi', label: 'Humidity', labelHint: '%RH', type: 'number', value: c.calibrationHumi == null ? 0 : c.calibrationHumi, attrs: 'step="0.1" inputmode="decimal"' })}
-            ${UI.field({ id: 'calibrationQfe', label: 'Pressure', labelHint: 'hPa', type: 'number', value: c.calibrationQfe == null ? 0 : c.calibrationQfe, attrs: 'step="0.1" inputmode="decimal"', hint: 'Station pressure (QFE), not sea-level (QNH)' })}
+            ${UI.field({ id: 'calibrationTemp', label: 'Temperature', labelHint: '°C', type: 'number', value: c.calibrationTemp == null ? 0 : c.calibrationTemp, attrs: 'step="0.1"', hint: 'e.g. 1.5 if the sensor reads 22 when it is 23.5, or -1.5 the other way round' })}
+            ${UI.field({ id: 'calibrationHumi', label: 'Humidity', labelHint: '%RH', type: 'number', value: c.calibrationHumi == null ? 0 : c.calibrationHumi, attrs: 'step="0.1"' })}
+            ${UI.field({ id: 'calibrationQfe', label: 'Pressure', labelHint: 'hPa', type: 'number', value: c.calibrationQfe == null ? 0 : c.calibrationQfe, attrs: 'step="0.1"', hint: 'Station pressure (QFE), not sea-level (QNH)' })}
           </div>` })}`;
     },
     collect() {

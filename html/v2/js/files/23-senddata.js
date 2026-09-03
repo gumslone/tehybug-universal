@@ -13,7 +13,14 @@
   const clampInterval = v => { const m = maxInterval(); return Math.max(10, m ? Math.min(m, v) : v); };
   // https needs the TLS client, which the 1 MB build for first-generation boards leaves out
   const checkScheme = (url, fieldId) => { if (T.isGeneric() && /^https:/i.test(url)) throw T.fail('First-generation boards have no TLS client — use an http:// address', fieldId); };
-  const cloudPreview = () => T.Suggest.have() ? T.Suggest.cloudUrl(T.units()) : cloudFallback();
+  // The cloud always gets metric values (tehybug.com charts °C), whatever the
+  // °C/°F switch shows; and until this session has seen readings, a stored
+  // cloud URL is kept rather than replaced by the two-value fallback.
+  const cloudPreview = () => {
+    if (T.Suggest.have()) return T.Suggest.cloudUrl('metric');
+    const stored = T.State.config.httpGetURL;
+    return T.isCloudUrl(stored) ? stored : cloudFallback();
+  };
 
   function cloudCard(c) {
     const on = !!c.httpGetActive && T.isCloudUrl(c.httpGetURL);
@@ -24,7 +31,7 @@
       <div id="cloud-fields" ${on ? '' : 'hidden'}>
         <div class="field"><label>Your device key</label><div class="row"><code>${key || '…'}</code>${key ? html`<button type="button" class="btn btn-sm" data-copy="${key}">${T.icon('copy')} Copy</button>` : ''}</div><div class="hint">Add the device to your tehybug.com account with this key.</div></div>
         ${UI.field({ id: 'cloudFreq', label: 'Send every', labelHint: 'seconds', type: 'number', value: on && c.httpGetFrequency ? c.httpGetFrequency : 900, attrs: 'min="60" inputmode="numeric"', hint: '900 s (15 min) suits a battery device; the cloud keeps the history either way. ' + intervalHint() })}
-        <div class="hint">The device will request <code id="cloud-url">${cloudPreview()}</code></div>
+        <div class="hint">The device will request <code id="cloud-url">${cloudPreview()}</code> — always in °C, whatever the °C/°F switch shows.</div>
       </div>` });
   }
 
@@ -136,7 +143,7 @@
     },
     on: {
       sensors() { T.render($('#ph-list'), UI.placeholderList()); const p = $('#cloud-url'); if (p) p.textContent = cloudPreview(); },
-      units() { T.render($('#ph-list'), UI.placeholderList()); const p = $('#cloud-url'); if (p) p.textContent = cloudPreview(); },
+      units() { T.render($('#ph-list'), UI.placeholderList()); },
       info() { if (!T.Shell.dirty) T.Shell.rerender(); }
     },
     collect() {

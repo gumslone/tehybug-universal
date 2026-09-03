@@ -84,7 +84,9 @@
       confirm: async data => {
         const c = T.State.config;
         const goingOffline = data.offlineModeActive && !c.offlineModeActive;
-        const layoutChange = c.eepromLogActive && data.eepromLogHourly !== !!c.eepromLogHourly;
+        // the firmware re-lays out (erases) the log on a layout flip whether or
+        // not logging is on, so warn unless no module was found at all
+        const layoutChange = data.eepromLogHourly !== !!c.eepromLogHourly && !(lastLog && !lastLog.error && !lastLog.active);
         if (!goingOffline && !layoutChange) return true;
         return T.Shell.confirm({
           title: goingOffline ? 'Switch to offline mode?' : 'Change the log layout?',

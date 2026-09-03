@@ -276,18 +276,25 @@
     // from before this UI restarted before answering, and the save most
     // likely went through.
     async saveConfig(obj) {
+      let r;
       try {
-        const r = await timeoutFetch('/api/config', {
+        r = await timeoutFetch('/api/config', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(obj)
         }, 12000);
-        if (!r.ok) throw new Error(r.status === 406 ? 'the device could not parse the settings' : 'HTTP ' + r.status);
-        return { ok: true };
       } catch (e) {
+        // only a dropped connection can mean "restarted before answering";
+        // an HTTP error status below is a real failure and stays one
         if (obj.reboot) return { ok: true, unconfirmed: true };
         throw e;
       }
+      if (!r.ok) {
+        throw new Error(r.status === 406 ? 'the device could not parse the settings'
+          : r.status === 500 ? 'the device could not write the settings to its flash memory'
+          : 'HTTP ' + r.status);
+      }
+      return { ok: true };
     },
     // OTA: the same multipart POST the firmware's own /update form makes,
     // with upload progress. The updater answers 200 with either
@@ -474,11 +481,11 @@
   // A page: { id, title, nav: {group, icon, order}, boards?, save?, render(),
   //           mount?(root), unmount?(), collect?(), on?: {event: fn} }
   const pages = [];
-  const byId = {};
+  const byId = Object.create(null); // no prototype: "#/constructor" must not find one
   T.definePage = def => { pages.push(def); byId[def.id] = def; return def; };
   T.Pages = {
     all: () => pages.slice(),
-    get: id => byId[id],
+    get: id => (Object.prototype.hasOwnProperty.call(byId, id) ? byId[id] : undefined),
     visible: () => pages.filter(p => !p.boards || p.boards.indexOf(T.board()) >= 0)
   };
 })();

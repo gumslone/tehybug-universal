@@ -124,7 +124,7 @@
         <span class="save-status" id="save-status"></span>
         <button type="button" class="btn btn-primary" id="save-btn">${T.icon('save')}<span id="save-label">Save</span></button>
       </div>
-      <div class="toasts" id="toasts"></div>
+      <div class="toasts" id="toasts" role="status" aria-live="polite"></div>
       <div id="dialogs"></div>
     </div>`;
   }
@@ -148,8 +148,38 @@
       <div class="nav-foot hint">Web UI ${T.UI_VERSION}</div>`);
   };
   function setActiveNav(id) { $$('#nav a[data-page]').forEach(a => a.classList.toggle('active', a.getAttribute('data-page') === id)); }
-  function openDrawer() { $('#nav').classList.add('open'); $('#scrim').classList.add('open'); }
-  function closeDrawer() { $('#nav').classList.remove('open'); $('#scrim').classList.remove('open'); }
+  // Scroll lock for sheets and the drawer. iOS Safari ignores overflow:hidden
+  // on the document, so the body is pinned at its current offset instead.
+  let lockCount = 0, lockedY = 0;
+  function lockScroll() {
+    if (lockCount++ > 0) return;
+    lockedY = window.scrollY || 0;
+    document.body.classList.add('locked');
+    document.body.style.top = -lockedY + 'px';
+  }
+  function unlockScroll() {
+    if (lockCount === 0) return;
+    if (--lockCount > 0) return;
+    document.body.classList.remove('locked');
+    document.body.style.top = '';
+    window.scrollTo(0, lockedY);
+  }
+  function openDrawer() {
+    const nav = $('#nav');
+    if (nav.classList.contains('open')) return;
+    nav.classList.add('open');
+    $('#scrim').classList.add('open');
+    lockScroll();
+    const first = $('#nav a[data-page]');
+    if (first) first.focus();
+  }
+  function closeDrawer() {
+    const nav = $('#nav');
+    if (!nav.classList.contains('open')) return;
+    nav.classList.remove('open');
+    $('#scrim').classList.remove('open');
+    unlockScroll();
+  }
 
   function updatePill() {
     const pill = $('#conn-pill');
@@ -173,6 +203,9 @@
     const cfg = saveCfg(Shell.current);
     bar.hidden = !cfg;
     if (cfg) $('#save-label').textContent = cfg.label || 'Save';
+    // Until the configuration has loaded, a page shows firmware defaults;
+    // saving then would write those defaults over the device's real settings.
+    $('#save-btn').disabled = !!cfg && !T.State.configLoaded;
     document.documentElement.style.setProperty('--savebar-h', cfg ? bar.offsetHeight + 'px' : '0px');
     Shell.setDirty(Shell.dirty);
   }
@@ -180,8 +213,14 @@
     Shell.dirty = !!on;
     const st = $('#save-status');
     if (!st) return;
-    st.textContent = on ? 'Unsaved changes' : (saveCfg(Shell.current) && saveCfg(Shell.current).reboot ? 'Saving restarts the device' : '');
-    st.classList.toggle('dirty', !!on);
+    const cfg = saveCfg(Shell.current);
+    if (cfg && !T.State.configLoaded) {
+      st.textContent = 'The settings have not loaded from the device yet — retrying; saving is off until they do.';
+      st.className = 'save-status blocked';
+      return;
+    }
+    st.textContent = on ? 'Unsaved changes' : (cfg && cfg.reboot ? 'Saving restarts the device' : '');
+    st.className = 'save-status' + (on ? ' dirty' : '');
   };
 
   function unwire() {
@@ -234,38 +273,67 @@
     if (!box) return;
     const el = document.createElement('div');
     el.className = 'toast ' + (kind || '');
+    if (kind === 'danger') el.setAttribute('role', 'alert');
     T.render(el, html`${T.icon(kind === 'danger' || kind === 'warn' ? 'alert-triangle' : 'check')}<span>${msg}</span>`);
     box.appendChild(el);
     setTimeout(() => el.remove(), ms || 3200);
   };
 
+  const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+  let dialogSeq = 0;
   Shell.dialog = o => {
     const host = $('#dialogs');
     const wrap = document.createElement('div');
     wrap.className = 'overlay';
     let buttons = o.buttons || [];
+    const titleId = o.title ? 'dlg-title-' + (++dialogSeq) : '';
+    const prevFocus = document.activeElement;
+    let closed = false;
     const api = {
       el: wrap,
-      close() { wrap.remove(); },
+      close() {
+        if (closed) return;
+        closed = true;
+        wrap.remove();
+        unlockScroll();
+        if (prevFocus && typeof prevFocus.focus === 'function' && document.contains(prevFocus)) prevFocus.focus();
+      },
       body() { return $('.dialog-body', wrap); },
       setBody(tpl) { T.render($('.dialog-body', wrap), tpl); syncChoices(wrap); },
-      setButtons(list) { buttons = list; T.render($('.dialog-buttons', wrap), renderButtons()); }
+      setButtons(list) { buttons = list; T.render($('.dialog-buttons', wrap), renderButtons()); $('.dialog-buttons', wrap).hidden = !list.length; }
     };
     function renderButtons() {
       return html`${buttons.map((b, i) => html`<button type="button" class="btn ${b.cls || ''}" data-btn="${i}" ${b.disabled ? 'disabled' : ''}>${b.icon ? T.icon(b.icon) : ''}${b.label}</button>`)}`;
     }
-    T.render(wrap, html`<div class="dialog ${o.cls || ''}" role="dialog" aria-modal="true">
-      ${o.title ? html`<h2>${o.title}</h2>` : ''}
+    T.render(wrap, html`<div class="dialog ${o.cls || ''}" role="dialog" aria-modal="true" tabindex="-1" ${titleId ? raw('aria-labelledby="' + titleId + '"') : ''}>
+      ${o.title ? html`<h2 id="${titleId}">${o.title}</h2>` : ''}
       <div class="dialog-body">${o.body}</div>
       <div class="dialog-buttons" ${buttons.length ? '' : 'hidden'}>${renderButtons()}</div></div>`);
     syncChoices(wrap);
+    const dismiss = () => { api.close(); if (o.onDismiss) o.onDismiss(); };
     wrap.addEventListener('click', e => {
       const b = e.target.closest('[data-btn]');
       if (b) { const def = buttons[+b.getAttribute('data-btn')]; if (def && def.onClick) def.onClick(api, b); else api.close(); return; }
-      if (o.dismissable !== false && e.target === wrap) { api.close(); if (o.onDismiss) o.onDismiss(); }
+      if (o.dismissable !== false && e.target === wrap) dismiss();
     });
-    wrap.addEventListener('change', e => syncChoices(wrap));
+    wrap.addEventListener('change', () => syncChoices(wrap));
+    // Keyboard: Escape closes a dismissable sheet; Tab cycles inside it so
+    // focus never lands on the page underneath (aria-modal hides that page
+    // from screen readers, so a keyboard user would otherwise be stranded).
+    wrap.addEventListener('keydown', e => {
+      if (e.key === 'Escape') { if (o.dismissable !== false) { e.preventDefault(); dismiss(); } return; }
+      if (e.key !== 'Tab') return;
+      const items = $$(FOCUSABLE, wrap).filter(el => el.offsetParent !== null);
+      if (!items.length) { e.preventDefault(); return; }
+      const first = items[0], last = items[items.length - 1];
+      const sheet = $('.dialog', wrap);
+      if (e.shiftKey && (document.activeElement === first || document.activeElement === sheet)) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    });
     host.appendChild(wrap);
+    lockScroll();
+    // focus the sheet itself, so its title and body are read before the buttons
+    $('.dialog', wrap).focus();
     return api;
   };
   Shell.confirm = o => new Promise(resolve => {
@@ -283,7 +351,8 @@
     const page = Shell.current;
     const cfg = saveCfg(page);
     if (!cfg || !page.collect) return;
-    $$('.field.invalid', $('#main')).forEach(f => f.classList.remove('invalid'));
+    if (!T.State.configLoaded) { Shell.toast('The settings have not loaded from the device yet', 'warn'); return; }
+    $$('.field', $('#main')).forEach(clearFieldError);
     let data;
     try {
       data = page.collect();
@@ -291,7 +360,22 @@
       Shell.toast(e.message || 'Please check the highlighted field', 'danger', 5000);
       if (e.fieldId) {
         const el = document.getElementById(e.fieldId);
-        if (el) { el.focus(); const f = el.closest('.field'); if (f) f.classList.add('invalid'); }
+        if (el) {
+          // the toast alone is silent to a screen reader (focus moves first),
+          // so the message also lands in the field itself
+          const f = el.closest('.field');
+          if (f) {
+            f.classList.add('invalid');
+            const err = document.createElement('div');
+            err.className = 'hint field-error';
+            err.id = e.fieldId + '-err';
+            err.textContent = e.message || 'Please check this field';
+            f.appendChild(err);
+            el.setAttribute('aria-invalid', 'true');
+            el.setAttribute('aria-describedby', err.id);
+          }
+          el.focus();
+        }
       }
       return;
     }
@@ -315,7 +399,7 @@
         Shell.toast('Saved');
         Shell.rerender();
       }
-      if (page.offersGoLive && T.State.config.configModeActive !== false && T.destinations().length) T.GoLive.suggest();
+      if (page.offersGoLive && T.State.configLoaded && T.State.config.configModeActive !== false && T.destinations().length) T.GoLive.suggest();
     } catch (e) {
       Shell.toast('Not saved: ' + (e.message || e), 'danger', 6000);
     } finally {
@@ -326,35 +410,40 @@
   /* ---------------- Restart choreography ---------------- */
   T.Restart = {
     // Shows a blocking sheet while the device reboots and polls /api/info
-    // until it answers again. Resolves true when it is back.
+    // until it answers again. Resolves true when it is back, false when the
+    // user gives up.
     async wait(o) {
       o = o || {};
-      const dlg = Shell.dialog({
-        title: o.title || 'Restarting…',
-        dismissable: false,
-        body: html`<div class="restart"><div class="spinner"></div>
-          <p>${o.text || 'The device saved the settings and is restarting. This takes about 10–15 seconds.'}</p>
-          <p class="hint" id="restart-sub">Waiting for it to come back…</p></div>`
-      });
+      const text = o.text || 'The device saved the settings and is restarting. This takes about 10–15 seconds.';
+      const waiting = () => html`<div class="restart" role="status" aria-live="polite"><div class="spinner"></div>
+          <p>${text}</p>
+          <p class="hint" id="restart-sub">Waiting for it to come back…</p></div>`;
+      const dlg = Shell.dialog({ title: o.title || 'Restarting…', dismissable: false, body: waiting() });
       const started = Date.now();
-      const deadline = started + (o.timeoutMs || 75000);
       await T.sleep(o.initialMs || 4000);
-      let back = false;
-      while (Date.now() < deadline) {
-        try { T.applyInfo(await T.Api.info()); back = true; break; } catch (e) { /* still down */ }
-        const sub = $('#restart-sub', dlg.el);
-        if (sub) sub.textContent = 'Waiting for it to come back… ' + Math.round((Date.now() - started) / 1000) + ' s';
-        await T.sleep(1500);
-      }
-      if (!back) {
-        dlg.setBody(html`<div class="restart">${T.icon('alert-triangle')}
-          <p><strong>The device has not answered yet.</strong></p>
-          <p class="hint">If its address changed, open it at the new address. On a battery board that just left setup mode this is expected: the interface only runs in setup mode.</p></div>`);
-        await new Promise(res => dlg.setButtons([
-          { label: 'Keep waiting', onClick: async a => { a.close(); res(); back = await T.Restart.wait(o); } },
-          { label: 'Reload page', cls: 'btn-primary', onClick: () => location.reload() }
-        ]));
-        return back;
+      for (;;) {
+        const deadline = Date.now() + (o.timeoutMs || 75000);
+        let back = false;
+        while (Date.now() < deadline) {
+          try { T.applyInfo(await T.Api.info()); back = true; break; } catch (e) { /* still down */ }
+          const sub = $('#restart-sub', dlg.el);
+          if (sub) sub.textContent = 'Waiting for it to come back… ' + Math.round((Date.now() - started) / 1000) + ' s';
+          await T.sleep(1500);
+        }
+        if (back) break;
+        // not back within the window: let the user decide, then keep polling
+        // in this same sheet rather than stacking a second one
+        const again = await new Promise(res => {
+          dlg.setBody(html`<div class="restart" role="status" aria-live="polite">${T.icon('alert-triangle')}
+            <p><strong>The device has not answered yet.</strong></p>
+            <p class="hint">If its address changed, open it at the new address. On a battery board that just left setup mode this is expected: the interface only runs in setup mode.</p></div>`);
+          dlg.setButtons([
+            { label: 'Keep waiting', onClick: a => { a.setButtons([]); a.setBody(waiting()); res(true); } },
+            { label: 'Reload page', cls: 'btn-primary', onClick: () => location.reload() },
+            { label: 'Close', onClick: () => res(false) }
+          ]);
+        });
+        if (!again) { dlg.close(); return false; }
       }
       try { T.applyConfig(await T.Api.config()); } catch (e) { /* the page keeps what it has */ }
       dlg.close();
@@ -446,10 +535,16 @@
   };
 
   /* ---------------- Global interactions ---------------- */
+  function clearFieldError(f) {
+    f.classList.remove('invalid');
+    const err = $('.field-error', f);
+    if (err) err.remove();
+    $$('[aria-invalid]', f).forEach(inp => { inp.removeAttribute('aria-invalid'); inp.removeAttribute('aria-describedby'); });
+  }
   function markDirty(e) {
     if (e.target.closest('[data-nosave]') || e.target.closest('.overlay')) return;
     const f = e.target.closest('.field');
-    if (f) f.classList.remove('invalid');
+    if (f) clearFieldError(f);
     Shell.setDirty(true);
   }
   function doFill(targetId, kind) {
@@ -538,13 +633,24 @@
     });
     // a config push (or reload after a restart): pages that patch themselves
     // declare on.config; the others are simply drawn again — unless edited
-    T.Bus.on('config', () => { const p = Shell.current; if (p && !(p.on && p.on.config)) Shell.rerender(); });
+    T.Bus.on('config', () => { const p = Shell.current; updateSaveBar(); if (p && !(p.on && p.on.config)) Shell.rerender(); });
+    // the websocket coming (back) up is the moment to fetch a config that failed earlier
+    T.Bus.on('online', () => { if (!T.State.configLoaded) loadConfigWithRetry(); });
     const [info, config] = await Promise.all([T.Api.info().catch(() => null), T.Api.config().catch(() => null)]);
     if (info) T.applyInfo(info);
     if (config) T.applyConfig(config);
     Shell.show((location.hash || '').replace(/^#\/?/, '') || 'dashboard');
-    if (!config) Shell.toast('Could not load the configuration from the device — is it in setup mode?', 'warn', 6000);
+    if (!config) { Shell.toast('Could not load the settings from the device yet — retrying', 'warn', 6000); loadConfigWithRetry(); }
     T.Live.start();
   };
+  // Keeps asking for the configuration until the device answers: pages show
+  // firmware defaults until then, and Save stays off (see updateSaveBar).
+  let configRetryTimer = null;
+  async function loadConfigWithRetry() {
+    clearTimeout(configRetryTimer);
+    if (T.State.configLoaded) return;
+    try { T.applyConfig(await T.Api.config()); }
+    catch (e) { configRetryTimer = setTimeout(loadConfigWithRetry, 5000); }
+  }
   document.addEventListener('DOMContentLoaded', () => { T.Shell.boot(); });
 })();

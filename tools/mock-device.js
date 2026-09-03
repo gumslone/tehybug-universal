@@ -121,9 +121,18 @@ function applyConfig(obj) {
 }
 
 /* ---- HTTP ---- */
+// The same inline styles the firmware page carries (src/web_api.h mainPage),
+// including the older firmware's #page rule: the UI renders into #page, so
+// anything that rule does must be visible here, not only on a real device.
 const bootstrap = () => `<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>TeHyBug (mock)</title></head>
-<body><div id="page"><h3>TeHyBug</h3><b>On your own network this device is at: <span id="ip">tehybug.local</span></b><br><br>Loading the full interface...</div>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><meta name="theme-color" content="#0f7a58"><title>TeHyBug (mock)</title>
+<style>
+body{margin:0;font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:#eef1f4;color:#182029}
+#page{max-width:520px;margin:0 auto;padding:24px 16px}
+.hello{background:#fff;border:1px solid #dde3e9;border-radius:14px;padding:20px}
+.hello h1{font-size:1.3rem;margin:0 0 8px;color:#0f7a58}
+</style></head>
+<body><div id="page"><div class="hello"><h1>TeHyBug</h1><p>On your own network this device is at <b><span id="ip">tehybug.local</span></b>.</p><p>Loading the full interface…</p></div></div>
 <script>window.TEHYBUG_WS_PORT=${WS_PORT};</script>
 <link rel="stylesheet" href="/v2/css/style.php" media="print" onload="this.media='all'">
 <script src="/v2/js/javascript.php" defer></script>
