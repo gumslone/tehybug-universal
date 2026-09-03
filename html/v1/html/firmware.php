@@ -117,12 +117,12 @@
         if (!target) { return; }
         var url = 'https://raw.githubusercontent.com/gumslone/tehybug-universal/main/CHANGELOG.md';
 
-        function esc(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+        function esc(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
         function inline(s) {
             return esc(s)
                 .replace(/`([^`]+)`/g, '<code>$1</code>')
                 .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
-                .replace(/\[([^\]]+)\]\((https?:[^)]+)\)/g, '<a href="$2" target="_blank">$1</a>');
+                .replace(/\[([^\]]+)\]\((https?:[^)\s"'<>]+)\)/g, '<a href="$2" target="_blank">$1</a>');
         }
         function mdToHtml(md) {
             var lines = md.split('\n'), out = [], inList = false, para = [], m;
