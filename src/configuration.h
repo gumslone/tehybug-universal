@@ -205,10 +205,14 @@ class TeHyBugConfig {
     static constexpr int MIN_DATA_FREQUENCY_S = 10;
 
     void validateDataFrequency(int &freq) {
+#if !TEHYBUG_DISPLAY
+      // an interval longer than the chip can sleep would never wake it; the
+      // display board never sleeps, so it has no such ceiling
       const int maxDS = (int)(ESP.deepSleepMax() / 1000000);
       if (freq > maxDS) {
         freq = maxDS;
       }
+#endif
       if (freq < MIN_DATA_FREQUENCY_S) {
         freq = MIN_DATA_FREQUENCY_S;
       }

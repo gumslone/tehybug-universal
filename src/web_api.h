@@ -28,14 +28,14 @@ const char mainPage[] PROGMEM = R"=====(
 body{margin:0;font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:#eef1f4;color:#182029}
 /* Only the placeholder card is styled: the web UI renders itself into #page
    and takes the whole viewport, so #page must stay unstyled. */
-.hello{box-sizing:border-box;max-width:520px;margin:24px auto;background:#fff;border:1px solid #dde3e9;border-radius:14px;padding:20px}
+.hello{box-sizing:border-box;width:calc(100% - 32px);max-width:520px;margin:24px auto;background:#fff;border:1px solid #dde3e9;border-radius:14px;padding:20px}
 .hello h1{font-size:1.3rem;margin:0 0 8px;color:#0f7a58}
 .hello code{background:#f4f6f8;padding:2px 6px;border-radius:6px}
 @media(prefers-color-scheme:dark){body{background:#0d1218;color:#e7ecf1}.hello{background:#161c23;border-color:#28323c}.hello code{background:#1d252e}}
 </style>
 </head>
 <body>
-<div id="page" style="padding:0 16px">
+<div id="page">
 <div class="hello">
 <h1>TeHyBug</h1>
 <p>On your own network this device is at <b><span id="ip">tehybug.local</span></b>.</p>
