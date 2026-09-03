@@ -49,10 +49,14 @@ class TeHyBugConfig {
     void saveConfigCallback() {
       m_shouldSaveConfig = true;
     }
-    void saveConfig(bool force = false) {
+    // Writes the configuration to flash. Returns false when nothing was
+    // written although it should have been - the document overflowed its
+    // pool, or the file could not be opened or written - so a caller can say
+    // "not saved" instead of confirming.
+    bool saveConfig(bool force = false) {
       // save the custom parameters to FS
       if (!m_shouldSaveConfig && !force) {
-        return;
+        return true; // nothing pending
       }
 
       DynamicJsonDocument json(CONFIG_DOC_SIZE);
@@ -64,7 +68,7 @@ class TeHyBugConfig {
       // it would silently drop whatever was cut — keep the last good file.
       if (json.overflowed()) {
         D_println(F("Config save aborted: does not fit CONFIG_DOC_SIZE"));
-        return;
+        return false;
       }
 
       File configFile = SPIFFS.open("/config.json", "w");
@@ -73,16 +77,17 @@ class TeHyBugConfig {
         // not be told the settings were stored — this used to be ignored, so a
         // full or failed filesystem silently lost the configuration.
         D_println(F("Config save failed: cannot open /config.json"));
-        return;
+        return false;
       }
       const size_t written = serializeJson(json, configFile);
       configFile.close();
       if (written == 0) {
         D_println(F("Config save failed: nothing written"));
-        return;
+        return false;
       }
       m_shouldSaveConfig = false; // stored; nothing pending until the next change
       D_println(F("Config saved"));
+      return true;
     }
 
     // Builds the config document. full=false writes only values that differ
@@ -240,9 +245,10 @@ class TeHyBugConfig {
       }
     }
 
-    void setConfig(JsonObject &json) {
+    // Applies and stores a configuration. Returns whether it reached flash.
+    bool setConfig(JsonObject &json) {
       setConfigParameters(json);
-      saveConfig(true);
+      const bool stored = saveConfig(true);
 
       // restart the module when reboot is requested in save config
       if (json.containsKey("reboot") && json["reboot"]) {
@@ -251,6 +257,7 @@ class TeHyBugConfig {
         delay(1000);
         ESP.restart();
       }
+      return stored;
     }
 
     // Serves the complete configuration, not the stored file: the file only

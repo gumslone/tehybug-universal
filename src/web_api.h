@@ -22,19 +22,20 @@ const char mainPage[] PROGMEM = R"=====(
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#158f68">
+<meta name="theme-color" content="#0f7a58">
 <title>TeHyBug</title>
 <style>
 body{margin:0;font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:#eef1f4;color:#182029}
-#page{max-width:520px;margin:0 auto;padding:24px 16px}
-.hello{background:#fff;border:1px solid #dde3e9;border-radius:14px;padding:20px}
-.hello h1{font-size:1.3rem;margin:0 0 8px;color:#158f68}
+/* Only the placeholder card is styled: the web UI renders itself into #page
+   and takes the whole viewport, so #page must stay unstyled. */
+.hello{box-sizing:border-box;max-width:520px;margin:24px auto;background:#fff;border:1px solid #dde3e9;border-radius:14px;padding:20px}
+.hello h1{font-size:1.3rem;margin:0 0 8px;color:#0f7a58}
 .hello code{background:#f4f6f8;padding:2px 6px;border-radius:6px}
 @media(prefers-color-scheme:dark){body{background:#0d1218;color:#e7ecf1}.hello{background:#161c23;border-color:#28323c}.hello code{background:#1d252e}}
 </style>
 </head>
 <body>
-<div id="page">
+<div id="page" style="padding:0 16px">
 <div class="hello">
 <h1>TeHyBug</h1>
 <p>On your own network this device is at <b><span id="ip">tehybug.local</span></b>.</p>
@@ -213,7 +214,13 @@ void handleSetConfig() {
   // out, apply the rest, confirm, then restart.
   const bool reboot = object["reboot"] | false;
   object.remove("reboot");
-  tehybug.conf.setConfig(object);
+  if (!tehybug.conf.setConfig(object)) {
+    // Applied in RAM but not written to flash (pool overflow, or the file
+    // system refused - see saveConfig). Confirming would be a lie, and a
+    // restart now would discard even the RAM copy.
+    server.send(500, "application/json", "{\"response\":\"Not saved\"}");
+    return;
+  }
   server.send(200, "application/json",
               reboot ? "{\"response\":\"OK\",\"reboot\":true}"
                      : "{\"response\":\"OK\"}");
