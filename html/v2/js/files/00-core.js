@@ -271,10 +271,9 @@
     },
     // POSTs a (partial) configuration: the firmware applies only the keys
     // present, so a page sends its own fields and nothing else. Resolves
-    // once the device confirms. A network error while `reboot` was
-    // requested is reported as unconfirmed rather than failed: firmware
-    // from before this UI restarted before answering, and the save most
-    // likely went through.
+    // once the device confirms — every firmware that loads this interface
+    // answers before it restarts, so a dropped connection is a failed save,
+    // never a "restarted before answering".
     async saveConfig(obj) {
       let r;
       try {
@@ -284,10 +283,7 @@
           body: JSON.stringify(obj)
         }, 12000);
       } catch (e) {
-        // only a dropped connection can mean "restarted before answering";
-        // an HTTP error status below is a real failure and stays one
-        if (obj.reboot) return { ok: true, unconfirmed: true };
-        throw e;
+        throw new Error(e && e.name === 'AbortError' ? 'the device did not answer' : 'could not reach the device');
       }
       if (!r.ok) {
         throw new Error(r.status === 406 ? 'the device could not parse the settings'

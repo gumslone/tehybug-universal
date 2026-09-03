@@ -150,10 +150,11 @@
   function setActiveNav(id) { $$('#nav a[data-page]').forEach(a => a.classList.toggle('active', a.getAttribute('data-page') === id)); }
   // Scroll lock for sheets and the drawer. iOS Safari ignores overflow:hidden
   // on the document, so the body is pinned at its current offset instead.
-  let lockCount = 0, lockedY = 0;
+  let lockCount = 0, lockedY = 0, lockedPage = '';
   function lockScroll() {
     if (lockCount++ > 0) return;
     lockedY = window.scrollY || 0;
+    lockedPage = Shell.current ? Shell.current.id : '';
     document.body.classList.add('locked');
     document.body.style.top = -lockedY + 'px';
   }
@@ -162,8 +163,12 @@
     if (--lockCount > 0) return;
     document.body.classList.remove('locked');
     document.body.style.top = '';
-    window.scrollTo(0, lockedY);
+    // back to where the page was, unless a link in the sheet went elsewhere
+    window.scrollTo(0, (Shell.current && Shell.current.id === lockedPage) ? lockedY : 0);
   }
+  // the sheets currently open, so a page change can close the ones that may be closed
+  const openDialogs = new Set();
+  Shell.closeDialogs = () => { Array.from(openDialogs).forEach(d => { if (d.dismissable) d.dismiss(); }); };
   function openDrawer() {
     const nav = $('#nav');
     if (nav.classList.contains('open')) return;
@@ -205,7 +210,7 @@
     if (cfg) $('#save-label').textContent = cfg.label || 'Save';
     // Until the configuration has loaded, a page shows firmware defaults;
     // saving then would write those defaults over the device's real settings.
-    $('#save-btn').disabled = !!cfg && !T.State.configLoaded;
+    $('#save-btn').disabled = Shell.saving || (!!cfg && !T.State.configLoaded);
     document.documentElement.style.setProperty('--savebar-h', cfg ? bar.offsetHeight + 'px' : '0px');
     Shell.setDirty(Shell.dirty);
   }
@@ -233,8 +238,10 @@
     if (!page || (page.boards && T.State.infoLoaded && page.boards.indexOf(T.board()) < 0)) page = T.Pages.get('dashboard');
     if (Shell.current && Shell.current.unmount) { try { Shell.current.unmount(); } catch (e) { console.error(e); } }
     unwire();
+    Shell.closeDialogs();
     Shell.current = page;
     Shell.dirty = false;
+    Shell.drawnWithoutConfig = !T.State.configLoaded;
     // Each page gets a fresh element to mount on: listeners a page adds in
     // mount() die with it. On the shared #main they piled up across visits,
     // so a page's handler ran once per visit made so far.
@@ -289,11 +296,13 @@
     const titleId = o.title ? 'dlg-title-' + (++dialogSeq) : '';
     const prevFocus = document.activeElement;
     let closed = false;
+    const entry = { dismissable: o.dismissable !== false };
     const api = {
       el: wrap,
       close() {
         if (closed) return;
         closed = true;
+        openDialogs.delete(entry);
         wrap.remove();
         unlockScroll();
         if (prevFocus && typeof prevFocus.focus === 'function' && document.contains(prevFocus)) prevFocus.focus();
@@ -311,6 +320,7 @@
       <div class="dialog-buttons" ${buttons.length ? '' : 'hidden'}>${renderButtons()}</div></div>`);
     syncChoices(wrap);
     const dismiss = () => { api.close(); if (o.onDismiss) o.onDismiss(); };
+    entry.dismiss = dismiss; // so a page change resolves a pending confirm as "no"
     wrap.addEventListener('click', e => {
       const b = e.target.closest('[data-btn]');
       if (b) { const def = buttons[+b.getAttribute('data-btn')]; if (def && def.onClick) def.onClick(api, b); else api.close(); return; }
@@ -330,6 +340,8 @@
       if (e.shiftKey && (document.activeElement === first || document.activeElement === sheet)) { e.preventDefault(); last.focus(); }
       else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
     });
+    entry.api = api;
+    openDialogs.add(entry);
     host.appendChild(wrap);
     lockScroll();
     // focus the sheet itself, so its title and body are read before the buttons
@@ -381,20 +393,22 @@
     }
     if (cfg.confirm) { const ok = await cfg.confirm(data); if (!ok) return; }
     const btn = $('#save-btn');
+    Shell.saving = true;
     btn.disabled = true;
     try {
       const payload = Object.assign({}, data, cfg.reboot ? { reboot: true } : {});
-      const res = await T.Api.saveConfig(payload);
+      await T.Api.saveConfig(payload);
       T.applyConfig(data);
       Shell.setDirty(false);
       T.Bus.emit('saved', { page: page.id, data });
       // Leaving setup mode on a battery board, or switching WiFi off with
       // offline mode on any board, takes this interface away with the
       // restart — say so instead of waiting for a device that will not answer.
-      if (data.offlineModeActive === true || (data.configModeActive === false && !T.isDisplay())) { T.LeftSetup.show(data.offlineModeActive ? 'offline' : 'live'); return; }
+      if (data.configModeActive === false && (data.offlineModeActive === true || !T.isDisplay())) { T.LeftSetup.show(data.offlineModeActive ? 'offline' : 'live'); return; }
       if (cfg.reboot) {
-        const back = await T.Restart.wait({ unconfirmed: res.unconfirmed });
-        if (back && cfg.afterRestart) cfg.afterRestart(data);
+        const back = await T.Restart.wait();
+        if (!back) return; // the user gave up waiting: nothing more to offer
+        if (cfg.afterRestart) cfg.afterRestart(data);
       } else {
         Shell.toast('Saved');
         Shell.rerender();
@@ -403,7 +417,8 @@
     } catch (e) {
       Shell.toast('Not saved: ' + (e.message || e), 'danger', 6000);
     } finally {
-      btn.disabled = false;
+      Shell.saving = false;
+      updateSaveBar();
     }
   };
 
@@ -415,9 +430,9 @@
     async wait(o) {
       o = o || {};
       const text = o.text || 'The device saved the settings and is restarting. This takes about 10–15 seconds.';
-      const waiting = () => html`<div class="restart" role="status" aria-live="polite"><div class="spinner"></div>
-          <p>${text}</p>
-          <p class="hint" id="restart-sub">Waiting for it to come back…</p></div>`;
+      const waiting = () => html`<div class="restart"><div class="spinner"></div>
+          <p role="status" aria-live="polite">${text}</p>
+          <p class="hint" id="restart-sub" aria-hidden="true">Waiting for it to come back…</p></div>`;
       const dlg = Shell.dialog({ title: o.title || 'Restarting…', dismissable: false, body: waiting() });
       const started = Date.now();
       await T.sleep(o.initialMs || 4000);
@@ -434,8 +449,8 @@
         // not back within the window: let the user decide, then keep polling
         // in this same sheet rather than stacking a second one
         const again = await new Promise(res => {
-          dlg.setBody(html`<div class="restart" role="status" aria-live="polite">${T.icon('alert-triangle')}
-            <p><strong>The device has not answered yet.</strong></p>
+          dlg.setBody(html`<div class="restart">${T.icon('alert-triangle')}
+            <p role="status" aria-live="polite"><strong>The device has not answered yet.</strong></p>
             <p class="hint">If its address changed, open it at the new address. On a battery board that just left setup mode this is expected: the interface only runs in setup mode.</p></div>`);
           dlg.setButtons([
             { label: 'Keep waiting', onClick: a => { a.setButtons([]); a.setBody(waiting()); res(true); } },
@@ -602,6 +617,12 @@
     window.addEventListener('hashchange', onHashChange);
     window.addEventListener('beforeunload', e => { if (Shell.dirty) { e.preventDefault(); e.returnValue = ''; } });
     window.addEventListener('resize', () => updateSaveBar());
+    // the drawer becomes the permanent sidebar at the breakpoint (app.css
+    // ≥900px); an open one must not keep the page locked past it
+    const desktop = matchMedia('(min-width: 900px)');
+    const onBreakpoint = () => { if (desktop.matches) closeDrawer(); };
+    if (desktop.addEventListener) desktop.addEventListener('change', onBreakpoint); else desktop.addListener(onBreakpoint);
+    window.addEventListener('resize', onBreakpoint);
   }
 
   // The device page pulls the stylesheet in non-blocking (media="print" until
@@ -633,7 +654,23 @@
     });
     // a config push (or reload after a restart): pages that patch themselves
     // declare on.config; the others are simply drawn again — unless edited
-    T.Bus.on('config', () => { const p = Shell.current; updateSaveBar(); if (p && !(p.on && p.on.config)) Shell.rerender(); });
+    T.Bus.on('config', () => {
+      const p = Shell.current;
+      updateSaveBar();
+      if (!p) return;
+      // Drawn from defaults while the configuration was still missing: the
+      // edits were made on top of the wrong values, so redraw regardless and
+      // say so — saving them would have written defaults over real settings.
+      if (Shell.drawnWithoutConfig) {
+        Shell.drawnWithoutConfig = false;
+        const hadEdits = Shell.dirty;
+        Shell.dirty = false;
+        Shell.show(p.id, { keepScroll: true });
+        if (hadEdits) Shell.toast('The settings arrived from the device — the page was refreshed, please redo your changes', 'warn', 6000);
+        return;
+      }
+      if (!(p.on && p.on.config)) Shell.rerender();
+    });
     // the websocket coming (back) up is the moment to fetch a config that failed earlier
     T.Bus.on('online', () => { if (!T.State.configLoaded) loadConfigWithRetry(); });
     const [info, config] = await Promise.all([T.Api.info().catch(() => null), T.Api.config().catch(() => null)]);

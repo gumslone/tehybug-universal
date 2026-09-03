@@ -33,7 +33,8 @@
   function stepsInner() {
     const c = T.State.config;
     const seen = T.Readings.known().filter(k => !/^cs2?$/.test(k)).length;
-    const sensorsOn = SENSOR_SWITCHES.some(k => c[k]);
+    // the generic build never reads the second port or the ADC, so a stale flag there is not "a sensor switched on"
+    const sensorsOn = SENSOR_SWITCHES.filter(k => !T.isGeneric() || k === 'dht_sensor' || k === 'ds18b20_sensor').some(k => c[k]);
     const dest = T.destinations();
     const live = T.State.configLoaded && c.configModeActive === false;
     const steps = [

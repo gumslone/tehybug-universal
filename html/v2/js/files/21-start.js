@@ -20,10 +20,10 @@
           <p class="hint mt">The key identifies this device on tehybug.com and in every payload (<code>%key%</code>).</p>` })}
 
         ${UI.card({ title: 'Step 1 — Sensors', icon: 'thermometer', body: html`
-          <p>I²C sensors (BME280/BMP280, BME680, AHT20, AM2320, MAX44009, SGP30) are detected automatically. Sensors on the jack ports have to be switched on, because a sensor that is enabled but not attached can make the device restart in a loop.</p>
+          <p>I²C sensors (${T.isGeneric() ? 'BME280/BMP280, AHT20, AM2320, MAX44009' : 'BME280/BMP280, BME680, AHT20, AM2320, MAX44009, SGP30'}) are detected automatically. Sensors on the jack port${T.isGeneric() ? '' : 's'} have to be switched on, because a sensor that is enabled but not attached can make the device restart in a loop.</p>
           <ul>
-            ${T.isGeneric() ? html`<li><strong>Analog input:</strong> a soil-moisture probe or similar. Reading <code>%adc%</code>.</li>` : html`<li><strong>Port A (black):</strong> one DHT, DS18B20 or an analog sensor (ADC, e.g. soil moisture). Readings <code>%temp2%</code> / <code>%humi2%</code> / <code>%adc%</code>.</li>`}
-            ${display ? '' : html`<li><strong>Port B (green):</strong> one DHT or DS18B20. Readings <code>%temp%</code> / <code>%humi%</code>. This port shares the I²C pins, so while it is in use I²C sensors and the clock/data-log module are not available.</li>`}
+            ${T.isGeneric() ? '' : html`<li><strong>Port A (black):</strong> one DHT, DS18B20 or an analog sensor (ADC, e.g. soil moisture). Readings <code>%temp2%</code> / <code>%humi2%</code> / <code>%adc%</code>.</li>`}
+            ${display ? '' : html`<li><strong>Port B (green)${T.isGeneric() ? ' — the one sensor port' : ''}:</strong> one DHT or DS18B20. Readings <code>%temp%</code> / <code>%humi%</code>. This port shares the I²C pins, so while it is in use I²C sensors${T.isGeneric() ? '' : ' and the clock/data-log module'} are not available.</li>`}
           </ul>
           ${UI.note('info', 'BME680 air quality (IAQ, eCO₂, bVOC) needs the sensor to run continuously for 30+ minutes to calibrate, so it does not work with deep sleep. Temperature, humidity and pressure do.')}
           <div class="row"><a class="btn btn-primary" href="#/sensors">${T.icon('sliders')} Open Sensors</a><span class="hint">Then check the readings on the <a href="#/dashboard">dashboard</a>.</span></div>` })}

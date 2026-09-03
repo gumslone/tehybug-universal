@@ -130,7 +130,7 @@ hr { border: 0; border-top: 1px solid var(--border); margin: 16px 0; }
    centred card for the moment before this bundle arrives; the app takes the
    whole viewport, so undo that here (same ID specificity, later in the
    cascade). Firmware in the field keeps serving the old rule, so this must stay. */
-#page { max-width: none; margin: 0; padding: 0; }
+#page { max-width: none !important; margin: 0 !important; padding: 0 !important; } /* !important: one firmware build put the padding inline */
 .app { min-height: 100vh; }
 /* while a sheet or the drawer is open the page behind must not scroll (iOS
    ignores overflow:hidden on the document, so the body is pinned instead) */

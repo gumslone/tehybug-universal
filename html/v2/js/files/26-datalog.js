@@ -34,7 +34,7 @@
       ${UI.note('info', html`Offline mode is exclusive: saving it switches off every network destination, the sleep modes and setup mode, and turns logging on. <strong>This page is then unreachable</strong> — to read the log later, press RESET, then MODE until the LED turns blue, and come back here.`)}
       <div id="offline-unavailable" hidden>${UI.note('warn', display
         ? 'No clock + EEPROM module was found: the device would switch WiFi off and keep the screen running, but nothing gets logged. If a DHT or DS18B20 is enabled on Port B (green) it occupies the pins the module needs.'
-        : 'No clock + EEPROM module was found, and offline mode cannot engage without one: the device would restart with nothing to do and come straight back to setup mode. If a DHT or DS18B20 is enabled on Port B (green) it occupies the pins the module needs — move it to Port A (black).')}</div>` });
+        : 'No clock + EEPROM module was found. Offline mode needs one, so it cannot be switched on here until a module is attached (if a DHT or DS18B20 is enabled on Port B (green) it occupies the pins the module needs — move it to Port A (black)) and the device restarted.')}</div>` });
   }
 
   function filesInner() {
@@ -92,7 +92,7 @@
           title: goingOffline ? 'Switch to offline mode?' : 'Change the log layout?',
           okLabel: goingOffline ? 'Go offline' : 'Change and erase',
           danger: !goingOffline,
-          body: html`${goingOffline ? html`<p>After the restart the device runs with WiFi off and <strong>this page is unreachable</strong>. To get back: press RESET, then MODE until the LED turns blue${T.isDisplay() ? ', or hold the right button for 10 seconds' : ''}.</p>${lastLog && !lastLog.active ? UI.note('warn', T.isDisplay() ? 'No clock + EEPROM module was detected — WiFi goes off but nothing gets logged.' : 'No clock + EEPROM module was detected — offline mode cannot engage without one, so the device comes back to setup mode instead.') : ''}` : ''}
+          body: html`${goingOffline ? html`<p>After the restart the device runs with WiFi off and <strong>this page is unreachable</strong>. To get back: press RESET, then MODE until the LED turns blue${T.isDisplay() ? ', or hold the right button for 10 seconds' : ''}.</p>${lastLog && !lastLog.active && T.isDisplay() ? UI.note('warn', 'No clock + EEPROM module was detected — WiFi goes off but nothing gets logged.') : ''}` : ''}
             ${layoutChange ? html`<p>Switching between per-day and per-hour files <strong>erases the existing log</strong>. Download anything you still need first.</p>` : ''}`
         });
       }
@@ -125,10 +125,21 @@
         offlineModeActive: offline
       };
       if (offline) {
+        // Without the module a battery board cannot enter offline mode at all:
+        // it would go live with nothing to send and no interface to come
+        // back to. Refuse rather than predict.
+        if (!T.isDisplay() && lastLog && !lastLog.error && !lastLog.active) {
+          throw T.fail('No clock + EEPROM module was found — offline mode needs one. Attach it (or move a Port B sensor to Port A), restart, then switch offline mode on.', 'offlineModeActive');
+        }
         Object.assign(out, {
           eepromLogActive: true, mqttActive: false, haActive: false, httpGetActive: false, httpPostActive: false,
-          sleepModeActive: false, lightSleepModeActive: false, configModeActive: false
+          sleepModeActive: false, lightSleepModeActive: false
         });
+        // Leaving setup mode is part of switching offline mode ON. With it
+        // already stored (the device was brought back with RESET + MODE), a
+        // save here must come back to this page; Go live / "Go offline" is
+        // the explicit way out.
+        if (!T.State.config.offlineModeActive) out.configModeActive = false;
       }
       return out;
     }

@@ -39,21 +39,22 @@
       const generic = T.isGeneric();
       const portB = c.dht_sensor ? 'dht' : (c.ds18b20_sensor ? 'ds18b20' : 'none');
       const portA = c.second_dht_sensor ? 'dht' : (c.second_ds18b20_sensor ? 'ds18b20' : (c.adc_sensor ? 'adc' : 'none'));
-      // first-generation boards have no second data pin: only the analog input is left on that side
-      const portAOptions = [{ value: 'none', label: 'Nothing' }].concat(generic ? [] : [
+      const portAOptions = [
+        { value: 'none', label: 'Nothing' },
         { value: 'dht', label: 'DHT11 / DHT21 / DHT22', hint: 'Temperature and humidity → %temp2% / %humi2%' },
-        { value: 'ds18b20', label: 'DS18B20', hint: 'Temperature (waterproof probes) → %temp2%' }
-      ], [{ value: 'adc', label: 'Analog sensor (ADC)', hint: 'Soil moisture, light, a voltage → %adc%' }]);
+        { value: 'ds18b20', label: 'DS18B20', hint: 'Temperature (waterproof probes) → %temp2%' },
+        { value: 'adc', label: 'Analog sensor (ADC)', hint: 'Soil moisture, light, a voltage → %adc%' }
+      ];
       return html`${UI.pagehead('Sensors', 'Tell the device what is plugged into its ports. I²C sensors are found by themselves.')}
         ${UI.note('warn', 'Only switch on a sensor that is really attached: the firmware waits for it, and a missing one can keep the device restarting.')}
         <div class="grid-2">
-        ${UI.card({ title: generic ? 'Analog input' : 'Port A (black)', icon: 'cpu', body: html`
-          <p class="hint">${generic ? 'The first-generation board has one sensor port (below) plus the analog input.' : 'Has its own pin, so it never gets in the way of I²C sensors or the clock/data-log module. One sensor at a time.'}</p>
+        ${generic ? '' : UI.card({ title: 'Port A (black)', icon: 'cpu', body: html`
+          <p class="hint">Has its own pin, so it never gets in the way of I²C sensors or the clock/data-log module. One sensor at a time.</p>
           ${UI.choice({ name: 'portA', value: portA, options: portAOptions })}` })}
         ${display
           ? UI.card({ title: 'Port B (green)', icon: 'cpu', body: html`<p class="hint mb0">On the Display Weatherstation these pins drive the screen, so Port B is I²C only: plug I²C sensors and the clock module in here.</p>` })
           : UI.card({ title: 'Port B (green)', icon: 'cpu', body: html`
-          <p class="hint">${generic ? 'Shares its pins with the I²C bus: while a DHT or DS18B20 is enabled here, I²C sensors are not available.' : 'Shares its pins with the I²C bus: while a DHT or DS18B20 is enabled here, I²C sensors and the clock/data-log module are not available. Prefer Port A for a DHT if you use the data log.'}</p>
+          <p class="hint">${generic ? 'The first-generation board has this one sensor port. It shares its pins with the I²C bus: while a DHT or DS18B20 is enabled here, I²C sensors are not available.' : 'Shares its pins with the I²C bus: while a DHT or DS18B20 is enabled here, I²C sensors and the clock/data-log module are not available. Prefer Port A for a DHT if you use the data log.'}</p>
           ${UI.choice({ name: 'portB', value: portB, options: [
             { value: 'none', label: 'Nothing / I²C sensors' },
             { value: 'dht', label: 'DHT11 / DHT21 / DHT22', hint: 'Temperature and humidity → %temp% / %humi%' },
@@ -72,7 +73,8 @@
     },
     collect() {
       const display = T.isDisplay();
-      const portA = T.radio('portA');
+      // the generic build has no second port and no ADC: the card is absent, the keys go false
+      const portA = T.isGeneric() ? 'none' : T.radio('portA');
       const out = {
         second_dht_sensor: portA === 'dht',
         second_ds18b20_sensor: portA === 'ds18b20',
