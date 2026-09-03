@@ -22,7 +22,7 @@
         ${UI.card({ title: 'Step 1 — Sensors', icon: 'thermometer', body: html`
           <p>I²C sensors (BME280/BMP280, BME680, AHT20, AM2320, MAX44009, SGP30) are detected automatically. Sensors on the jack ports have to be switched on, because a sensor that is enabled but not attached can make the device restart in a loop.</p>
           <ul>
-            <li><strong>Port A (black):</strong> one DHT, DS18B20 or an analog sensor (ADC, e.g. soil moisture). Readings <code>%temp2%</code> / <code>%humi2%</code> / <code>%adc%</code>.</li>
+            ${T.isGeneric() ? html`<li><strong>Analog input:</strong> a soil-moisture probe or similar. Reading <code>%adc%</code>.</li>` : html`<li><strong>Port A (black):</strong> one DHT, DS18B20 or an analog sensor (ADC, e.g. soil moisture). Readings <code>%temp2%</code> / <code>%humi2%</code> / <code>%adc%</code>.</li>`}
             ${display ? '' : html`<li><strong>Port B (green):</strong> one DHT or DS18B20. Readings <code>%temp%</code> / <code>%humi%</code>. This port shares the I²C pins, so while it is in use I²C sensors and the clock/data-log module are not available.</li>`}
           </ul>
           ${UI.note('info', 'BME680 air quality (IAQ, eCO₂, bVOC) needs the sensor to run continuously for 30+ minutes to calibrate, so it does not work with deep sleep. Temperature, humidity and pressure do.')}
@@ -44,7 +44,7 @@
           ${display
             ? html`<p>Going live starts the sending. On the Display Weatherstation everything else — screen, clock, alarms and this web interface — keeps running in every mode; only the TEHYBUG setup access point disappears.</p>`
             : html`<p>Going live ends setup mode: the device restarts, starts sending on schedule and, depending on the power mode, sleeps in between. <strong>This web interface is then no longer served</strong> — that is by design, it is what saves the battery.</p>
-              <ul><li><strong>Deep sleep</strong> for battery: months of runtime, unreachable while asleep.</li><li><strong>Light sleep</strong>: sleeps but keeps WiFi, wakes fast.</li><li><strong>Always on</strong> for USB/mains and for BME680 air quality.</li></ul>`}
+              <ul><li><strong>Deep sleep</strong> for battery: months of runtime, unreachable while asleep.</li><li><strong>Light sleep</strong>: powers down between sends and rejoins the network on each wake.</li><li><strong>Always on</strong> for USB/mains and for BME680 air quality.</li></ul>`}
           ${live ? UI.note('ok', 'The device is live.') : html`<div class="row"><button type="button" class="btn btn-primary" data-golive>${T.icon('radio')} Go live</button><span class="hint">You choose the power mode in the next step.</span></div>`}` })}
 
         ${UI.card({ title: 'Getting back into setup', icon: 'settings', body: html`

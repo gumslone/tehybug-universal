@@ -370,14 +370,19 @@
       const c = T.State.config;
       const dest = T.destinations();
       const display = T.isDisplay();
+      // Offline mode outranks every network destination in the firmware: with
+      // it stored, "going live" means running with WiFi off.
+      const offline = !!c.offlineModeActive;
       const power = c.sleepModeActive ? 'deep' : (c.lightSleepModeActive ? 'light' : 'on');
       const iaq = !!T.State.seen.iaq;
       const body = html`
-        <p>Going live ends setup mode and starts sending. ${display ? '' : 'The device restarts and this interface stops being served.'}</p>
+        <p>${offline
+          ? html`Offline mode is switched on, so leaving setup mode runs the device <strong>with WiFi off</strong>: it logs to its memory module and nothing is sent. Switch offline mode off on <a href="#/datalog">Data log</a> first if you want it to send.`
+          : html`Going live ends setup mode and starts sending. ${display ? '' : 'The device restarts and this interface stops being served.'}`}</p>
         ${dest.length
           ? html`<p class="mb0"><strong>Readings go to</strong></p><ul>${dest.map(d => html`<li>${d.label} <span class="hint">${d.detail}</span></li>`)}</ul>`
           : UI.note('warn', html`Nothing is switched on yet, so the device would go live and send nowhere — and with nothing to serve it just returns to setup mode. Set a destination on <a href="#/senddata">Send data</a> first.`)}
-        ${display ? '' : html`<h3 class="mt">Power</h3>${UI.choice({ name: 'golive-power', value: power, options: [
+        ${display || offline ? '' : html`<h3 class="mt">Power</h3>${UI.choice({ name: 'golive-power', value: power, options: [
           { value: 'deep', label: 'Deep sleep — battery', hint: 'Powers down between sends (≈20 µA). Months on a battery; unreachable while asleep.' },
           { value: 'light', label: 'Light sleep', hint: 'Sleeps between sends but keeps WiFi associated, so it wakes fast. A middle ground.' },
           { value: 'on', label: 'Always on — USB / mains', hint: 'WiFi stays connected (≈80 mA). Needed for BME680 air-quality values.' }
@@ -389,15 +394,16 @@
         title: 'Go live', body,
         buttons: [
           { label: 'Cancel' },
-          { label: 'Go live', cls: 'btn-primary', icon: 'radio', disabled: !dest.length, onClick: async (a, btn) => {
+          { label: offline ? 'Go offline' : 'Go live', cls: 'btn-primary', icon: 'radio', disabled: !dest.length, onClick: async (a, btn) => {
             btn.disabled = true;
             const data = { configModeActive: false };
-            if (!display) { const p = T.radio('golive-power'); data.sleepModeActive = p === 'deep'; data.lightSleepModeActive = p === 'light'; }
+            if (!display && !offline) { const p = T.radio('golive-power'); data.sleepModeActive = p === 'deep'; data.lightSleepModeActive = p === 'light'; }
             try {
               await T.Api.saveConfig(Object.assign({ reboot: true }, data));
               T.applyConfig(data);
               a.close();
-              if (display) { await T.Restart.wait({ title: 'Going live…', text: 'The device is restarting into live mode. The screen keeps running; this page comes back in about 15 seconds.' }); }
+              if (offline) T.LeftSetup.show('offline');
+              else if (display) { await T.Restart.wait({ title: 'Going live…', text: 'The device is restarting into live mode. The screen keeps running; this page comes back in about 15 seconds.' }); }
               else T.LeftSetup.show('live');
             } catch (e) { btn.disabled = false; Shell.toast('Could not go live: ' + e.message, 'danger', 6000); }
           } }
@@ -428,10 +434,12 @@
         dismissable: true,
         body: html`
           <p>${kind === 'offline'
-            ? 'The device restarted with WiFi off. It now wakes on the log interval, measures, writes a line to its data log and sleeps again.'
-            : 'The device restarted and is sending readings on its own schedule. This page is no longer served — that is normal.'}</p>
-          ${cloud ? html`<p>Add the device to your account on <a href="https://tehybug.com" target="_blank" rel="noopener">tehybug.com</a> with the key from the dashboard; the first reading arrives after the first interval.</p>` : ''}
-          ${UI.note('info', html`<strong>To change anything later:</strong> press <strong>RESET</strong>, then <strong>MODE</strong> within a second, until the LED turns ${T.led('blue')}. If the LED stays dark, press RESET twice about a second apart, then MODE. Then open this address again.`)}`,
+            ? (T.isDisplay()
+              ? 'The device restarted with WiFi off. The screen, clock and alarms keep running and it writes to its data log on the log interval; nothing is sent.'
+              : 'The device restarted with WiFi off. It now wakes on the log interval, measures, writes a line to its data log and sleeps again.')
+            : 'The device restarted and sends its first readings right away, then on its own schedule. This page is no longer served — that is normal.'}</p>
+          ${cloud ? html`<p>Add the device to your account on <a href="https://tehybug.com" target="_blank" rel="noopener">tehybug.com</a> with the key from the dashboard; the first reading shows up within a minute or so.</p>` : ''}
+          ${UI.note('info', html`<strong>To change anything later:</strong> press <strong>RESET</strong>, then <strong>MODE</strong> within a second, until the LED turns ${T.led('blue')}. If the LED stays dark, press RESET twice about a second apart, then MODE.${kind === 'offline' && T.isDisplay() ? ' Holding the right button for 10 seconds switches WiFi back on as well.' : ''} Then open this address again.`)}`,
         buttons: [{ label: 'Close' }]
       });
     }

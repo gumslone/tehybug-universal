@@ -31,7 +31,7 @@
           <p class="hint">MODE is on the chip's boot pin: pressing it after RESET is fine; holding it while RESET is pressed starts flashing mode instead.</p>` })}
 
         ${UI.card({ title: 'All placeholders', icon: 'list', body: html`
-          <p class="hint">Any of these can be used in URLs, payloads, topics, the data-log template${display ? ' and the screen lines' : ''}. Which ones carry values depends on the attached sensors — the ones this device produces are listed on <a href="#/senddata">Send data</a>.</p>
+          <p class="hint">Any of these can be used in URLs, payloads, the data-log template${display ? ' and the screen lines' : ''} (not in the MQTT topic, which is sent as written). Which ones carry values depends on the attached sensors — the ones this device produces are listed on <a href="#/senddata">Send data</a>.</p>
           <div class="ph-list">${T.Readings.order.map(k => html`<div><code>%${k}%</code><span>${T.Readings.name(k)}</span><span class="u">${T.Readings.unit(k)}</span></div>`)}
             <div><code>%temp_imp%</code><span>Temperature</span><span class="u">°F</span></div>
             <div><code>%key%</code><span>Device key</span><span class="u"></span></div></div>

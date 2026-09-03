@@ -171,8 +171,9 @@
   ];
   const MAP = {};
   READINGS.forEach(r => { MAP[r[0]] = { key: r[0], name: r[1], unit: r[2], icon: r[3], param: r[4] }; });
-  // DHTesp's ComfortState enum, which the firmware reports as an integer
-  const COMFORT = ['Comfortable', 'Too hot', 'Too cold', 'Too dry', 'Too humid', 'Hot and humid', 'Hot and dry', 'Cold and humid', 'Cold and dry'];
+  // DHTesp's ComfortState enum, which the firmware reports as an integer. It
+  // is a bit field (hot 1, cold 2, dry 4, humid 8), not a sequence.
+  const COMFORT = { 0: 'Comfortable', 1: 'Too hot', 2: 'Too cold', 4: 'Too dry', 8: 'Too humid', 9: 'Hot and humid', 5: 'Hot and dry', 10: 'Cold and humid', 6: 'Cold and dry' };
   // The firmware names Fahrenheit siblings inconsistently: temp -> temp_imp,
   // temp2 -> temp2_imp, but hi2 -> hi_imp2 and dew2 -> dew_imp2.
   function impKey(k) {

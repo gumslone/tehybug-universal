@@ -43,13 +43,13 @@
           : UI.card({ title: 'Power', icon: 'battery', body: html`
             ${UI.choice({ name: 'power', value: power, options: [
               { value: 'deep', label: 'Deep sleep — for battery', hint: 'Powers down between sends (≈20 µA), wakes, connects, sends, sleeps again. Unreachable while asleep' + (maxSleep ? '; longest interval ' + maxSleep : '') + '.' },
-              { value: 'light', label: 'Light sleep', hint: 'The CPU and radio sleep between sends but the WiFi association is kept, so waking is quick. Roughly 5 mA between sends.' },
+              { value: 'light', label: 'Light sleep', hint: 'CPU and radio power down between sends; on each wake the device rejoins the network (well under a second on a good signal) and sends. Far less power than always on, more than deep sleep.' },
               { value: 'on', label: 'Always on — USB or mains', hint: 'WiFi stays connected all the time (≈80 mA). Required for BME680 air quality, which needs 30+ minutes of continuous running.' }
             ] })}
             ${UI.disclosure('How long does a battery last?', html`
               ${UI.table(['Mode', 'Interval', '2000 mAh battery'], [
                 ['Always on', 'any', '~1 day'],
-                ['Light sleep', '5 min', '~2 weeks'],
+                ['Light sleep', '5 min', '~2 weeks (rough)'],
                 ['Deep sleep', '15 min', '~3–5 months'],
                 ['Deep sleep', '1 h', '~6–12 months']
               ])}

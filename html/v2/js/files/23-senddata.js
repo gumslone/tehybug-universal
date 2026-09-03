@@ -6,6 +6,13 @@
   const T = window.TeHyBug, html = T.html, UI = T.UI, $ = T.$;
 
   const cloudFallback = () => T.CLOUD_URL + '?bug_key=%key%&t=%temp%&h=%humi%';
+  // The firmware clamps intervals to 10 s .. the longest deep sleep the chip
+  // can do (about 3.5 h); say so where the number is typed.
+  const maxInterval = () => (T.isDisplay() ? 0 : parseInt(T.State.info.deepSleepMax, 10) || 0);
+  const intervalHint = () => (maxInterval() ? 'At least 10 s, at most ' + T.fmt.secs(maxInterval()) + ' (the longest sleep the chip can do).' : 'At least 10 s.');
+  const clampInterval = v => { const m = maxInterval(); return Math.max(10, m ? Math.min(m, v) : v); };
+  // https needs the TLS client, which the 1 MB build for first-generation boards leaves out
+  const checkScheme = (url, fieldId) => { if (T.isGeneric() && /^https:/i.test(url)) throw T.fail('First-generation boards have no TLS client — use an http:// address', fieldId); };
   const cloudPreview = () => T.Suggest.have() ? T.Suggest.cloudUrl(T.units()) : cloudFallback();
 
   function cloudCard(c) {
@@ -16,25 +23,25 @@
       ${UI.toggle({ id: 'cloudActive', cls: 'big', label: 'Send to TeHyBug Cloud', checked: on })}
       <div id="cloud-fields" ${on ? '' : 'hidden'}>
         <div class="field"><label>Your device key</label><div class="row"><code>${key || '…'}</code>${key ? html`<button type="button" class="btn btn-sm" data-copy="${key}">${T.icon('copy')} Copy</button>` : ''}</div><div class="hint">Add the device to your tehybug.com account with this key.</div></div>
-        ${UI.field({ id: 'cloudFreq', label: 'Send every', labelHint: 'seconds', type: 'number', value: on && c.httpGetFrequency ? c.httpGetFrequency : 900, attrs: 'min="60" inputmode="numeric"', hint: '900 s (15 min) suits a battery device; the cloud keeps the history either way.' })}
+        ${UI.field({ id: 'cloudFreq', label: 'Send every', labelHint: 'seconds', type: 'number', value: on && c.httpGetFrequency ? c.httpGetFrequency : 900, attrs: 'min="60" inputmode="numeric"', hint: '900 s (15 min) suits a battery device; the cloud keeps the history either way. ' + intervalHint() })}
         <div class="hint">The device will request <code id="cloud-url">${cloudPreview()}</code></div>
       </div>` });
   }
 
   function mqttCard(c) {
     const mode = c.haActive ? 'ha' : (c.mqttActive ? 'custom' : 'off');
-    return UI.card({ title: 'Home Assistant & MQTT', icon: 'home', body: html`
-      ${UI.choice({ name: 'mqttMode', value: mode, options: [
-        { value: 'off', label: 'Off' },
-        { value: 'ha', label: 'Home Assistant', hint: 'The sensors appear in Home Assistant by themselves (MQTT auto-discovery).' },
-        { value: 'custom', label: 'Publish to an MQTT topic', hint: 'Your broker, your topic, your payload.' }
-      ] })}
+    // the 1 MB build for first-generation boards has no Home Assistant support
+    const options = [{ value: 'off', label: 'Off' }];
+    if (!T.isGeneric()) options.push({ value: 'ha', label: 'Home Assistant', hint: 'The sensors appear in Home Assistant by themselves (MQTT auto-discovery).' });
+    options.push({ value: 'custom', label: 'Publish to an MQTT topic', hint: 'Your broker, your topic, your payload.' });
+    return UI.card({ title: T.isGeneric() ? 'MQTT' : 'Home Assistant & MQTT', icon: 'home', body: html`
+      ${UI.choice({ name: 'mqttMode', value: mode, options })}
       <div id="mqtt-fields" ${mode === 'off' ? 'hidden' : ''}>
         <h3 class="mt">Broker</h3>
         ${UI.field({ id: 'mqttServer', label: 'Server', labelHint: 'IP or hostname', value: c.mqttServer === '0.0.0.0' ? '' : c.mqttServer, placeholder: '192.168.1.10 or homeassistant.local', attrs: 'autocomplete="off" maxlength="63" inputmode="url"' })}
         <div class="fields-inline">
-          ${UI.field({ id: 'mqttPort', label: 'Port', type: 'number', value: c.mqttPort || 1883, attrs: 'inputmode="numeric"', hint: '1883 plain, 8883 TLS' })}
-          ${UI.field({ id: 'mqttFrequency', label: 'Send every', labelHint: 's', type: 'number', value: c.mqttFrequency || 600, attrs: 'min="10" inputmode="numeric"' })}
+          ${UI.field({ id: 'mqttPort', label: 'Port', type: 'number', value: c.mqttPort || 1883, attrs: 'inputmode="numeric"', hint: 'Usually 1883 — plain MQTT; this firmware does not speak TLS.' })}
+          ${UI.field({ id: 'mqttFrequency', label: 'Send every', labelHint: 's', type: 'number', value: c.mqttFrequency || 600, attrs: 'min="10" inputmode="numeric"', hint: intervalHint() })}
         </div>
         <div class="fields-inline">
           ${UI.field({ id: 'mqttUser', label: 'User', value: c.mqttUser, placeholder: 'optional', attrs: 'autocomplete="off"' })}
@@ -57,7 +64,7 @@
       ${UI.toggle({ id: 'getActive', label: 'Request a URL with the readings', checked: custom, hint: 'For simple logging services and webhooks: the values ride in the query string.' })}
       <div id="get-fields" ${custom ? '' : 'hidden'}>
         ${UI.field({ id: 'httpGetURL', label: 'URL', type: 'url', value: url, placeholder: 'https://example.com/log?device=%key%&t=%temp%', attrs: 'inputmode="url" autocomplete="off"', after: UI.fill('httpGetURL', 'query', 'Keep the server, rebuild the query from my sensors:') })}
-        ${UI.field({ id: 'httpGetFrequency', label: 'Send every', labelHint: 'seconds', type: 'number', value: c.httpGetFrequency || 900, attrs: 'min="10" inputmode="numeric"' })}
+        ${UI.field({ id: 'httpGetFrequency', label: 'Send every', labelHint: 'seconds', type: 'number', value: c.httpGetFrequency || 900, attrs: 'min="10" inputmode="numeric"', hint: intervalHint() })}
       </div>` });
   }
 
@@ -67,7 +74,7 @@
       <div id="post-fields" ${c.httpPostActive ? '' : 'hidden'}>
         ${UI.field({ id: 'httpPostURL', label: 'URL', type: 'url', value: c.httpPostURL, placeholder: 'https://example.com/api/readings', attrs: 'inputmode="url" autocomplete="off"' })}
         ${UI.field({ id: 'httpPostJson', label: 'JSON body template', value: c.httpPostJson, placeholder: '{"device":"%key%","temp":"%temp%","humi":"%humi%"}', after: UI.fill('httpPostJson', 'json') })}
-        ${UI.field({ id: 'httpPostFrequency', label: 'Send every', labelHint: 'seconds', type: 'number', value: c.httpPostFrequency || 900, attrs: 'min="10" inputmode="numeric"' })}
+        ${UI.field({ id: 'httpPostFrequency', label: 'Send every', labelHint: 'seconds', type: 'number', value: c.httpPostFrequency || 900, attrs: 'min="10" inputmode="numeric"', hint: intervalHint() })}
       </div>` });
   }
 
@@ -119,7 +126,7 @@
         ${mqttCard(c)}
         ${getCard(c)}
         ${postCard(c)}
-        ${UI.card({ title: 'Placeholders this device provides', icon: 'list', actions: UI.unitsSeg(), body: html`<div id="ph-list">${UI.placeholderList()}</div><p class="hint mt">Use them in URLs, payloads and topics; <code>%key%</code> is the device key. The °C/°F switch also decides what the “fill from my sensors” links produce.</p>` })}`;
+        ${UI.card({ title: 'Placeholders this device provides', icon: 'list', actions: UI.unitsSeg(), body: html`<div id="ph-list">${UI.placeholderList()}</div><p class="hint mt">Use them in URLs and payloads (the MQTT topic is sent as written); <code>%key%</code> is the device key. The °C/°F switch also decides what the “fill from my sensors” links produce.</p>` })}`;
     },
     mount(root) {
       root.addEventListener('change', e => {
@@ -140,23 +147,25 @@
       if (cloud) {
         out.httpGetActive = true;
         out.httpGetURL = cloudPreview();
-        out.httpGetFrequency = Math.max(10, T.int('cloudFreq', 900));
+        out.httpGetFrequency = clampInterval(T.int('cloudFreq', 900));
       } else {
         out.httpGetActive = get;
         out.httpGetURL = T.val('httpGetURL').trim();
-        out.httpGetFrequency = Math.max(10, T.int('httpGetFrequency', 900));
+        out.httpGetFrequency = clampInterval(T.int('httpGetFrequency', 900));
         if (get && !T.isUrl(out.httpGetURL)) throw T.fail('Enter the full HTTP GET URL, starting with http:// or https://', 'httpGetURL');
+        if (get) checkScheme(out.httpGetURL, 'httpGetURL');
       }
       out.httpPostActive = post;
       out.httpPostURL = T.val('httpPostURL').trim();
       out.httpPostJson = T.val('httpPostJson').trim();
-      out.httpPostFrequency = Math.max(10, T.int('httpPostFrequency', 900));
+      out.httpPostFrequency = clampInterval(T.int('httpPostFrequency', 900));
       if (post && !T.isUrl(out.httpPostURL)) throw T.fail('Enter the full HTTP POST URL, starting with http:// or https://', 'httpPostURL');
+      if (post) checkScheme(out.httpPostURL, 'httpPostURL');
       out.mqttServer = T.val('mqttServer').trim();
       out.mqttPort = T.int('mqttPort', 1883);
       out.mqttUser = T.val('mqttUser');
       out.mqttPassword = T.val('mqttPassword');
-      out.mqttFrequency = Math.max(10, T.int('mqttFrequency', 600));
+      out.mqttFrequency = clampInterval(T.int('mqttFrequency', 600));
       out.mqttMasterTopic = T.val('mqttMasterTopic').trim();
       out.mqttMessage = T.val('mqttMessage').trim();
       out.mqttRetained = T.checked('mqttRetained');

@@ -10,7 +10,7 @@
   function eepromCard(c) {
     return UI.card({ title: 'Log to the device', icon: 'hard-drive', body: html`
       ${UI.toggle({ id: 'eepromLogActive', cls: 'big', label: 'Write readings to the EEPROM', checked: !!c.eepromLogActive })}
-      ${UI.field({ id: 'eepromLogFrequency', label: 'Every', labelHint: 'seconds', type: 'number', value: c.eepromLogFrequency || 60, attrs: 'min="60" inputmode="numeric"', hint: 'Timestamps have one-minute resolution, so 60 s or more. In offline mode this is also the sleep interval between wake-ups.' })}
+      ${UI.field({ id: 'eepromLogFrequency', label: 'Every', labelHint: 'seconds', type: 'number', value: c.eepromLogFrequency || 60, attrs: 'min="60" inputmode="numeric"', hint: 'Timestamps have one-minute resolution, so 60 s or more. When the device sleeps between sends, this interval also decides how often it wakes: the log and the sends share the shortest interval configured. In offline mode it is the wake interval outright.' })}
       ${UI.field({ id: 'eepromLogMessage', label: 'Which values', labelHint: 'optional', value: c.eepromLogMessage, placeholder: 'empty = the default set of measured values', after: UI.fill('eepromLogMessage', 'log'), hint: html`Placeholders such as <code>%temp% %humi%</code>. Fewer values per line means more history fits.` })}
       ${UI.toggle({ id: 'eepromLogHourly', label: 'One file per hour (last 24 h) instead of per day (last month)', checked: !!c.eepromLogHourly, hint: 'Per day keeps a rolling month at day resolution; per hour keeps a rolling 24 hours at finer detail. Changing this erases the existing log.' })}
       ${UI.disclosure('How much fits?', html`
@@ -32,7 +32,9 @@
         ? 'The Display Weatherstation stays awake — screen, clock and alarms keep running — it just never connects to WiFi, and keeps logging if logging is on. The right button held for 10 seconds toggles the same thing on the device (the LED turns purple).'
         : 'The device never connects to WiFi: it wakes on the log interval, measures, appends one line to the log and deep-sleeps again. The lowest power draw there is, and no network needed.'}</p>
       ${UI.note('info', html`Offline mode is exclusive: saving it switches off every network destination, the sleep modes and setup mode, and turns logging on. <strong>This page is then unreachable</strong> — to read the log later, press RESET, then MODE until the LED turns blue, and come back here.`)}
-      <div id="offline-unavailable" hidden>${UI.note('warn', 'No clock + EEPROM module was found, so offline mode would log nothing. If a DHT or DS18B20 is enabled on Port B (green) it occupies the pins the module needs — move it to Port A (black).')}</div>` });
+      <div id="offline-unavailable" hidden>${UI.note('warn', display
+        ? 'No clock + EEPROM module was found: the device would switch WiFi off and keep the screen running, but nothing gets logged. If a DHT or DS18B20 is enabled on Port B (green) it occupies the pins the module needs.'
+        : 'No clock + EEPROM module was found, and offline mode cannot engage without one: the device would restart with nothing to do and come straight back to setup mode. If a DHT or DS18B20 is enabled on Port B (green) it occupies the pins the module needs — move it to Port A (black).')}</div>` });
   }
 
   function filesInner() {
@@ -88,7 +90,7 @@
           title: goingOffline ? 'Switch to offline mode?' : 'Change the log layout?',
           okLabel: goingOffline ? 'Go offline' : 'Change and erase',
           danger: !goingOffline,
-          body: html`${goingOffline ? html`<p>After the restart the device runs with WiFi off and <strong>this page is unreachable</strong>. To get back: press RESET, then MODE until the LED turns blue${T.isDisplay() ? ', or hold the right button for 10 seconds' : ''}.</p>${lastLog && !lastLog.active ? UI.note('warn', 'No clock + EEPROM module was detected — the device would sleep and log nothing.') : ''}` : ''}
+          body: html`${goingOffline ? html`<p>After the restart the device runs with WiFi off and <strong>this page is unreachable</strong>. To get back: press RESET, then MODE until the LED turns blue${T.isDisplay() ? ', or hold the right button for 10 seconds' : ''}.</p>${lastLog && !lastLog.active ? UI.note('warn', T.isDisplay() ? 'No clock + EEPROM module was detected — WiFi goes off but nothing gets logged.' : 'No clock + EEPROM module was detected — offline mode cannot engage without one, so the device comes back to setup mode instead.') : ''}` : ''}
             ${layoutChange ? html`<p>Switching between per-day and per-hour files <strong>erases the existing log</strong>. Download anything you still need first.</p>` : ''}`
         });
       }

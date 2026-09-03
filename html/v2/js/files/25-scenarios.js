@@ -51,7 +51,7 @@
             <li><strong>No debouncing:</strong> while the condition stays true, the action fires on every send. Pair two scenarios (above → on, below → off) for a thermostat-style switch.</li>
             <li><strong>IO_13</strong> can source about 12 mA at 3.3 V — enough for an LED or a relay module's input, not a load.</li>
             <li><strong>Placeholders</strong> such as <code>%temp%</code> work in the URL and the JSON body.</li>
-            <li>HTTP actions need the network; pin actions also work in offline mode.</li>
+            <li>Scenarios are checked while the device is live and sending. HTTP actions need the network; on the Display Weatherstation the pin actions keep working in offline mode too.</li>
           </ul>` })}`;
     },
     mount(root) {
