@@ -45,6 +45,16 @@
                         <td><a href="https://github.com/gumslone/tehybug-universal/raw/main/firmware/tehybug.ino.esp8285_debug.bin" target="_blank">Download</a></td>
                     </tr>
                     <tr>
+                        <td>TeHyBug Display Weatherstation (OLED, clock, buzzer)</td>
+                        <td><code>tehybug.ino.display.bin</code></td>
+                        <td><a href="https://github.com/gumslone/tehybug-universal/raw/main/firmware/tehybug.ino.display.bin" target="_blank">Download</a></td>
+                    </tr>
+                    <tr>
+                        <td>Display Weatherstation with serial debug output</td>
+                        <td><code>tehybug.ino.display_debug.bin</code></td>
+                        <td><a href="https://github.com/gumslone/tehybug-universal/raw/main/firmware/tehybug.ino.display_debug.bin" target="_blank">Download</a></td>
+                    </tr>
+                    <tr>
                         <td>Old / first-gen TeHyBug (esp-01 based, generic ESP8266, 1&nbsp;MB)</td>
                         <td><code>tehybug.ino.generic.bin</code></td>
                         <td><a href="https://github.com/gumslone/tehybug-universal/raw/main/firmware/tehybug.ino.generic.bin" target="_blank">Download</a></td>
@@ -54,9 +64,12 @@
         </div>
         <div class="alert alert-info small mb-0">
             <strong>Which file?</strong> Use the <code>esp8285</code> build for the TeHyBug universal <em>and</em> Mini
-            TeHyBug (both use the ESP8285). The <code>generic</code> build is only for old / first-generation TeHyBugs
-            (esp-01 based generic ESP8266). The <code>_debug</code> build is only for troubleshooting (it prints over
-            serial and is larger).
+            TeHyBug (both use the ESP8285). The <code>display</code> build is for the Display Weatherstation (the one
+            with the OLED screen) &mdash; it is the same firmware plus the screen, clock and alarms. The
+            <code>generic</code> build is only for old / first-generation TeHyBugs (esp-01 based generic ESP8266).
+            The <code>_debug</code> build is only for troubleshooting (it prints over serial and is larger).
+            <br><span id="firmware_board_hint" class="d-none">Your device reports itself as
+            <strong><span id="firmware_board_name"></span></strong>, so keep to that build when you update.</span>
         </div>
     </div>
 </div>
@@ -104,12 +117,12 @@
         if (!target) { return; }
         var url = 'https://raw.githubusercontent.com/gumslone/tehybug-universal/main/CHANGELOG.md';
 
-        function esc(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+        function esc(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
         function inline(s) {
             return esc(s)
                 .replace(/`([^`]+)`/g, '<code>$1</code>')
                 .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
-                .replace(/\[([^\]]+)\]\((https?:[^)]+)\)/g, '<a href="$2" target="_blank">$1</a>');
+                .replace(/\[([^\]]+)\]\((https?:[^)\s"'<>]+)\)/g, '<a href="$2" target="_blank">$1</a>');
         }
         function mdToHtml(md) {
             var lines = md.split('\n'), out = [], inList = false, para = [], m;

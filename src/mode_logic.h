@@ -46,11 +46,25 @@ inline bool dataLogAvailable(const Peripherals &p) {
 //                which is why it is a mode of its own and not folded into
 //                DeepSleep.
 //   Live       - stay awake and serve on tickers.
-enum class DeviceMode : uint8_t { Config, Offline, DeepSleep, LightSleep, Live };
+//   OfflineLive - display board only: WiFi off, but stay awake — the clock
+//                and sensor pages keep drawing, and the tickers still drive
+//                the EEPROM log and IO scenarios. Never sleeps.
+enum class DeviceMode : uint8_t {
+  Config, Offline, DeepSleep, LightSleep, Live, OfflineLive
+};
 
-inline DeviceMode currentMode(const Device &d, const Peripherals &p) {
+// alwaysOnDisplay is the display board (TEHYBUG_DISPLAY): its panel must keep
+// drawing, so "offline" means WiFi-off-but-awake (OfflineLive) rather than the
+// battery boards' log-and-deep-sleep Offline, and the sleep modes — which
+// would blank a mains-powered clock — never engage even if a shared config
+// carries them.
+inline DeviceMode currentMode(const Device &d, const Peripherals &p,
+                              bool alwaysOnDisplay = false) {
   if (d.configMode) {
     return DeviceMode::Config;
+  }
+  if (alwaysOnDisplay) {
+    return d.offlineMode ? DeviceMode::OfflineLive : DeviceMode::Live;
   }
   if (offlineEnabled(d, p)) {
     return DeviceMode::Offline;
@@ -74,11 +88,12 @@ inline bool isSleeping(DeviceMode m) {
 // for logs and the device-info payload
 inline const char *modeName(DeviceMode m) {
   switch (m) {
-    case DeviceMode::Config:     return "config";
-    case DeviceMode::Offline:    return "offline";
-    case DeviceMode::DeepSleep:  return "deep-sleep";
-    case DeviceMode::LightSleep: return "light-sleep";
-    case DeviceMode::Live:       return "live";
+    case DeviceMode::Config:      return "config";
+    case DeviceMode::Offline:     return "offline";
+    case DeviceMode::DeepSleep:   return "deep-sleep";
+    case DeviceMode::LightSleep:  return "light-sleep";
+    case DeviceMode::Live:        return "live";
+    case DeviceMode::OfflineLive: return "offline-display";
   }
   return "unknown";
 }
@@ -173,16 +188,31 @@ struct SetupPlan {
   bool tickers{false};
 };
 
-inline SetupPlan setupPlan(const Device &d, const DataServ &s) {
+inline SetupPlan setupPlan(const Device &d, const DataServ &s,
+                           bool alwaysOnDisplay = false) {
   SetupPlan p;
   if (d.configMode) {
     p.webServer = true;
     return p;
   }
+  // Display board with WiFi off: nothing network-facing comes up, but the
+  // tickers still run — they drive the EEPROM log and the IO scenarios
+  // (setupServeTickers skips the network services in this mode).
+  if (alwaysOnDisplay && d.offlineMode) {
+    p.tickers = true;
+    return p;
+  }
+  // The display board is mains powered and never sleeps, so its web UI stays
+  // up in live mode too: no RESET+MODE dance just to tweak a setting on a
+  // device that is awake anyway (only the setup access point goes away).
+  // Battery boards keep the web server config-only - their live mode exists
+  // to spend as little time awake as possible.
+  p.webServer = alwaysOnDisplay;
   p.mqtt = s.mqtt.active || s.ha.active;
   p.ha = s.ha.active;
   p.remoteControl = d.remoteControl.active;
-  p.tickers = !sleepEnabled(d);
+  // the display board never sleeps (see currentMode), so it always tickers
+  p.tickers = alwaysOnDisplay || !sleepEnabled(d);
   return p;
 }
 

@@ -1,0 +1,19 @@
+{
+  "css": [
+    "files/app.css"
+  ],
+  "js": [
+    "files/00-core.js",
+    "files/10-shell.js",
+    "files/20-dashboard.js",
+    "files/21-start.js",
+    "files/22-sensors.js",
+    "files/23-senddata.js",
+    "files/24-system.js",
+    "files/25-scenarios.js",
+    "files/26-datalog.js",
+    "files/27-display.js",
+    "files/28-firmware.js",
+    "files/29-help.js"
+  ]
+}

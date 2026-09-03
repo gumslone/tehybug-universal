@@ -33,17 +33,31 @@ jobs:
       - name: Install toolchain
         run: ./ci/install-deps.sh
 
-      # The firmware derives its version from the compile timestamp
-      # (YYMMDDHHMM, see fw_version.h); capture the same timestamp at build
-      # start so the release tag matches the version the device reports.
+      # The release tag is the semantic version the firmware reports
+      # (FW_VERSION in src/fw_version.h). If that tag already exists, the
+      # version was not bumped for this merge: binaries are still refreshed
+      # and committed, but no changelog entry or release is made.
       - name: Set version
         id: version
-        run: echo "tag=v$(date -u +%y%m%d%H%M)" >> "$GITHUB_OUTPUT"
+        run: |
+          ver="$(grep -oE '#define FW_VERSION "[0-9]+\.[0-9]+\.[0-9]+"' src/fw_version.h | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')"
+          if [ -z "$ver" ]; then
+            echo "FW_VERSION not found in src/fw_version.h" >&2
+            exit 1
+          fi
+          echo "tag=v$ver" >> "$GITHUB_OUTPUT"
+          if git rev-parse -q --verify "refs/tags/v$ver" >/dev/null; then
+            echo "released=true" >> "$GITHUB_OUTPUT"
+            echo "==> v$ver is already released; will refresh binaries only"
+          else
+            echo "released=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Build firmware binaries
         run: |
           ./build.sh all
           ./build.sh esp8285 debug
+          ./build.sh display debug
 
       # Fails if a binary grows past the size at which it can still update
       # itself over the air — the 1MB generic build has very little headroom.
@@ -59,7 +73,7 @@ jobs:
       # Prepend a release section to CHANGELOG.md from the commits since the
       # last tag, and write release-notes.md for the release body.
       - name: Update changelog
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.version.outputs.released == 'false'
         run: ./ci/changelog.sh "${{ steps.version.outputs.tag }}"
 
       - name: Commit updated binaries and changelog
@@ -67,7 +81,9 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add firmware/tehybug.ino.esp8285.bin firmware/tehybug.ino.esp8285_debug.bin firmware/tehybug.ino.generic.bin CHANGELOG.md
+          # CHANGELOG.md is unchanged (and that is fine) when the version was
+          # not bumped - git add tolerates it either way
+          git add firmware/tehybug.ino.esp8285.bin firmware/tehybug.ino.esp8285_debug.bin firmware/tehybug.ino.display.bin firmware/tehybug.ino.display_debug.bin firmware/tehybug.ino.generic.bin CHANGELOG.md
           if git diff --cached --quiet; then
             echo "Nothing to commit."
           else
@@ -76,7 +92,7 @@ jobs:
           fi
 
       - name: Create release
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.version.outputs.released == 'false'
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.version.outputs.tag }}
@@ -88,4 +104,6 @@ jobs:
             --notes-file release-notes.md \
             firmware/tehybug.ino.esp8285.bin \
             firmware/tehybug.ino.esp8285_debug.bin \
+            firmware/tehybug.ino.display.bin \
+            firmware/tehybug.ino.display_debug.bin \
             firmware/tehybug.ino.generic.bin

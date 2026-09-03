@@ -105,8 +105,9 @@ const sensorMap = {
     'iaq': { name: "Indoor air quality", unit: "", url: '', mqtt: ', "iaq":"%iaq%"' },
     'qfe': { name: "Atmospheric pressure", unit: "hPa", url: '&p=%qfe%', mqtt: ', "qfe":"%qfe%"' },
     'alt': { name: "Altitude", unit: "m", url: '', mqtt: ', "alt":"%alt%"' },
-    'eco2': { name: "CO2 equivalent", unit: "", url: '', mqtt: ', "eco2":"%eco2%"' },
-    'bvoc': { name: "breath VOC equivalent", unit: "", url: '', mqtt: ', "bvoc":"%bvoc%"' },
+    'eco2': { name: "CO2 equivalent", unit: "ppm", url: '', mqtt: ', "eco2":"%eco2%"' },
+    'bvoc': { name: "breath VOC equivalent", unit: "ppm", url: '', mqtt: ', "bvoc":"%bvoc%"' },
+    'tvoc': { name: "Total VOC", unit: "ppb", url: '', mqtt: ', "tvoc":"%tvoc%"' },
     'uv': { name: "UV index", unit: "", url: '&u=%uv%', mqtt: ', "uv":"%uv%"' },
     'lux': { name: "Ambient light", unit: "Lux", url: '&l=%lux%', mqtt: ', "lux":"%lux%"' },
     'adc': { name: "ADC", unit: "ADC", url: '&x=%adc%', mqtt: ', "adc":"%adc%"' }
@@ -250,8 +251,43 @@ function RefreshData(input) {
     }
 
     $.each(jsonData, function (key, val) {
+        // Board gate: the device reports which board its binary targets
+        // ("universal" / "generic" / "display", in both the info and the
+        // config dump). Firmware from before this key reported nothing -
+        // treated as a board without a display.
+        if (key === 'board') {
+            window.deviceBoard = val.toString();
+            if (window.deviceBoard === 'display') {
+                $('.display-only').removeClass('d-none');
+                // its counterpart: text that is only true for the battery
+                // boards (e.g. "offline mode deep-sleeps")
+                $('.display-hidden').addClass('d-none');
+                // Settings the display build ignores (the sleep modes): grey
+                // them out rather than let someone set one and wonder why
+                // nothing happened. They still submit as false, which is what
+                // the firmware stores anyway.
+                $('.display-not-applicable').css('opacity', 0.5)
+                    .find('input').prop('disabled', true);
+            }
+            const boardNames = {
+                'universal': 'TeHyBug universal / Mini (esp8285 build)',
+                'display': 'Display Weatherstation (display build)',
+                'generic': 'Old / first-generation TeHyBug (generic build)'
+            };
+            const label = boardNames[window.deviceBoard] || window.deviceBoard;
+            $('#boardName').text(label);
+            $('#boardRow').removeClass('d-none'); // see main.php
+
+            // firmware page: name the build to keep to when updating
+            if ($('#firmware_board_name').length) {
+                $('#firmware_board_name').text(label);
+                $('#firmware_board_hint').removeClass('d-none');
+            }
+            return;
+        }
+
         // Config JSON
-        const configPages = ['settings', 'ha_settings', 'cloud_settings', 'setsensor', 'scenarios', 'setsystem', 'datalog'];
+        const configPages = ['settings', 'ha_settings', 'cloud_settings', 'setsensor', 'scenarios', 'setsystem', 'datalog', 'display_settings'];
         if (configPages.includes(pageName)) {
             if (typeof val === 'boolean') {
                 $("#" + key).not(".dont-change").prop('checked', val);
@@ -273,7 +309,7 @@ function RefreshData(input) {
         }
 
         // Sensor data
-        const sensorPages = ['settings', 'cloud_settings', 'main', 'datalog'];
+        const sensorPages = ['settings', 'cloud_settings', 'main', 'datalog', 'display_settings'];
         if (sensorPages.includes(pageName)) {
             sensorData(key, val.toString());
         }

@@ -6,29 +6,70 @@
 #include "data_types.h"
 #include "pixel.h"
 
+// Pool for the whole configuration document (stored file, UI dump, load).
+//
+// ArduinoJson drops members silently once the pool is full, so being tight
+// here does not fail loudly — it loses settings. Both the key and the value
+// of every entry written through put() are copied into the pool (they are
+// Arduino Strings, which ArduinoJson duplicates; only string *literals*
+// passed as const char* are stored by pointer), so the keys alone account
+// for the best part of a kilobyte.
+//
+// The sizes below come from measuring a deliberately fully-configured device
+// — long cloud URLs, a "fill from my sensors" MQTT and POST payload, three
+// populated scenarios — in tests/test_config_size.cpp, which fails if the
+// inventory ever outgrows them again:
+//
+//   universal   3694 bytes needed
+//   display     4616 bytes needed (three template lines, clock options and
+//               three alarms on top)
+//
+// The old 3072 was therefore already too small for a heavily configured
+// device, on every board, before the display keys were added at all.
+#if TEHYBUG_DISPLAY
+static constexpr size_t CONFIG_DOC_SIZE = 5632;
+#else
+static constexpr size_t CONFIG_DOC_SIZE = 4608;
+#endif
+
 class TeHyBugConfig {
   public:
 
-    TeHyBugConfig(Calibration & calibration, Sensor & sensor, Peripherals & peripherals, Device & device, DataServ & serveData, Scenarios & scenarios, TeHyBugPixel & pixel) :
+    TeHyBugConfig(Calibration & calibration, Sensor & sensor, Peripherals & peripherals, Device & device, DataServ & serveData, Scenarios & scenarios, DisplayConf & displayConf, Alarms & alarms, TeHyBugPixel & pixel) :
       m_calibration(calibration),
       m_sensor(sensor),
       m_peripherals(peripherals),
       m_device(device),
       m_serveData(serveData),
       m_scenarios(scenarios),
+      m_displayConf(displayConf),
+      m_alarms(alarms),
       m_pixel(pixel)
     {}
     void saveConfigCallback() {
       m_shouldSaveConfig = true;
     }
-    void saveConfig(bool force = false) {
+    // Writes the configuration to flash. Returns false when nothing was
+    // written although it should have been - the document overflowed its
+    // pool, or the file could not be opened or written - so a caller can say
+    // "not saved" instead of confirming.
+    bool saveConfig(bool force = false) {
       // save the custom parameters to FS
       if (!m_shouldSaveConfig && !force) {
-        return;
+        return true; // nothing pending
       }
 
-      DynamicJsonDocument json(3072);
+      DynamicJsonDocument json(CONFIG_DOC_SIZE);
       buildConfig(json, false); // only non-defaults: keeps the flash file small
+
+      // Check BEFORE opening the file: "w" truncates it on open, so bailing
+      // out afterwards would already have destroyed the stored settings.
+      // A document that did not fit its pool is missing members, and writing
+      // it would silently drop whatever was cut — keep the last good file.
+      if (json.overflowed()) {
+        D_println(F("Config save aborted: does not fit CONFIG_DOC_SIZE"));
+        return false;
+      }
 
       File configFile = SPIFFS.open("/config.json", "w");
       if (!configFile) {
@@ -36,16 +77,17 @@ class TeHyBugConfig {
         // not be told the settings were stored — this used to be ignored, so a
         // full or failed filesystem silently lost the configuration.
         D_println(F("Config save failed: cannot open /config.json"));
-        return;
+        return false;
       }
       const size_t written = serializeJson(json, configFile);
       configFile.close();
       if (written == 0) {
         D_println(F("Config save failed: nothing written"));
-        return;
+        return false;
       }
       m_shouldSaveConfig = false; // stored; nothing pending until the next change
       D_println(F("Config saved"));
+      return true;
     }
 
     // Builds the config document. full=false writes only values that differ
@@ -63,6 +105,12 @@ class TeHyBugConfig {
       const Scenario scenario{};
 
       json["key"] = m_device.key;
+      // Which board this binary targets — for the UI dump only, never
+      // persisted (it is a build fact, not a setting). The web UI uses it to
+      // show board-specific pages (the Display page) only where they apply.
+      if (full) {
+        json["board"] = BOARD_NAME;
+      }
 
 
       put(json, full, "mqttActive", m_serveData.mqtt.active, serveData.mqtt.active);
@@ -123,6 +171,29 @@ class TeHyBugConfig {
       put(json, full, "rc_active", m_device.remoteControl.active, device.remoteControl.active);
       put(json, full, "rc_url", m_device.remoteControl.url, device.remoteControl.url);
 
+#if TEHYBUG_DISPLAY
+      // Display board only. The key names are the original display
+      // firmware's, so a device upgraded from it keeps its stored pages,
+      // clock options and alarms.
+      const DisplayConf displayConf{};
+      const AlarmConf alarmConf{};
+      put(json, full, "line1", m_displayConf.line1, displayConf.line1);
+      put(json, full, "line2", m_displayConf.line2, displayConf.line2);
+      put(json, full, "line3", m_displayConf.line3, displayConf.line3);
+      put(json, full, "clock_12h", m_displayConf.clock12h, displayConf.clock12h);
+      put(json, full, "clock_show_ip", m_displayConf.showIp, displayConf.showIp);
+      put(json, full, "clock_sleep", m_displayConf.nightMode, displayConf.nightMode);
+      put(json, full, "clock_sleep_start", m_displayConf.nightStart, displayConf.nightStart);
+      put(json, full, "clock_sleep_finish", m_displayConf.nightEnd, displayConf.nightEnd);
+      for (uint8_t i = 0; i < Alarms::count; i++) {
+        const String prefix = "alarm" + String(i + 1);
+        AlarmConf &alarm = m_alarms.items[i];
+        put(json, full, prefix + "Active", alarm.active, alarmConf.active);
+        put(json, full, prefix + "Time", alarm.time, alarmConf.time);
+        put(json, full, prefix + "Message", alarm.message, alarmConf.message);
+        put(json, full, prefix + "Weekdays", alarm.weekdays, alarmConf.weekdays);
+      }
+#endif
     }
 
     // Smallest reporting interval accepted. A read + send pass can hold the
@@ -134,10 +205,14 @@ class TeHyBugConfig {
     static constexpr int MIN_DATA_FREQUENCY_S = 10;
 
     void validateDataFrequency(int &freq) {
+#if !TEHYBUG_DISPLAY
+      // an interval longer than the chip can sleep would never wake it; the
+      // display board never sleeps, so it has no such ceiling
       const int maxDS = (int)(ESP.deepSleepMax() / 1000000);
       if (freq > maxDS) {
         freq = maxDS;
       }
+#endif
       if (freq < MIN_DATA_FREQUENCY_S) {
         freq = MIN_DATA_FREQUENCY_S;
       }
@@ -154,7 +229,7 @@ class TeHyBugConfig {
         if (configFile) {
           D_println(F("opened config file"));
 
-          DynamicJsonDocument json(3072);
+          DynamicJsonDocument json(CONFIG_DOC_SIZE);
           const auto error = deserializeJson(json, configFile);
 
           if (!error) {
@@ -174,9 +249,10 @@ class TeHyBugConfig {
       }
     }
 
-    void setConfig(JsonObject &json) {
+    // Applies and stores a configuration. Returns whether it reached flash.
+    bool setConfig(JsonObject &json) {
       setConfigParameters(json);
-      saveConfig(true);
+      const bool stored = saveConfig(true);
 
       // restart the module when reboot is requested in save config
       if (json.containsKey("reboot") && json["reboot"]) {
@@ -185,21 +261,22 @@ class TeHyBugConfig {
         delay(1000);
         ESP.restart();
       }
+      return stored;
     }
 
-    // The stored file is already the JSON we serve, so hand it back as-is.
-    //
-    // This used to parse it into a 3072-byte DynamicJsonDocument and
-    // re-serialize that into a String, i.e. hold the document, the file buffer
-    // and the output at once — on every websocket connect (sendConfig) and
-    // every GET /api/config, purely to reformat bytes we wrote ourselves.
     // Serves the complete configuration, not the stored file: the file only
     // holds non-default values, and the UI must also see the ones that equal
     // their defaults (see buildConfig). Costs one 3 KB document per config
     // page load, paid only in config mode where the heap is at its freest.
     String getConfig() {
-      DynamicJsonDocument json(3072);
+      DynamicJsonDocument json(CONFIG_DOC_SIZE);
       buildConfig(json, true);
+      // Not fatal for the UI the way it is for a save (nothing is written),
+      // but the page would show stale defaults for the missing keys, so say
+      // so rather than let it look like the device forgot them.
+      if (json.overflowed()) {
+        D_println(F("Config dump truncated: does not fit CONFIG_DOC_SIZE"));
+      }
       String out;
       out.reserve(measureJson(json) + 1);
       serializeJson(json, out);
@@ -228,6 +305,8 @@ class TeHyBugConfig {
     Device & m_device;
     DataServ & m_serveData;
     Scenarios & m_scenarios;
+    DisplayConf & m_displayConf;
+    Alarms & m_alarms;
     Peripherals & m_peripherals;
     TeHyBugPixel & m_pixel;
 
@@ -300,6 +379,39 @@ class TeHyBugConfig {
       // saveConfig() writes "key", so it must be read back here too — without
       // this the stored device key was ignored and regenerated on every boot.
       setData(json, "key", m_device.key);
+
+#if TEHYBUG_DISPLAY
+      setData(json, "line1", m_displayConf.line1);
+      setData(json, "line2", m_displayConf.line2);
+      setData(json, "line3", m_displayConf.line3);
+      setData(json, "clock_12h", m_displayConf.clock12h);
+      setData(json, "clock_show_ip", m_displayConf.showIp);
+      setData(json, "clock_sleep", m_displayConf.nightMode);
+      setData(json, "clock_sleep_start", m_displayConf.nightStart);
+      setData(json, "clock_sleep_finish", m_displayConf.nightEnd);
+      for (uint8_t i = 0; i < Alarms::count; i++) {
+        const String prefix = "alarm" + String(i + 1);
+        AlarmConf &alarm = m_alarms.items[i];
+        setData(json, prefix + "Active", alarm.active);
+        setData(json, prefix + "Time", alarm.time);
+        setData(json, prefix + "Message", alarm.message);
+        setData(json, prefix + "Weekdays", alarm.weekdays);
+      }
+      // The original display firmware stored "wifiActive"; its false is this
+      // firmware's offline mode, so an upgraded device that was running
+      // display-only keeps doing that instead of silently joining WiFi.
+      if (json.containsKey("wifiActive") && !json["wifiActive"].as<bool>()) {
+        m_device.offlineMode = true;
+      }
+
+      // A display board is mains powered and its panel must keep drawing:
+      // ignore sleep modes a shared or upgraded config may carry, and drop
+      // the Port B pin sensors — GPIO0/GPIO2 are the OLED's I2C bus here.
+      m_device.sleepMode = false;
+      m_device.lightSleepMode = false;
+      m_sensor.dht = false;
+      m_sensor.ds18b20 = false;
+#endif
     }
 
     template<typename T>

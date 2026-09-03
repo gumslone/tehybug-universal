@@ -46,5 +46,5 @@ jobs:
       - name: Install PlatformIO
         run: pip install platformio
 
-      - name: Build (esp8285 + generic)
-        run: pio run -e esp8285 -e generic
+      - name: Build (esp8285 + display + generic)
+        run: pio run -e esp8285 -e display -e generic

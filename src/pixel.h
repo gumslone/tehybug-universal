@@ -10,6 +10,13 @@
 #ifndef PIXEL_ACTIVE
 #define PIXEL_ACTIVE 1
 #endif
+
+// Whether SIGNAL_LED_PIN gates the pixel's power supply. The display board
+// powers its WS2812B permanently and uses GPIO4 for the buzzer instead, so
+// driving the "gate" there would sound the buzzer (see board.h).
+#ifndef PIXEL_POWER_GATED
+#define PIXEL_POWER_GATED 1
+#endif
 #define PIXEL_COUNT 1 // Number of NeoPixels
 #define PIXEL_PIN 12  // Digital IO pin connected to the NeoPixels.
 
@@ -39,7 +46,10 @@ public:
 #endif
   void on(uint8_t r=0, uint8_t g=0, uint8_t b=255, uint8_t brightness=50) {
     D_println("Led on");
-#if !SIGNAL_LED_ACTIVE
+#if !PIXEL_POWER_GATED
+    // permanently powered pixel: just clock the colour out
+    setPixel(r, g, b, brightness);
+#elif !SIGNAL_LED_ACTIVE
     (void)r; (void)g; (void)b; (void)brightness;
     return; // the pin is the debug serial line, see SIGNAL_LED_ACTIVE
 #else
@@ -72,7 +82,9 @@ public:
     // ran (a boot straight into a serving mode, sleep). Writing to a pin still
     // in INPUT mode only toggles its pullup, so the LED was not actually driven
     // off there.
-#if !SIGNAL_LED_ACTIVE
+#if !PIXEL_POWER_GATED
+    setPixel(0, 0, 0, 0);
+#elif !SIGNAL_LED_ACTIVE
     return; // the pin is the debug serial line, see SIGNAL_LED_ACTIVE
 #else
     pinMode(SIGNAL_LED_PIN, OUTPUT);

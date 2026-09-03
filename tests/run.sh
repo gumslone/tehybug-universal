@@ -18,6 +18,8 @@ echo "==> Building"
 "$CXX" $STD $INC tests/test_i2c.cpp -o "$OUT/test_i2c"
 "$CXX" $STD $INC tests/test_mode_logic.cpp -o "$OUT/test_mode_logic"
 "$CXX" $STD $INC tests/test_wifi_policy.cpp -o "$OUT/test_wifi_policy"
+"$CXX" $STD $INC tests/test_display_logic.cpp -o "$OUT/test_display_logic"
+"$CXX" $STD $INC tests/test_config_size.cpp -o "$OUT/test_config_size"
 
 echo "==> Running"
 rc=0
@@ -26,4 +28,6 @@ rc=0
 "$OUT/test_i2c" || rc=1
 "$OUT/test_mode_logic" || rc=1
 "$OUT/test_wifi_policy" || rc=1
+"$OUT/test_display_logic" || rc=1
+"$OUT/test_config_size" || rc=1
 exit $rc

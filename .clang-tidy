@@ -18,4 +18,8 @@ Checks: >
   -bugprone-unchecked-string-to-number-conversion,
   -bugprone-exception-escape,
   -bugprone-throwing-static-initialization
-HeaderFilterRegex: '(eeprom|mode_logic|common_functions|data_types|i2cscanner)\.h$'
+# Every project header the test TUs pull in. A header missing from this list
+# is silently NOT analysed: its warnings never surface and the run still
+# reports clean, which is exactly what happened to display_logic.h and
+# wifi_policy.h until they were added. Add new host-compilable headers here.
+HeaderFilterRegex: '(eeprom|mode_logic|common_functions|data_types|i2cscanner|display_logic|wifi_policy)\.h$'

@@ -18,19 +18,30 @@ String websocketConnection[MAX_WEBSOCKET_CLIENTS];
 
 const char mainPage[] PROGMEM = R"=====(
 <!doctype html>
-<html>
+<html lang="en">
 <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-    <title>TeHyBug</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f7a58">
+<title>TeHyBug</title>
+<style>
+body{margin:0;font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:#eef1f4;color:#182029}
+/* Only the placeholder card is styled: the web UI renders itself into #page
+   and takes the whole viewport, so #page must stay unstyled. */
+.hello{box-sizing:border-box;width:calc(100% - 32px);max-width:520px;margin:24px auto;background:#fff;border:1px solid #dde3e9;border-radius:14px;padding:20px}
+.hello h1{font-size:1.3rem;margin:0 0 8px;color:#0f7a58}
+.hello code{background:#f4f6f8;padding:2px 6px;border-radius:6px}
+@media(prefers-color-scheme:dark){body{background:#0d1218;color:#e7ecf1}.hello{background:#161c23;border-color:#28323c}.hello code{background:#1d252e}}
+</style>
 </head>
 <body>
 <div id="page">
-<h3>TeHyBug</h3>
-<b>On your own network this device is at: <span id="ip">tehybug.local</span></b>
-<br><br>Loading the full interface...
-<br>If it does not load, you are probably still on the TeHyBug access point,
-which has no internet. Rejoin your home WiFi and open the address above.
+<div class="hello">
+<h1>TeHyBug</h1>
+<p>On your own network this device is at <b><span id="ip">tehybug.local</span></b>.</p>
+<p>Loading the full interface&hellip;</p>
+<p>If it does not appear, you are probably still on the TeHyBug access point, which has no internet. Rejoin your home WiFi and open the address above.</p>
+</div>
 </div>
 <script>
 // Fill in the device address from the device itself. This is the only part of
@@ -41,7 +52,7 @@ function setBugIp() {
   xhr.open('GET', '/api/getip');
   xhr.onload = function() {
     var el = document.getElementById("ip");
-    if (xhr.status == 200 && el) { el.innerHTML = xhr.responseText; }
+    if (xhr.status == 200 && el) { el.textContent = xhr.responseText; }
   };
   xhr.send();
 }
@@ -52,8 +63,8 @@ setBugIp();
      blocking: a stylesheet in <head> blocks painting and a plain <script src>
      there blocks parsing, so on the access point (no internet) the browser
      stalled before it drew anything at all and the page came up empty. -->
-<link rel="stylesheet" href="https://tehybug.com/tehybug/v1/css/style.php" media="print" onload="this.media='all'">
-<script src="https://tehybug.com/tehybug/v1/js/javascript.php" defer></script>
+<link rel="stylesheet" href="https://tehybug.com/tehybug/v2/css/style.php" media="print" onload="this.media='all'">
+<script src="https://tehybug.com/tehybug/v2/js/javascript.php" defer></script>
 </body>
 </html>
 )=====";
@@ -61,8 +72,13 @@ setBugIp();
 /* Device info / sensor JSON */
 
 String getInfo() {
-  DynamicJsonDocument root(1024);
+  DynamicJsonDocument root(1280);
   root["gumboardVersion"] = version;
+  // exact build (YYMMDDHHMM): tells two builds of the same version apart
+  root["fwBuild"] = buildTimestamp;
+  // which board this binary targets ("universal" / "generic" / "display"), so
+  // the web UI can show board-specific pages only where they apply
+  root["board"] = BOARD_NAME;
   root["sketchSize"] = ESP.getSketchSize();
   root["freeSketchSpace"] = ESP.getFreeSketchSpace();
   root["wifiRSSI"] = String(WiFi.RSSI());
@@ -75,6 +91,19 @@ String getInfo() {
   root["sleepModeActive"] = tehybug.sleepEnabled();
   root["deepSleepMax"] = (int)(ESP.deepSleepMax() / 1000000);
   root["key"] = tehybug.device.key;
+  root["uptimeS"] = millis() / 1000;
+  // What the start-up I2C scan found, so the UI can say which sensors and
+  // modules are attached instead of leaving that to be inferred from which
+  // readings happen to arrive.
+  JsonObject detected = root.createNestedObject("detected");
+  detected["bmx"] = tehybug.sensor.bmx;
+  detected["bme680"] = tehybug.sensor.bme680;
+  detected["aht20"] = tehybug.sensor.aht20;
+  detected["am2320"] = tehybug.sensor.am2320;
+  detected["max44009"] = tehybug.sensor.max44009;
+  detected["sgp30"] = tehybug.sensor.sgp30;
+  detected["ds3231"] = tehybug.peripherals.ds3231;
+  detected["eeprom"] = tehybug.peripherals.eeprom;
   String json;
   serializeJson(root, json);
   return json;
@@ -109,19 +138,25 @@ void sendDeviceInfo() {
   // connect under that websocket url (see connectionStart in gumboard.js) and
   // display the device key. Without it those pages never received the info
   // message and their key field stayed on "Loading...".
-  sendToWebsocketClients(getInfo(),
-                         {"/main", "/firststart", "/api/info", "/settings"});
+  // "/firmware" included so the Downloads page can name the build this
+  // device actually runs, rather than leaving the choice to guesswork.
+  sendToWebsocketClients(
+      getInfo(),
+      {"/main", "/firststart", "/api/info", "/settings", "/firmware"});
 }
 
 void sendSensorData() {
-  // "/datalog" included so its template field can offer "fill from my
-  // sensors" - the page needs to know which readings this device produces.
-  sendToWebsocketClients(getSensor(), {"/main", "/settings", "/datalog"});
+  // "/datalog" and "/display_settings" included so their template fields can
+  // offer "fill from my sensors" - those pages need to know which readings
+  // this device produces.
+  sendToWebsocketClients(getSensor(),
+                         {"/main", "/settings", "/datalog", "/display_settings"});
 }
 
 void sendConfig() {
   sendToWebsocketClients(tehybug.conf.getConfig(),
-                         {"/settings", "/setsensor", "/scenarios", "/setsystem", "/datalog"});
+                         {"/settings", "/setsensor", "/scenarios", "/setsystem",
+                          "/datalog", "/display_settings"});
 }
 
 // Sends a log line to the dashboard websocket.
@@ -163,17 +198,37 @@ void handleNotFound() {
 }
 
 void handleSetConfig() {
-  DynamicJsonDocument json(3072);
+  DynamicJsonDocument json(CONFIG_DOC_SIZE);
   const auto error = deserializeJson(json, server.arg("plain"));
   server.sendHeader("Connection", "close");
-  if (!error) {
-    Log(("SetConfig"), ("Incoming Json length: " + String(measureJson(json))));
-    // extract the data
-    JsonObject object = json.as<JsonObject>();
-    tehybug.conf.setConfig(object);
-    server.send(200, "application/json", "{\"response\":\"OK\"}");
-  } else {
+  if (error) {
     server.send(406, "application/json", "{\"response\":\"Not Acceptable\"}");
+    return;
+  }
+  Log(F("SetConfig"), "Incoming Json length: " + String(measureJson(json)));
+  JsonObject object = json.as<JsonObject>();
+  // Answer before restarting. setConfig() restarts the chip itself when the
+  // save carries reboot:true, and that used to happen before this handler
+  // ever sent its response - so the browser saw the connection drop on every
+  // successful save and could not tell it from a failed one. Take the flag
+  // out, apply the rest, confirm, then restart.
+  const bool reboot = object["reboot"] | false;
+  object.remove("reboot");
+  if (!tehybug.conf.setConfig(object)) {
+    // Applied in RAM but not written to flash (pool overflow, or the file
+    // system refused - see saveConfig). Confirming would be a lie, and a
+    // restart now would discard even the RAM copy.
+    server.send(500, "application/json", "{\"response\":\"Not saved\"}");
+    return;
+  }
+  server.send(200, "application/json",
+              reboot ? "{\"response\":\"OK\",\"reboot\":true}"
+                     : "{\"response\":\"OK\"}");
+  if (reboot) {
+    server.client().stop(); // the response is out and the socket closed cleanly
+    tehybug.pixel.off();
+    delay(200);
+    ESP.restart();
   }
 }
 
@@ -235,6 +290,23 @@ void handleGetDataLog() {
   server.send(200, "application/json", json);
 }
 
+// GET /api/time -> {"rtc":true,"timeSet":...,"time":"YYYY-MM-DD HH:MM"}
+// The DS3231 clock on its own — /api/datalog also reports the time, but only
+// with the EEPROM module attached; the display board has an RTC regardless.
+void handleGetTime() {
+  server.sendHeader("Access-Control-Allow-Origin", "*");
+  server.sendHeader("Connection", "close");
+  if (!tehybug.peripherals.ds3231) {
+    server.send(200, "application/json", "{\"rtc\":false}");
+    return;
+  }
+  tehybug.time.update();
+  server.send(200, "application/json",
+              "{\"rtc\":true,\"timeSet\":" +
+                  String(tehybug.time.isTimeSet() ? "true" : "false") +
+                  ",\"time\":\"" + tehybug.time.timestamp() + "\"}");
+}
+
 // GET /api/settime?y=2026&mo=6&d=10&wd=4&h=18&mi=45&s=30
 // sets the DS3231 clock (usually from the browser's local time)
 void handleSetTime() {
@@ -273,9 +345,11 @@ void handleFactoryReset() {
   while (digitalRead(BUTTON_PIN) == LOW && (millis() - releaseStart) < 5000) {
     delay(10);
   }
-  Wire.begin(I2C_SDA, I2C_SCL);
+  // i2cBusBegin probes both port orientations - a data-log module attached
+  // the mirrored way round must not survive a factory reset with its log
+  // intact. (It also scans twice, which sensors like the AM2320 need.)
+  i2cBusBegin();
   i2cScanner::Scanner &scanner = i2cScanner::shared();
-  scanner.scan();
   if (scanner.addressExists(0x50)) {
     tehybug.peripherals.eeprom = true;
     tehybug.eeprom.format();
@@ -311,8 +385,21 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload,
       }
     case WStype_TEXT: {
         if (((char *)payload)[0] == '{') {
-          DynamicJsonDocument json(1024);
-          deserializeJson(json, payload);
+          // Sized like the configuration itself (it was 1 KB): a whole-page
+          // save carries every input on that page, and the Display & Alarms
+          // page alone posts ~25 keys. Only alive in config mode, where the
+          // heap is at its freest.
+          DynamicJsonDocument json(CONFIG_DOC_SIZE);
+          const auto error = deserializeJson(json, payload);
+          // The result used to be ignored, so a payload that did not fit was
+          // applied in part and the rest of the user's edits vanished with no
+          // sign that anything went wrong. Refuse the whole save instead.
+          if (error) {
+            Log(F("WebSocketEvent"),
+                String(F("Ignored a config that could not be parsed: ")) +
+                    error.c_str());
+            break;
+          }
           Log("WebSocketEvent",
               "Incoming Json length: " + String(measureJson(json)));
           if (websocketConnection[num] == "/setConfig") {
@@ -335,6 +422,7 @@ void setupWebServer() {
   server.on(F("/api/config"), HTTP_GET, handleGetConfig);
   server.on(F("/api/sensor"), HTTP_GET, handleGetSensor);
   server.on(F("/api/datalog"), HTTP_GET, handleGetDataLog);
+  server.on(F("/api/time"), HTTP_GET, handleGetTime);
   server.on(F("/api/settime"), HTTP_GET, handleSetTime);
   server.on(F("/api/getip"), HTTP_GET, handleGetIp);
   server.on(F("/"), HTTP_GET, handleGetMainPage);

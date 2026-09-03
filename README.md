@@ -19,6 +19,8 @@ This firmware is compatible with tehybug universal boards (without display) like
 * or other TeHyBug boards with have audio jack connector for the sensors
 * It is also compatible with any other ESP8266/ESP8285 dev boards like wemos, lolin, nodemcu etc. See the pin mapping images. Only the indicator led will not work and the power saving mode with deep sleep will probably not work either.
 
+The **TeHyBug Display Weatherstation** ([tindie](https://www.tindie.com/products/25408/)) is supported by its own build of this same firmware — flash `firmware/tehybug.ino.display.bin`. See [Display Weatherstation](#display-weatherstation-oled--clock--alarms) below.
+
 ## Buttons
 - Reset: forces TeHyBug to reboot/restart
 - Mode button: activates the configuration mode. Press it **after** the device has booted, not while pressing RESET — the MODE button is on GPIO0, so holding it down during reset puts the ESP into firmware-flash (UART download) mode instead.
@@ -42,16 +44,45 @@ The device waits **1 second** after a reset for a MODE press. Scheduled deep-sle
 
 With a DS3231 RTC + I²C EEPROM module attached, TeHyBug can store timestamped readings on the device itself — no server, broker or network required. Configure and read the log on the **Data Log** page of the web interface.
 
-- **One file per day, a full month retained.** A file per day of month is written. The 32 KB EEPROM (FT24C256A) is split into 32 slots of ~1 KB each, so every day of the month gets its own file; when no free slot is left the oldest day file is recycled.
+- **One file per day, a full month retained.** A file per day of month is written. The EEPROM is split into 32 slots, so every day of the month gets its own file; when no free slot is left the oldest day file is recycled. The chip size is detected at boot: current modules carry a 64 KB FT24C512A (~2 KB per day file), earlier ones a 32 KB FT24C256A (~1 KB). The Data Log page shows which was found. **Upgrading a 64 KB module from an older firmware re-lays out the log once and erases what was stored — download anything you want to keep first.**
 - **Log period (month or day).** The default keeps a rolling month (one file per day of month). Switch to **per-hour** logging on the Data Log page for a rolling 24 hours at finer detail (one file per hour of day, reused the next day). Changing the period wipes the log automatically so it starts clean in the new layout.
 - **Pick what to log.** Store the default measured set, or a custom placeholder template (e.g. `%temp% %humi%`) to keep only the fields you care about.
-- **Compact format.** To fit more into the small slots (~1 KB each) the date is omitted — it is implied by the file name — and each value is tagged with a short code, e.g. `07:55 22.6t 48.3h 1013.2p`. This roughly doubles the entries per day file versus a verbose `key=value` line.
+- **Compact format.** To fit more into the small slots the date is omitted — it is implied by the file name — and each value is tagged with a short code, e.g. `07:55 22.6t 48.3h 1013.2p`. This roughly doubles the entries per day file versus a verbose `key=value` line.
 - **Own log interval.** The log frequency is independent of the data-serving intervals; in offline mode it also sets the deep-sleep interval. A day file holds a limited number of entries, so pick an interval that fits a full day — the Data Log page shows a capacity table. When a day file fills up it wraps: it clears and starts again from the top, overwriting that day's earlier entries (so logging never stops; you keep the most recent readings).
 - **Offline mode.** Enabling offline mode logs with WiFi completely off. The web interface is unavailable while offline; to read the data, press RESET then hold MODE until the LED turns blue to re-enter Config mode (press RESET twice if the LED doesn't react — see "Return to Config mode" above).
 
 > Available in the ESP8285 build (TeHyBug universal and Mini) when an RTC + EEPROM module is attached. The slim generic (1MB) build for old / first-generation boards omits the RTC/EEPROM driver entirely.
 
+## Display Weatherstation (OLED + clock + alarms)
+
+The [TeHyBug Display Weatherstation](https://www.tindie.com/products/25408/) (ESP8285, 1.3&Prime; SH1106 OLED, DS3231 real-time clock with battery backup, buzzer, WS2812B indicator, three buttons, two sensor ports) runs the `display` build of this firmware — it replaces the separate `tehybug_display_c_firmware_v1`, whose configuration (display lines, clock options, alarms, even "WiFi off") carries over on upgrade.
+
+On top of everything above (sensors, MQTT/Home Assistant, cloud, scenarios, data log) the display build adds:
+
+- **Clock page** — date, big time with blinking colon (24 h or 12 h with am/pm), your first two template lines as a live footer, and the device's IP in tiny type along the edge so it is always findable.
+- **Sensor page** — three freely configurable `%placeholder%` template lines.
+- **Three weekday alarms** — time + weekday schedule + message; the buzzer alternates two tones and the display shows the message until any button mutes it.
+- **Night mode** — the panel switches off inside a configurable window (may cross midnight); alarms and data serving keep running.
+- **Offline display mode** — WiFi completely off, clock and sensors keep running. Toggle it by holding the right (IO_5) button for 10 seconds (LED turns purple, device restarts).
+
+Configure it all on the **Display &amp; Alarms** page of the web interface (it appears automatically for display devices). Set the clock there once — the DS3231 keeps it on its backup battery.
+
+Buttons on the display board:
+
+| Button | Press | Action |
+| --- | --- | --- |
+| Left / Right | click | switch clock/sensor page, or mute a ringing alarm |
+| Right (IO_5) | hold 10 s | toggle offline display mode (WiFi off/on, purple LED, restart) |
+| MODE (top) | press after RESET | config mode (blue LED) — do **not** hold it during reset, that is the chip's flash mode |
+| MODE (top) | hold 20 s | factory reset (red LED) |
+| RESET | click | reboot |
+
+> Port note: on the display board the OLED and RTC occupy the I²C bus (Port B pins), so DHT/DS18B20 on Port B are not available there — use Port A (readings appear as `%temp2%` / `%humi2%`) or any I²C sensor. The SGP30 air-quality sensor (`%tvoc%` / `%eco2%`) is supported, as it was in the old display firmware.
+
 ## Port B (green) supported sensors:
+
+> Port B shares its pins with the I²C bus. While a DHT or DS18B20 is enabled here, I²C sensors **and the RTC + EEPROM data-log module are not detected** — put the sensor on Port A if you want the data log alongside it. Readings appear as `%temp%` / `%humi%`.
+
 * BME680
 * BME280/BMP280
 * DHT21/DHT22/AM2032 (in dht simulation mode)
@@ -65,6 +96,9 @@ With a DS3231 RTC + I²C EEPROM module attached, TeHyBug can store timestamped r
 <img src="images/tehybug_port_b_pinmapping.png" width="300">
 
 ## Port A (black) supported sensors:
+
+> Port A has its own pin, so it leaves the I²C bus free — the data-log module keeps working alongside. It fits **one** sensor (DHT, DS18B20 *or* ADC). Readings appear as `%temp2%` / `%humi2%`.
+
 * DHT21/DHT22/AM2032 (in dht simulation mode)
 * DS18B20
 * ADC soil moisture sensor
@@ -85,7 +119,9 @@ The prebuilt binaries in [`firmware/`](firmware/) are rebuilt automatically on e
 | --- | --- | --- |
 | `firmware/tehybug.ino.esp8285.bin` | TeHyBug universal (v2) and Mini TeHyBug (ESP8285) | recommended |
 | `firmware/tehybug.ino.esp8285_debug.bin` | TeHyBug universal / Mini (ESP8285) | serial debug output enabled |
-| `firmware/tehybug.ino.generic.bin` | Old / first-generation TeHyBug boards (esp-01 based, generic ESP8266, 1MB flash) | slimmed to fit 1MB and stay OTA-updatable; no BME680, no RTC/EEPROM data log, no Home Assistant discovery, no https data push (plain http works). Plain MQTT, http GET/POST and scenarios all work |
+| `firmware/tehybug.ino.display.bin` | TeHyBug Display Weatherstation (ESP8285 + SH1106 OLED) | everything the esp8285 build has, plus the display, clock, alarms and buzzer |
+| `firmware/tehybug.ino.display_debug.bin` | TeHyBug Display Weatherstation | serial debug output enabled |
+| `firmware/tehybug.ino.generic.bin` | Old / first-generation TeHyBug boards (esp-01 based, generic ESP8266, 1MB flash) | slimmed to fit 1MB and stay OTA-updatable; no BME680 or SGP30, no RTC/EEPROM data log, no Home Assistant discovery, no https data push (plain http works), one sensor port (no Port A, no ADC). Plain MQTT, http GET/POST and scenarios all work |
 
 ## How to program/flash the board (advanced users only)
 To flash firmware use the `firmware/tehybug.ino.esp8285.bin` file.
@@ -136,9 +172,11 @@ Replace /dev/cu.usbserial-1410 with your usb2serial port.
 
 ## Web Gui
   
-<img src="images/webgui.png" width="800">
+<img src="images/webgui.png" width="620"> <img src="images/webgui-phone.png" width="190">
 
-Demo web configuration page: https://tehybug.com/tehybug/v1/html/demo.html
+The web interface is built for phones first (the pictures are the mock device in `tools/`; captured with `tools/screenshot.js`).
+
+Demo of the web interface (a simulated device, nothing to flash): https://tehybug.com/tehybug/v2/demo.html — add `?board=display` for the Display Weatherstation pages.
 
 ## Configuration first steps
 - Connect an external sensor to the board 3,5mm audio jack connector.
@@ -151,8 +189,14 @@ Demo web configuration page: https://tehybug.com/tehybug/v1/html/demo.html
 - Provide credentials of your WIFI network and save them
 - If your credentials were correct, the TeHyBug WIFI network will disapear
 - TeHyBug will connect to your network and boot in a configuration mode with solid blue LED light
-- open with your browser http://tehybug.local/ and the configuration page should open. (if this didnt work. Find out the TeHyBug IP Addres from your router and open it with yoour browser)
-- Follow the instructions on the configuration page.
+- open with your browser http://tehybug.local/ and the configuration page should open. (if this didnt work. Find out the TeHyBug IP Addres from your router and open it with your browser. First-generation / 1MB boards have no mDNS, so always use the IP there — the device's own page at http://192.168.4.1/ shows it.)
+
+Then, on the web interface:
+
+1. **Sensors** — switch on the sensor(s) you attached (I²C sensors are detected automatically), and check the readings appear on the Dashboard.
+2. **Send data** — TeHyBug Cloud, Home Assistant, MQTT, or your own server by HTTP, all on one page. The *"Fill from my sensors"* links build the MQTT payload / POST body / GET query from the sensors this device actually reports, in °C or °F. Save.
+3. **Go live** — the button on the Dashboard (or on *Power & go live*): pick the power mode (Deep sleep for battery) and confirm. The device restarts and starts sending; on battery boards the web interface stops being served, which is expected. The Dashboard's set-up checklist shows which of the three steps are done.
+4. **Getting back in later** — press RESET, then MODE within a second (see "Return to Config mode" above). A device that has nothing configured to serve always starts its setup portal, so it can't lock you out.
 
 ## Factory reset
 To delete all the configs, reset the wifi configuration and erase the on-device data log (the RTC + EEPROM module, if attached).
@@ -185,7 +229,8 @@ Requirements: [arduino-cli](https://arduino.github.io/arduino-cli/) and git. Eve
 ```bash
 ./ci/install-deps.sh        # one-time: install the ESP8266 toolchain
 ./build.sh                  # build for ESP8285 (default)
-./build.sh all              # build esp8285 + generic
+./build.sh display          # build for the Display Weatherstation
+./build.sh all              # build esp8285 + display + generic
 ./build.sh esp8285 debug    # build with serial debug output
 ```
 
@@ -199,6 +244,7 @@ Either drive it directly:
 
 ```bash
 pio run -e esp8285        # universal board (recommended)
+pio run -e display        # Display Weatherstation
 pio run -e generic        # old/first-gen TeHyBug / 1 MB
 pio run -e esp8285_debug  # with serial debug output
 ```
@@ -220,13 +266,13 @@ reference the CI release uses.
 ### Tests
 
 The hardware-independent firmware logic (the EEPROM data log + date index, the
-`common_functions` helpers, I²C device detection, and the boot/serve decision
-logic) has native host tests that run on a desktop compiler — no board or
-Arduino toolchain needed — plus a clang-tidy static-analysis pass. See
-[`tests/`](tests/README.md):
+`common_functions` helpers, I²C device detection, the boot/serve decision
+logic, and the display board's page/alarm/clock decisions) has native host
+tests that run on a desktop compiler — no board or Arduino toolchain needed —
+plus a clang-tidy static-analysis pass. See [`tests/`](tests/README.md):
 
 ```bash
-./tests/run.sh    # native host tests (fake I²C EEPROM; 88 assertions)
+./tests/run.sh    # native host tests (fake I²C EEPROM; 700+ assertions)
 ./tests/tidy.sh   # clang-tidy over the host-compilable headers
 ```
 
@@ -242,5 +288,9 @@ Every pull request to `main` is also built by the [build workflow](.github/workf
 (arduino-cli) and the resulting binaries are attached as workflow artifacts. After a merge to
 `main`, that workflow rebuilds all firmware variants, commits the updated binaries back to
 the repository and publishes a [release](https://github.com/gumslone/tehybug-universal/releases)
-with the binaries attached. The release tag (`vYYMMDDHHMM`) matches the firmware version
-reported by the device.
+with the binaries attached. The release tag (`v1.0.0`, `v1.1.0`, ...) matches the
+semantic firmware version the device reports (`FW_VERSION` in
+[`src/fw_version.h`](src/fw_version.h)) — bump it as part of a change to publish a
+release; a merge that leaves it unchanged only refreshes the committed binaries.
+(Releases before v1.0.0 used compile-timestamp tags, `vYYMMDDHHMM`; the device
+still reports that timestamp separately as its exact build id.)

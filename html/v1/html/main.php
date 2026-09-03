@@ -107,6 +107,16 @@
                         </a>
                     </li>
 
+                    <!-- Only shown when the device reports board:"display"
+                         (TeHyBug Display Weatherstation) - see gumboard.js -->
+                    <li class="nav-item display-only d-none">
+                        <a class="nav-link" href="javascript:void(0);"
+                           onclick="ChangeContent(this, 'display_settings', '#right-content');">
+                            <span data-feather="monitor"></span>
+                            Display &amp; Alarms
+                        </a>
+                    </li>
+
                     <li><hr class="dropdown-divider"></li>
                     <li class="nav-item">
                         <small class="text-muted px-3">MAINTENANCE</small>
@@ -174,7 +184,7 @@
                         <ol>
                             <li><strong><a href="javascript:void(0);" onclick="ChangeContent(this, 'setsensor', '#right-content');">Sensor Settings</a></strong> — switch on the sensor(s) you have attached, then check their readings appear on this Dashboard. (I2C sensors are detected automatically.)</li>
                             <li><strong>Pick ONE way to send data</strong> — the easiest is <a href="javascript:void(0);" onclick="ChangeContent(this, 'cloud_settings', '#right-content');">TeHyBug Cloud</a>; or <a href="javascript:void(0);" onclick="ChangeContent(this, 'ha_settings', '#right-content');">Home Assistant</a>; or your own server via <a href="javascript:void(0);" onclick="ChangeContent(this, 'settings', '#right-content');">Custom Data Serving</a> (use the "Fill from my sensors" links there). Save the page.</li>
-                            <li><strong>Go live on <a href="javascript:void(0);" onclick="ChangeContent(this, 'setsystem', '#right-content');">System Settings</a></strong> — choose a power mode (Deep Sleep for battery), switch <em>off</em> "Config Mode Active", keep "Reboot" ticked, and Save. The device restarts and starts serving; this web interface goes away — that is normal.</li>
+                            <li><strong>Go live on <a href="javascript:void(0);" onclick="ChangeContent(this, 'setsystem', '#right-content');">System Settings</a></strong> — <span class="display-hidden">choose a power mode (Deep Sleep for battery), </span>switch <em>off</em> "Config Mode Active", keep "Reboot" ticked, and Save. The device restarts and starts serving; this web interface goes away — that is normal.<span class="display-only d-none"> The screen, clock and this web interface keep running in every mode — going live only starts the data sending (just the setup access point goes away).</span></li>
                             <li><strong>Getting back in later:</strong> press RESET, then press MODE within a second — the LED turns blue when config mode is on. If the LED stays dark, press RESET twice about a second apart, then MODE.</li>
                         </ol>
                         <p class="text-muted small mb-0">The <a href="javascript:void(0);" onclick="ChangeContent(this, 'firststart', '#right-content');">Quick Start Guide</a> has the full walkthrough, sensor notes and battery-life estimates.</p>
@@ -218,6 +228,14 @@
                                     <tr>
                                         <td class="font-weight-bold">Version:</td>
                                         <td id="gumboardVersion">Loading...</td>
+                                    </tr>
+                                    <!-- Hidden until the device reports a board. Firmware older
+                                         than this field sends neither key, and the row would sit
+                                         on "Loading..." for ever on every existing device. -->
+                                    <tr id="boardRow" class="d-none">
+                                        <td class="font-weight-bold">Board / build:</td>
+                                        <td><span id="boardName"></span>
+                                            <small class="text-muted">(build <span id="fwBuild">&mdash;</span>)</small></td>
                                     </tr>
                                     <tr>
                                         <td class="font-weight-bold">Sketch Size:</td>

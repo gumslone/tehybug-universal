@@ -16,6 +16,9 @@
 #endif
 #include <AM2320_asukiaaa.h>
 #include <ErriezBMX280.h>
+#if !defined(ARDUINO_ESP8266_GENERIC)
+#include "SparkFun_SGP30_Arduino_Library.h"
+#endif
 #include "debug.h"
 #include "board.h"
 #include "i2cscanner.h"
@@ -30,6 +33,10 @@ uint8_t bsecState[BSEC_MAX_STATE_BLOB_SIZE] = {0};
 #endif
 
 Max44009 Max44009Lux(0x4A);
+
+#if !defined(ARDUINO_ESP8266_GENERIC)
+SGP30 sgp30;
+#endif
 
 AHT20 AHT;
 
@@ -171,6 +178,44 @@ void read_bme680() {
 
   // Save state periodically
   saveBME680State();
+}
+#endif
+
+#if !defined(ARDUINO_ESP8266_GENERIC)
+// Relative humidity [%RH] at tempC [°C] to absolute humidity [g/m³], for the
+// SGP30's on-chip humidity compensation.
+double RHtoAbsolute(float relHumidity, float tempC) {
+  const double eSat = 6.11 * pow(10.0, (7.5 * tempC / (237.7 + tempC)));
+  const double vaporPressure = (relHumidity * eSat) / 100; // millibars
+  // ideal gas law with unit conversions
+  return 1000 * vaporPressure * 100 / ((tempC + 273) * 461.5);
+}
+
+// The SGP30 takes the humidity as an 8.8 fixed-point number.
+uint16_t doubleToFixedPoint(double number) {
+  return (uint16_t)floor(number * 256 + 0.5);
+}
+
+void read_sgp30() {
+  // Feed the last temperature/humidity reading into the SGP30's humidity
+  // compensation, when another sensor provided one (values are stored as
+  // strings in sensorData, hence the atof).
+  const char *tempStr = tehybug.sensorData["temp"].as<const char *>();
+  const char *humiStr = tehybug.sensorData["humi"].as<const char *>();
+  if (tempStr != nullptr && humiStr != nullptr) {
+    const float humidity = atof(humiStr);
+    if (humidity > 0) {
+      sgp30.setHumidity(doubleToFixedPoint(RHtoAbsolute(humidity, atof(tempStr))));
+    }
+  }
+  const SGP30ERR error = sgp30.measureAirQuality();
+  if (error != SGP30_SUCCESS) {
+    D_print(F("SGP30 read failed: "));
+    D_println((int)error);
+    return;
+  }
+  tehybug.addSensorData("tvoc", (int)sgp30.TVOC);
+  tehybug.addSensorData("eco2", (int)sgp30.CO2);
 }
 #endif
 
@@ -318,8 +363,11 @@ void read_second_dht() {
 #endif
 
 void read_am2320() {
-  Wire.begin(I2C_SDA, I2C_SCL);
-
+  // Deliberately NO Wire.begin() here: the bus is already up in whichever
+  // orientation i2cBusBegin() locked in, and re-beginning with the configured
+  // pins flipped it back - so an AM2320 found on the mirrored orientation
+  // (the very sensor the mirror probe exists for; its Lua script was the
+  // mirrored one) was detected and then could never be read.
   for (uint8_t attempt = 0; attempt < 10; attempt++) {
     if (am2320.update() == 0) {
       tehybug.addTempHumi("temp", am2320.temperatureC, "humi", am2320.humidity);
@@ -378,6 +426,13 @@ void read_adc() {
 }
 #endif
 
+// millis() of the last completed read_sensors(), whoever asked for it (a
+// serve ticker, the web API, the display). 0 until the first read. The
+// display uses it to top the readings up only when nothing else has, instead
+// of adding a second, redundant blocking read to a device that is already
+// measuring on a ticker.
+unsigned long lastSensorReadMs = 0;
+
 void read_sensors() {
   if (tehybug.sensor.bmx) {
     read_bmx280();
@@ -404,6 +459,11 @@ void read_sensors() {
     read_aht20();
   }
 #if !defined(ARDUINO_ESP8266_GENERIC)
+  // after the temp/humi sensors, so the SGP30 gets a fresh humidity value
+  // for its compensation
+  if (tehybug.sensor.sgp30) {
+    read_sgp30();
+  }
   if (tehybug.sensor.adc) {
     read_adc();
   }
@@ -417,6 +477,7 @@ void read_sensors() {
   // offline data log to EEPROM (no-op without RTC + EEPROM module)
   tehybug.logSensorData();
   tehybug.shouldSensorDataBeGarbageCollected(true);
+  lastSensorReadMs = millis();
 }
 
 // Bring up the I2C bus in whichever line orientation the sensor is actually
@@ -490,6 +551,9 @@ uint8_t findI2Csensors() {
     tehybug.sensor.aht20 = true;
   }
 #if !defined(ARDUINO_ESP8266_GENERIC)
+  if (scanner.addressExists(0x58)) {
+    tehybug.sensor.sgp30 = true;
+  }
   if (scanner.addressExists(0x50)) {
     tehybug.peripherals.eeprom = true;
   }
@@ -618,8 +682,22 @@ void setupSensors() {
     AHT.begin();
   }
 #if !defined(ARDUINO_ESP8266_GENERIC)
+  if (tehybug.sensor.sgp30) {
+    if (sgp30.begin()) {
+      // must run once before measureAirQuality; the first ~15 s of readings
+      // are the sensor's warm-up defaults (400 ppm / 0 ppb)
+      sgp30.initAirQuality();
+    } else {
+      // Detected at 0x58 but not answering the init: disable it instead of
+      // hanging the boot (the original firmware spun in while(1) here).
+      D_println(F("SGP30 detected but init failed, disabled"));
+      tehybug.sensor.sgp30 = false;
+    }
+  }
+#endif
+#if !defined(ARDUINO_ESP8266_GENERIC)
   if (tehybug.sensor.dht_2) {
-    setupDht(dht2, 13);
+    setupDht(dht2, SECOND_ONE_WIRE_BUS); // Port A data pin, shared with 1-Wire
   }
 #endif
   if (tehybug.peripherals.eeprom) {

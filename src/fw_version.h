@@ -1,7 +1,18 @@
 #pragma once
 #include "common_functions.h"
 
-// Firmware version derived from the compile timestamp: YYMMDDHHMM
+// Semantic firmware version. Bump it when merging user-visible changes: the
+// release workflow reads this define, tags the release v<FW_VERSION> and
+// publishes it — and skips the release when the tag already exists, so a
+// merge without a bump just refreshes the committed binaries.
+#define FW_VERSION "1.0.0"
+
+const String version = FW_VERSION;
+
+// Compile timestamp (YYMMDDHHMM) — until v1.0.0 this WAS the version, now it
+// only identifies the exact build (two builds of the same version, a local
+// debug build vs the released one). Reported next to the version in
+// /api/info.
 #define COMPILE_HOUR (((__TIME__[0] - '0') * 10) + (__TIME__[1] - '0'))
 #define COMPILE_MINUTE (((__TIME__[3] - '0') * 10) + (__TIME__[4] - '0'))
 #define COMPILE_SHORT_YEAR (((__DATE__[9] - '0')) * 10 + (__DATE__[10] - '0'))
@@ -20,6 +31,6 @@
 #define COMPILE_DAY                                                            \
   ((__DATE__[4] == ' ' ? 0 : __DATE__[4] - '0') * 10 + (__DATE__[5] - '0'))
 
-const String version = String(COMPILE_SHORT_YEAR) + IntFormat(COMPILE_MONTH) +
-                       IntFormat(COMPILE_DAY) + IntFormat(COMPILE_HOUR) +
-                       IntFormat(COMPILE_MINUTE);
+const String buildTimestamp = String(COMPILE_SHORT_YEAR) +
+                              IntFormat(COMPILE_MONTH) + IntFormat(COMPILE_DAY) +
+                              IntFormat(COMPILE_HOUR) + IntFormat(COMPILE_MINUTE);

@@ -364,8 +364,39 @@ static void test_boot_decisions() {
   CHECK(p.remoteControl);
 }
 
+static void test_display_setup_plan() {
+  CASE("setupPlan on the display board");
+  Device d;
+  DataServ s;
+  s.mqtt.active = true;
+  s.mqtt.frequency = 60;
+
+  // config mode: web UI only, like every board
+  d.configMode = true;
+  mode_logic::SetupPlan p = setupPlan(d, s, true);
+  CHECK(p.webServer && !p.mqtt && !p.tickers);
+
+  // live mode: mains powered and always awake, so the web UI STAYS UP
+  // alongside the services - no button dance to change a setting
+  d.configMode = false;
+  p = setupPlan(d, s, true);
+  CHECK(p.webServer);
+  CHECK(p.mqtt && p.tickers);
+
+  // the same config on a battery board keeps the web server config-only
+  p = setupPlan(d, s, false);
+  CHECK(!p.webServer);
+  CHECK(p.mqtt && p.tickers);
+
+  // offline display mode: WiFi is off, so no web server - tickers only
+  d.offlineMode = true;
+  p = setupPlan(d, s, true);
+  CHECK(!p.webServer && !p.mqtt && p.tickers);
+}
+
 int main() {
   std::printf("Running mode_logic tests...\n");
+  test_display_setup_plan();
   test_boot_decisions();
   test_sleep_judge();
   test_serve_plan();

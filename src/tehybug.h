@@ -20,6 +20,10 @@ class TeHyBug {
     Peripherals peripherals{};
     DataServ serveData{};
     Scenarios scenarios{};
+    // Display board state (config keys only exist on the display build, but
+    // the members are unconditional so the config wiring stays uniform).
+    DisplayConf displayConf{};
+    Alarms alarms{};
     DynamicJsonDocument sensorData;
     // Declaration order is construction order, and each of these binds a
     // reference to the ones above it: conf takes pixel, time takes conf,
@@ -33,7 +37,8 @@ class TeHyBug {
     // initialiser order matches the declarations above (m_dht is declared last)
     TeHyBug(DHTesp & dht)
       : sensorData(1024),
-        conf(calibration, sensor, peripherals, device, serveData, scenarios, pixel),
+        conf(calibration, sensor, peripherals, device, serveData, scenarios,
+             displayConf, alarms, pixel),
         time(conf),
         eeprom(time),
         m_dht(dht) {
@@ -164,13 +169,18 @@ class TeHyBug {
        combinations at every call site. */
 
     mode_logic::DeviceMode mode() {
-      return mode_logic::currentMode(device, peripherals);
+      return mode_logic::currentMode(device, peripherals,
+                                     TEHYBUG_DISPLAY != 0);
     }
     const char *modeName() {
       return mode_logic::modeName(mode());
     }
     bool inConfigMode()     { return mode() == mode_logic::DeviceMode::Config; }
     bool inOfflineMode()    { return mode() == mode_logic::DeviceMode::Offline; }
+    // display board only: WiFi off, panel and tickers still running
+    bool inOfflineLiveMode() {
+      return mode() == mode_logic::DeviceMode::OfflineLive;
+    }
     bool inDeepSleepMode()  { return mode() == mode_logic::DeviceMode::DeepSleep; }
     bool inLightSleepMode() { return mode() == mode_logic::DeviceMode::LightSleep; }
     bool inLiveMode()       { return mode() == mode_logic::DeviceMode::Live; }

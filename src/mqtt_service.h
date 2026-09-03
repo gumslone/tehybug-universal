@@ -319,16 +319,25 @@ bool mqttAttemptConnect() {
     return true;
   }
 
-  mqtt.retryCounter++;
   Log(F("MqttReconnect"), String(F("Failed, rc=")) + String(mqttClient.state()));
-  Log(F("MqttReconnect"), String(F("Retry ")) + String(mqtt.retryCounter) +
-      String(F("/")) + String(mqtt.maxRetries));
   updateMqttClient();
 
-  if (mqtt.retryCounter >= mqtt.maxRetries) {
-    Log(F("MqttReconnect"), F("Max retries reached, MQTT deactivated"));
-    if (!tehybug.sleepEnabled()) {
-      ESP.restart();
+  // Saturate rather than wrap: in live mode the counter now outlives the max
+  // (nothing restarts the device any more), and a uint8_t rolling over would
+  // briefly look like a fresh budget. The crossing itself is logged exactly
+  // once per outage - it used to say "MQTT deactivated" and then restart the
+  // device (in live mode), deactivating nothing and turning a broker outage
+  // into a reboot every ~50 s, flash remounts and WiFi joins included. A
+  // device that cannot publish should idle cheaply and keep trying: the rate
+  // limiter above already spaces the attempts, and the counter resets on
+  // success or on the next wake.
+  if (mqtt.retryCounter < mqtt.maxRetries) {
+    mqtt.retryCounter++;
+    Log(F("MqttReconnect"), String(F("Retry ")) + String(mqtt.retryCounter) +
+        String(F("/")) + String(mqtt.maxRetries));
+    if (mqtt.retryCounter == mqtt.maxRetries) {
+      Log(F("MqttReconnect"),
+          F("Max retries reached, backing off until the broker returns"));
     }
   }
   return false;
@@ -368,6 +377,13 @@ bool mqttEnsureConnected(unsigned long budgetMs) {
   const unsigned long start = millis();
   uint8_t attempt = 0;
   MqttDataServ &mqtt = tehybug.serveData.mqtt;
+  // A fresh wake gets a fresh retry budget. The counter only ever reset on a
+  // successful connect, and light sleep never reboots, so a broker outage
+  // spanning a few wakes exhausted it permanently - every later wake hit the
+  // max-retries check below before making a single attempt, and the device
+  // never reconnected until someone rebooted it, however long the broker had
+  // been back. (Deep sleep was immune only because a reboot clears RAM.)
+  mqtt.retryCounter = 0;
   while (!mqttClient.connected() && (millis() - start) < budgetMs) {
     if (mqtt.retryCounter >= mqtt.maxRetries) {
       Log(F("MqttReconnect"), F("Giving up for this cycle"));

@@ -52,6 +52,24 @@ the EEPROM present), `anyServeModeActive`, `dataLogAvailable`, and
 `TeHyBug` class delegates to these, so `setup()`/`loop()` themselves stay thin
 hardware orchestration while their decisions are tested here.
 
+[`test_display_logic.cpp`](test_display_logic.cpp) covers the display board's
+pure decisions ([`../src/display_logic.h`](../src/display_logic.h)): page
+cycling, `parseHHMM` validation, the RTC→ISO weekday mapping (including the
+Sunday out-of-bounds bug of the original display firmware that it fixes),
+`alarmDue` (weekday CSV, second-0 gating), the night window (incl. crossing
+midnight), 12/24-hour clock formatting, and the display board's mode
+resolution (`OfflineLive`, sleep modes never engaging).
+
+[`test_config_size.cpp`](test_config_size.cpp) builds a deliberately
+fully-configured device's settings (long cloud URLs, a "fill from my sensors"
+MQTT and POST payload, three populated scenarios, and on the display build the
+template lines, clock options and three alarms) with the real ArduinoJson, and
+asserts it still fits `CONFIG_DOC_SIZE`. ArduinoJson drops members silently
+when its pool runs out, so an over-tight pool does not fail loudly — it loses
+settings. Keep the inventory in this test in step with
+`TeHyBugConfig::buildConfig()`; that is what makes it catch the next batch of
+new keys.
+
 ## Static analysis (clang-tidy)
 
 ```sh

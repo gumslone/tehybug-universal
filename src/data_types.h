@@ -27,6 +27,7 @@ struct Sensor {
   bool ds18b20{false};
   bool ds18b20_2{false};
   bool adc{false};
+  bool sgp30{false};
 } __attribute__((packed));
 struct Peripherals {
   bool eeprom{false};
@@ -100,4 +101,40 @@ struct DataServ {
   MqttDataServ mqtt{};
   HaDataServ ha{};
   EepromDataServ eeprom{};
+};
+
+/* Display board (TeHyBug Display Weatherstation) ----------------------------
+ *
+ * The types are unconditional so the pure display logic stays host-testable;
+ * the display build gate (TEHYBUG_DISPLAY) only decides whether the config
+ * carries these keys and whether the hardware modules are compiled in.
+ */
+
+// One weekday-scheduled alarm. `time` is "HH:MM"; `weekdays` is a CSV of 7
+// 0/1 flags Monday..Sunday — the format the original display firmware stored,
+// kept so an upgraded device's config keeps its alarms.
+struct AlarmConf {
+  bool active{false};
+  String time{};
+  String message{};
+  String weekdays{"0,0,0,0,0,0,0"};
+};
+struct Alarms {
+  static constexpr uint8_t count{3};
+  AlarmConf items[count]{};
+};
+
+// OLED configuration. line1..3 are %placeholder% templates (the clock page
+// shows line1+line2 in its footer, the sensor page all three). The clock_*
+// keys keep the original firmware's names; night mode (clock_sleep) blanks
+// the panel between two "HH:MM" times.
+struct DisplayConf {
+  String line1{"%temp% °C"};
+  String line2{"%humi% %RH"};
+  String line3{"%qfe% hPa"};
+  bool clock12h{false};
+  bool showIp{true};
+  bool nightMode{false};
+  String nightStart{"22:00"};
+  String nightEnd{"07:00"};
 };
