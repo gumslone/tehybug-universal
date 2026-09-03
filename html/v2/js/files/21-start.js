@@ -50,7 +50,7 @@
         ${UI.card({ title: 'Getting back into setup', icon: 'settings', body: html`
           <ol>
             <li>Press and release <strong>RESET</strong>.</li>
-            <li>Within about a second, press <strong>MODE</strong>. The LED turns <strong>blue</strong> — setup mode is on and this page is served again.</li>
+            <li>Within about a second, press <strong>MODE</strong>. The LED turns ${T.led('blue')} — setup mode is on and this page is served again.</li>
             <li>If the LED stays dark, press RESET twice about a second apart, then MODE (a device that had deep-slept needs the second reset).</li>
           </ol>
           ${UI.note('warn', html`Do not hold MODE <em>while</em> pressing RESET: MODE sits on the chip's boot pin, and holding it through a reset starts the firmware-flashing mode instead. Press RESET first, let go, then MODE.`)}

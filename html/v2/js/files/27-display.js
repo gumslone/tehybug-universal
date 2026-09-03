@@ -66,9 +66,9 @@
         <div class="grid-3">${[1, 2, 3].map(n => alarmCard(n, c))}</div>
         ${UI.card({ title: 'Buttons on the device', icon: 'cpu', body: UI.table(['Button', 'Press', 'Does'], [
           [html`<strong>Left / Right</strong>`, 'click', 'Switch between the clock and sensor pages — or mute a ringing alarm.'],
-          [html`<strong>Right</strong>`, 'hold 10 s', 'Toggle offline mode: WiFi off, screen and sensors keep running. The LED turns purple and the device restarts. The same hold switches WiFi back on.'],
-          [html`<strong>MODE</strong> (top)`, 'press after RESET', 'Setup mode with the setup access point; the LED turns blue. Holding it during RESET starts firmware-flashing mode instead.'],
-          [html`<strong>MODE</strong> (top)`, 'hold 20 s', 'Factory reset: settings, WiFi credentials and the data log are erased. The LED turns red.'],
+          [html`<strong>Right</strong>`, 'hold 10 s', html`Toggle offline mode: WiFi off, screen and sensors keep running. The LED turns ${T.led('purple')} and the device restarts. The same hold switches WiFi back on.`],
+          [html`<strong>MODE</strong> (top)`, 'press after RESET', html`Setup mode with the setup access point; the LED turns ${T.led('blue')}. Holding it during RESET starts firmware-flashing mode instead.`],
+          [html`<strong>MODE</strong> (top)`, 'hold 20 s', html`Factory reset: settings, WiFi credentials and the data log are erased. The LED turns ${T.led('red')}.`],
           [html`<strong>RESET</strong>`, 'click', 'Restart.']
         ]) })}`;
     },

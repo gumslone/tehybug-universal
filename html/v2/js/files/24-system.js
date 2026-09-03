@@ -59,7 +59,7 @@
 
         ${UI.card({ title: 'Reset everything', icon: 'trash-2', body: html`
           <p class="hint">A factory reset erases the settings, the WiFi credentials and the on-device data log. It is done on the device itself:</p>
-          <ol class="small"><li>Press and release <strong>RESET</strong>.</li><li>Press and hold <strong>MODE</strong> for about 20 seconds until the LED turns <strong>red</strong>.</li><li>The device restarts with its own access point <code>TEHYBUG-…</code> (password <code>${T.AP_PASSWORD}</code>); join it and open <code>http://192.168.4.1/</code> to choose a WiFi network.</li></ol>` })}`;
+          <ol class="small"><li>Press and release <strong>RESET</strong>.</li><li>Press and hold <strong>MODE</strong> for about 20 seconds until the LED turns ${T.led('red')}.</li><li>The device restarts with its own access point <code>TEHYBUG-…</code> (password <code>${T.AP_PASSWORD}</code>); join it and open <code>http://192.168.4.1/</code> to choose a WiFi network.</li></ol>` })}`;
     },
     mount(root) {
       root.addEventListener('click', e => {

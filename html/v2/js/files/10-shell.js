@@ -384,7 +384,7 @@
         ] })}${iaq ? UI.note('info', 'A BME680 is attached: its air-quality values (IAQ, eCO₂, bVOC) need the sensor powered continuously — choose Always on to keep them.') : ''}`}
         ${display
           ? UI.note('info', 'On the Display Weatherstation the screen, clock, alarms and this interface keep running. Only the TEHYBUG setup access point goes away — open this page at the device address afterwards.')
-          : UI.note('warn', html`To get back into setup later: press <strong>RESET</strong>, then <strong>MODE</strong> within a second — the LED turns blue. If it stays dark, press RESET twice about a second apart, then MODE.`)}`;
+          : UI.note('warn', html`To get back into setup later: press <strong>RESET</strong>, then <strong>MODE</strong> within a second — the LED turns ${T.led('blue')}. If it stays dark, press RESET twice about a second apart, then MODE.`)}`;
       const dlg = Shell.dialog({
         title: 'Go live', body,
         buttons: [
@@ -431,7 +431,7 @@
             ? 'The device restarted with WiFi off. It now wakes on the log interval, measures, writes a line to its data log and sleeps again.'
             : 'The device restarted and is sending readings on its own schedule. This page is no longer served — that is normal.'}</p>
           ${cloud ? html`<p>Add the device to your account on <a href="https://tehybug.com" target="_blank" rel="noopener">tehybug.com</a> with the key from the dashboard; the first reading arrives after the first interval.</p>` : ''}
-          ${UI.note('info', html`<strong>To change anything later:</strong> press <strong>RESET</strong>, then <strong>MODE</strong> within a second, until the LED turns blue. If the LED stays dark, press RESET twice about a second apart, then MODE. Then open this address again.`)}`,
+          ${UI.note('info', html`<strong>To change anything later:</strong> press <strong>RESET</strong>, then <strong>MODE</strong> within a second, until the LED turns ${T.led('blue')}. If the LED stays dark, press RESET twice about a second apart, then MODE. Then open this address again.`)}`,
         buttons: [{ label: 'Close' }]
       });
     }
