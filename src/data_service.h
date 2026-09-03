@@ -136,7 +136,9 @@ void checkScenario(Scenario &s) {
   D_println("condition met");
   D_println(s.url);
   if (s.type == "post") {
-    http::post(httpClient, getClient(s.url), s.url,
+    // the URL is a template too, as it is for GET and for the main POST target
+    const String url = tehybug.replacePlaceholders(s.url);
+    http::post(httpClient, getClient(url), url,
                tehybug.replacePlaceholders(s.message));
   } else if (isIoScenario(s.type)) {
     const uint8_t pin = ioScenarioPin(s.type);
