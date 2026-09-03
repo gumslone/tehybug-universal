@@ -172,7 +172,9 @@ Replace /dev/cu.usbserial-1410 with your usb2serial port.
 
 ## Web Gui
   
-<img src="images/webgui.png" width="800">
+<img src="images/webgui.png" width="620"> <img src="images/webgui-phone.png" width="190">
+
+The web interface is built for phones first (the pictures are the mock device in `tools/`; captured with `tools/screenshot.js`).
 
 Demo of the web interface (a simulated device, nothing to flash): https://tehybug.com/tehybug/v2/demo.html — add `?board=display` for the Display Weatherstation pages.
 
