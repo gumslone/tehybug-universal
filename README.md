@@ -176,6 +176,8 @@ Replace /dev/cu.usbserial-1410 with your usb2serial port.
 
 The web interface is built for phones first (the pictures are the mock device in `tools/`; captured with `tools/screenshot.js`).
 
+The interface is loaded from tehybug.com so it is always current; the 2 MB builds (universal, Display) also carry a built-in copy that the device page falls back to when tehybug.com cannot be reached — on the TeHyBug access point during first setup, or without internet. That copy is minified and gzipped into the firmware (about 44 KB) and updates with it.
+
 Demo of the web interface (a simulated device, nothing to flash): https://tehybug.com/tehybug/v2/demo.html — add `?board=display` for the Display Weatherstation pages.
 
 ## Configuration first steps

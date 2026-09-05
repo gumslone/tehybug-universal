@@ -139,6 +139,7 @@
   function layout() {
     return html`<div class="app">
       ${window.TEHYBUG_DEMO ? html`<div class="demo-banner">Demo — a simulated TeHyBug; nothing here reaches a real device</div>` : ''}
+      ${window.TEHYBUG_OFFLINE_UI ? html`<div class="demo-banner">Built-in copy of the interface (tehybug.com not reachable) — everything works; the online version may be newer.</div>` : ''}
       <header class="topbar">
         <button type="button" class="icon-btn menu-btn" id="menu-btn" aria-label="Menu">${T.icon('menu')}</button>
         <div class="brand">TeHyBug<span class="brand-sub" id="brand-sub"></span></div>
@@ -662,8 +663,9 @@
   async function stylesheetReady() {
     const link = $('link[href*="style.php"]');
     // only the device page uses the print-until-loaded trick; a plain
-    // stylesheet link (demo.html) has already applied or has a sheet
-    if (!link || link.media !== 'print' || link.sheet) return;
+    // stylesheet link (demo.html) has already applied or has a sheet. On
+    // the built-in copy the online link never loads - its CSS came from /ui/.
+    if (!link || link.media !== 'print' || link.sheet || window.TEHYBUG_OFFLINE_UI) return;
     await new Promise(res => {
       const t = setTimeout(res, 3000);
       link.addEventListener('load', () => { clearTimeout(t); res(); }, { once: true });
@@ -721,5 +723,8 @@
     try { T.applyConfig(await T.Api.config()); }
     catch (e) { configRetryTimer = setTimeout(loadConfigWithRetry, 5000); }
   }
-  document.addEventListener('DOMContentLoaded', () => { T.Shell.boot(); });
+  // The built-in copy is injected after the page has parsed (the fallback
+  // runs on the online bundle's error), so DOMContentLoaded may be long gone.
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => { T.Shell.boot(); });
+  else T.Shell.boot();
 })();

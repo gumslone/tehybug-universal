@@ -26,7 +26,7 @@
         ['Firmware size', i.sketchSize ? T.fmt.bytes(i.sketchSize) + ' used · ' + T.fmt.bytes(i.freeSketchSpace) + ' free for updates' : ''],
         ['Longest deep sleep', i.deepSleepMax ? T.fmt.secs(i.deepSleepMax) : ''],
         ['Up since restart', i.uptimeS != null ? T.fmt.duration(i.uptimeS) : ''],
-        ['Web UI', T.UI_VERSION]
+        ['Web UI', T.UI_VERSION + (window.TEHYBUG_OFFLINE_UI ? ' (built-in copy)' : '') + (i.uiBuild ? ' · built-in copy ' + i.uiBuild : '')]
       ]))}`;
   }
 

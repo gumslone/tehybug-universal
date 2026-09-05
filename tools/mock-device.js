@@ -121,23 +121,28 @@ function applyConfig(obj) {
 }
 
 /* ---- HTTP ---- */
-// The same inline styles the firmware page carries (src/web_api.h mainPage),
-// plus the older firmware's #page rule: the UI renders into #page, so
-// anything either page does to it must be visible here, not only on a real
-// device. Keep this in step with mainPage whenever it changes.
-const bootstrap = () => `<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><meta name="theme-color" content="#0f7a58"><title>TeHyBug (mock)</title>
-<style>
-body{margin:0;font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:#eef1f4;color:#182029}
-#page{max-width:520px;margin:0 auto;padding:24px 16px}
-.hello{box-sizing:border-box;width:calc(100% - 32px);max-width:520px;margin:24px auto;background:#fff;border:1px solid #dde3e9;border-radius:14px;padding:20px}
-.hello h1{font-size:1.3rem;margin:0 0 8px;color:#0f7a58}
-</style></head>
-<body><div id="page"><div class="hello"><h1>TeHyBug</h1><p>On your own network this device is at <b><span id="ip">tehybug.local</span></b>.</p><p>Loading the full interface…</p></div></div>
-<script>window.TEHYBUG_WS_PORT=${WS_PORT};</script>
-<link rel="stylesheet" href="/v2/css/style.php" media="print" onload="this.media='all'">
-<script src="/v2/js/javascript.php" defer></script>
-</body></html>`;
+// The device page is the firmware's own, read from src/web_api.h so the two
+// cannot drift (the UI renders into that page's #page, and every inline
+// style there shows). Online asset URLs become local ones; with --offline
+// they point at a dead port, so the page's fallback to the built-in copy
+// (/ui/, from .build/ui/ - run tools/embed-ui.py) is exercised.
+const OFFLINE = args.indexOf('--offline') >= 0;
+function bootstrap() {
+  const src = fs.readFileSync(path.join(__dirname, '..', 'src', 'web_api.h'), 'utf8');
+  const m = /R"=====\(\n?([\s\S]*?)\)====="/.exec(src);
+  if (!m) throw new Error('mainPage not found in src/web_api.h');
+  let page = m[1];
+  page = page.replace('https://tehybug.com/tehybug/v2/css/style.php', OFFLINE ? 'http://localhost:1/style.css' : '/v2/css/style.php');
+  page = page.replace('https://tehybug.com/tehybug/v2/js/javascript.php', OFFLINE ? 'http://localhost:1/app.js' : '/v2/js/javascript.php');
+  return page.replace('</body>', `<script>window.TEHYBUG_WS_PORT=${WS_PORT};</script>\n</body>`);
+}
+const UI_DIR = path.join(__dirname, '..', '.build', 'ui');
+function embedded(res, name, type) {
+  const file = path.join(UI_DIR, name + '.gz');
+  if (!fs.existsSync(file)) return text(res, 'run tools/embed-ui.py first', 'text/plain', 404);
+  res.writeHead(200, { 'Content-Type': type, 'Content-Encoding': 'gzip', 'Cache-Control': 'no-store', Connection: 'close' });
+  res.end(fs.readFileSync(file));
+}
 const TYPES = { '.js': 'text/javascript', '.css': 'text/css', '.html': 'text/html', '.json': 'application/json' };
 function bundle(kind) {
   const sep = kind === 'js' ? '\n;\n' : '\n';
@@ -154,7 +159,9 @@ http.createServer(async (req, res) => {
   if (Date.now() < rebootingUntil) { req.socket.destroy(); return; }
   if (p === '/') return text(res, bootstrap(), 'text/html');
   if (p === '/v2/css/style.php') return text(res, bundle('css'), 'text/css');
-  if (p === '/v2/js/javascript.php') return text(res, bundle('js'), 'text/javascript');
+  if (p === '/v2/js/javascript.php') return text(res, 'if (!window.TeHyBug) {\n' + bundle('js') + '\n}\n', 'text/javascript');
+  if (p === '/ui/app.js') return embedded(res, 'app.js', 'text/javascript');
+  if (p === '/ui/app.css') return embedded(res, 'app.css', 'text/css');
   if (p.startsWith('/v2/')) {
     const file = path.join(ROOT, p.slice(4));
     if (file.startsWith(ROOT) && fs.existsSync(file) && fs.statSync(file).isFile()) return text(res, fs.readFileSync(file), TYPES[path.extname(file)] || 'application/octet-stream');

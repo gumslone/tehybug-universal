@@ -13,7 +13,7 @@
  * Plain PHP 5 syntax on purpose: the web server runs an older PHP than
  * the command line does (type declarations made it die with a parse error).
  */
-function serveBundle($kind, $contentType, $separator)
+function serveBundle($kind, $contentType, $separator, $prefix = '', $suffix = '')
 {
     $manifest = json_decode((string)file_get_contents(__DIR__ . '/../manifest.json'), true);
     $files = array();
@@ -49,6 +49,7 @@ function serveBundle($kind, $contentType, $separator)
         ob_start();
     }
 
+    echo $prefix;
     foreach ($files as $file) {
         if (file_exists($file)) {
             readfile($file);
@@ -57,6 +58,7 @@ function serveBundle($kind, $contentType, $separator)
             echo $separator;
         }
     }
+    echo $suffix;
 
     ob_end_flush();
 }
