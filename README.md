@@ -198,6 +198,9 @@ Then, on the web interface:
 3. **Go live** — the button on the Dashboard (or on *Power & go live*): pick the power mode (Deep sleep for battery) and confirm. The device restarts and starts sending; on battery boards the web interface stops being served, which is expected. The Dashboard's set-up checklist shows which of the three steps are done.
 4. **Getting back in later** — press RESET, then MODE within a second (see "Return to Config mode" above). A device that has nothing configured to serve always starts its setup portal, so it can't lock you out.
 
+### HTTPS certificate check (optional)
+An `https://` target (HTTP GET/POST, scenarios) is encrypted either way, but by default the device does not verify the server's certificate: an ESP8266 has no trusted clock to validate a certificate chain against. What it can do is **pin the certificate**: on *Send data → HTTPS certificate check*, enter the SHA-1 fingerprint of your server's certificate (from the browser's certificate viewer, or `openssl s_client -connect host:443 -servername host </dev/null | openssl x509 -noout -fingerprint -sha1`) and the device refuses to send to anything else. One fingerprint covers all HTTPS targets. Certificates get renewed — Let's Encrypt about every two months — after which the sends fail (the dashboard log shows the TLS reason) until you update the pin. MQTT has no TLS; the 1 MB build for first-generation boards has no TLS client at all.
+
 ## Factory reset
 To delete all the configs, reset the wifi configuration and erase the on-device data log (the RTC + EEPROM module, if attached).
 

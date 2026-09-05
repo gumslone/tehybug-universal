@@ -85,6 +85,17 @@
       </div>` });
   }
 
+  // Optional certificate pin for https targets. The device has no clock to
+  // validate a certificate chain against, so the check it can do is "this
+  // exact certificate" — which also means a renewed certificate breaks it
+  // until the pin is updated.
+  function tlsCard(c) {
+    if (T.isGeneric()) return '';
+    return UI.card({ title: 'HTTPS certificate check', icon: 'key', body: html`
+      <p class="hint">Optional. An https:// target is encrypted either way, but by default the device does not verify who it is talking to. Set the fingerprint of your server's certificate and it refuses anything else.</p>
+      ${UI.field({ id: 'httpsFingerprint', label: 'SHA-1 fingerprint of the server certificate', labelHint: 'optional', value: c.httpsFingerprint, placeholder: 'AB:CD:EF:… (20 pairs)', attrs: 'autocomplete="off" spellcheck="false"', hint: html`Read it in your browser's certificate viewer, or with <code>openssl s_client -connect host:443 -servername host &lt;/dev/null | openssl x509 -noout -fingerprint -sha1</code>. One fingerprint for all HTTPS targets. Certificates get renewed (Let's Encrypt about every two months): after a renewal the sends fail until you update it — the dashboard log then shows the TLS reason. Leave empty for no check. MQTT has no TLS at all.` })}` });
+  }
+
   // The rules the firmware lives by, applied as switches flip:
   //  - Home Assistant owns the MQTT client and its availability topic, so
   //    it runs alone (the firmware serves one way at a time with HA).
@@ -133,6 +144,7 @@
         ${mqttCard(c)}
         ${getCard(c)}
         ${postCard(c)}
+        ${tlsCard(c)}
         ${UI.card({ title: 'Placeholders this device provides', icon: 'list', actions: UI.unitsSeg(), body: html`<div id="ph-list">${UI.placeholderList()}</div><p class="hint mt">Use them in URLs and payloads (the MQTT topic is sent as written); <code>%key%</code> is the device key. The °C/°F switch also decides what the “fill from my sensors” links produce.</p>` })}`;
     },
     mount(root) {
@@ -183,6 +195,12 @@
       if (!out.mqttServer) out.mqttServer = '0.0.0.0'; // the firmware's "unset"
       if (ha) { out.httpGetActive = false; out.httpPostActive = false; }
       if (out.httpGetActive || out.httpPostActive || ha || mqtt) out.offlineModeActive = false;
+      if (!T.isGeneric()) {
+        // accept "ab:cd", "AB CD", "abcd..."; store the canonical "AB:CD:..."
+        const hex = T.val('httpsFingerprint').replace(/[^0-9a-fA-F]/g, '').toUpperCase();
+        if (hex.length && hex.length !== 40) throw T.fail('A SHA-1 fingerprint is 40 hex digits (20 pairs like AB:CD:…)', 'httpsFingerprint');
+        out.httpsFingerprint = hex ? hex.match(/../g).join(':') : '';
+      }
       return out;
     }
   });

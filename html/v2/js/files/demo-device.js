@@ -15,7 +15,7 @@
     haActive: false,
     eepromLogActive: false, eepromLogFrequency: 60, eepromLogMessage: '', eepromLogHourly: false, offlineModeActive: false,
     httpGetURL: '', httpGetActive: false, httpGetFrequency: 900,
-    httpPostURL: '', httpPostActive: false, httpPostFrequency: 900, httpPostJson: '',
+    httpPostURL: '', httpPostActive: false, httpPostFrequency: 900, httpPostJson: '', httpsFingerprint: '',
     calibrationActive: false, calibrationTemp: 0, calibrationHumi: 0, calibrationQfe: 0,
     configModeActive: true, sleepModeActive: false, lightSleepModeActive: false,
     dht_sensor: false, second_dht_sensor: false, ds18b20_sensor: false, second_ds18b20_sensor: false, adc_sensor: false,
