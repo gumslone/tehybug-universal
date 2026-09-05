@@ -22,6 +22,10 @@ jobs:
           fetch-depth: 0
           fetch-tags: true
 
+      - uses: actions/setup-node@v4
+        with: { node-version: '22' }
+      - name: Install terser (minifies the built-in web UI)
+        run: npm ci
       - uses: arduino/setup-arduino-cli@v2
 
       - name: Cache Arduino toolchain
