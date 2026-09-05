@@ -52,7 +52,7 @@
         </div>
         <div class="fields-inline">
           ${UI.field({ id: 'mqttUser', label: 'User', value: c.mqttUser, placeholder: 'optional', attrs: 'autocomplete="off"' })}
-          ${UI.password({ id: 'mqttPassword', label: 'Password', value: c.mqttPassword, placeholder: 'optional' })}
+          ${UI.password({ id: 'mqttPassword', label: 'Password', value: c.mqttPassword, placeholder: 'optional', hint: c.mqttPassword === '********' ? 'A password is stored; it is never shown here. Type to replace it, clear the field to remove it.' : '' })}
         </div>
         <div id="mqtt-ha" ${mode === 'ha' ? '' : 'hidden'}>${UI.note('info', html`In Home Assistant: install the <strong>Mosquitto broker</strong> add-on, create a user for it (Settings → People), enable the <strong>MQTT</strong> integration, and enter that user above with Home Assistant's address as the server. The TeHyBug shows up under Settings → Devices &amp; services → MQTT after its first send.`)}</div>
         <div id="mqtt-custom" ${mode === 'custom' ? '' : 'hidden'}>

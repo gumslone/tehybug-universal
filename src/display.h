@@ -268,11 +268,16 @@ void checkAlarms() {
       Log(F("Alarm"), "Alarm " + String(i + 1) + " stopped by itself");
     }
   }
-  if (anyAlarmFired()) {
+  // Silence the buzzer once, when the last alarm stops - a noTone() on every
+  // tick would clip the short click that a button press plays.
+  static bool wasRinging = false;
+  const bool ringing = anyAlarmFired();
+  if (ringing) {
     buzzerAlarmTick();
-  } else {
+  } else if (wasRinging) {
     buzzerOff();
   }
+  wasRinging = ringing;
 }
 
 // Display-triggered sensor refresh, so the pages show readings even when no

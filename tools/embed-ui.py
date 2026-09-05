@@ -18,6 +18,7 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 V2 = os.path.join(ROOT, 'html', 'v2')
@@ -65,8 +66,14 @@ def main():
     css = bundle('css', '\n')
     js_min = minify_js(js)
     css_min = minify_css(css)
-    # a broken minification must fail the build, not the device
-    subprocess.run(['node', '--check', '/dev/stdin'], input=js_min, capture_output=True, text=True, check=True)
+    # a broken minification must fail the build, not the device (a real file:
+    # node --check cannot read a pipe on Linux)
+    with tempfile.NamedTemporaryFile('w', suffix='.js', delete=False) as tmp:
+        tmp.write(js_min)
+    try:
+        subprocess.run(['node', '--check', tmp.name], capture_output=True, text=True, check=True)
+    finally:
+        os.unlink(tmp.name)
     js_gz = gzip.compress(js_min.encode('utf-8'), 9, mtime=0)
     css_gz = gzip.compress(css_min.encode('utf-8'), 9, mtime=0)
     stamp = hashlib.sha1(js_min.encode('utf-8') + css_min.encode('utf-8')).hexdigest()[:8]
