@@ -57,6 +57,9 @@ constexpr uint32_t SENSOR_BUS_CLOCK_HZ = 100000;
 
 byte displayPage = display_logic::PAGE_CLOCK;
 bool alarmFired[Alarms::count] = {false, false, false};
+// when each alarm started ringing; an alarm nobody mutes stops by itself
+unsigned long alarmFiredAtMs[Alarms::count] = {0, 0, 0};
+constexpr unsigned long ALARM_AUTO_MUTE_MS = 5UL * 60UL * 1000UL;
 // minute-resolution timestamp each alarm last fired at, so one match rings
 // once (see display_logic::alarmDue)
 String alarmLastFired[Alarms::count];
@@ -253,11 +256,22 @@ void checkAlarms() {
                                 tehybug.time.getMinutes(), stamp,
                                 alarmLastFired[i])) {
       alarmFired[i] = true;
+      alarmFiredAtMs[i] = millis();
       Log(F("Alarm"), "Alarm " + String(i + 1) + " fired");
+    }
+  }
+  // Ring for at most ALARM_AUTO_MUTE_MS: with nobody home to press a button,
+  // an alarm used to sound until the next reboot.
+  for (uint8_t i = 0; i < Alarms::count; i++) {
+    if (alarmFired[i] && millis() - alarmFiredAtMs[i] >= ALARM_AUTO_MUTE_MS) {
+      alarmFired[i] = false;
+      Log(F("Alarm"), "Alarm " + String(i + 1) + " stopped by itself");
     }
   }
   if (anyAlarmFired()) {
     buzzerAlarmTick();
+  } else {
+    buzzerOff();
   }
 }
 
@@ -281,7 +295,16 @@ void refreshDisplaySensors() {
       (now - lastSensorReadMs) < (unsigned long)refreshS * 1000) {
     return;
   }
+  // A DHT read waits out its sampling period through sensorWait(), which
+  // calls displayTick() to keep the clock drawing — and displayTick() lands
+  // back here. Don't start a second read inside the first.
+  static bool reading = false;
+  if (reading) {
+    return;
+  }
+  reading = true;
   read_sensors(); // updates lastSensorReadMs itself
+  reading = false;
 }
 
 // Call from every loop() iteration, in every mode: polls the buttons each
@@ -341,6 +364,8 @@ void displayTick() {
 void displaySetup() {
   upButton.begin();
   downButton.begin();
+  // keep the panel alive while a sensor read waits (a DHT sample is ~2 s)
+  sensorWaitHook = displayTick;
 
   u8g2.begin();
   u8g2.enableUTF8Print();

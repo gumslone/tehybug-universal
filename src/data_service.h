@@ -13,12 +13,78 @@
 // has already arrived by the time the sleep path runs.
 constexpr unsigned long MQTT_DRAIN_MS = 250;
 
+// The host part of a URL ("https://user@Host.example.com:8443/x" -> the host).
+String hostOfUrl(const String &url) {
+  int start = url.indexOf("://");
+  start = start < 0 ? 0 : start + 3;
+  int end = url.indexOf('/', start);
+  if (end < 0) {
+    end = url.length();
+  }
+  String host = url.substring(start, end);
+  const int at = host.lastIndexOf('@');
+  if (at >= 0) {
+    host = host.substring(at + 1);
+  }
+  const int colon = host.indexOf(':');
+  if (colon >= 0) {
+    host = host.substring(0, colon);
+  }
+  return host;
+}
+
+// The certificate pin for a host. The setting holds one entry per line:
+// "AB:CD:..." applies to every host, "host.example.com AB:CD:..." to that
+// host only; a host's own entry wins over a bare one. Empty: no pin.
+String pinForHost(const String &host) {
+  const String &all = tehybug.serveData.httpsFingerprint;
+  String bare;
+  int start = 0;
+  while (start < (int)all.length()) {
+    int end = all.indexOf('\n', start);
+    if (end < 0) {
+      end = all.length();
+    }
+    String entry = all.substring(start, end);
+    entry.trim();
+    start = end + 1;
+    if (entry.length() == 0) {
+      continue;
+    }
+    const int space = entry.lastIndexOf(' ');
+    if (space < 0) {
+      if (bare.length() == 0) {
+        bare = entry;
+      }
+      continue;
+    }
+    String entryHost = entry.substring(0, space);
+    entryHost.trim();
+    if (entryHost.equalsIgnoreCase(host)) {
+      return entry.substring(space + 1);
+    }
+  }
+  return bare;
+}
+
 WiFiClient & getClient(const String & url)
 {
 #if !defined(ARDUINO_ESP8266_GENERIC)
   if (url.startsWith("https")) {
-    // Create the BearSSL client on first use and keep it for the session, so
-    // its buffers only cost heap once HTTPS is actually needed.
+    // Optional certificate check: with a pin configured for this host the
+    // server's certificate must match it exactly (no clock needed, unlike a
+    // CA chain). Without one the connection is encrypted but unverified.
+    const String pin = pinForHost(hostOfUrl(url));
+    // The BearSSL client keeps whichever trust setting it was given first
+    // (setInsecure() sticks), so a request that needs a different pin than
+    // the last one gets a fresh client. Normally the client is created on
+    // first https use and kept for the session, so its buffers only cost
+    // heap once HTTPS is actually needed.
+    static String activePin;
+    if (espClient_ssl && activePin != pin) {
+      delete espClient_ssl;
+      espClient_ssl = nullptr;
+    }
     if (!espClient_ssl) {
       espClient_ssl = new BearSSL::WiFiClientSecure();
       // 512 is the smallest the core accepts - it silently clamps anything
@@ -28,17 +94,14 @@ WiFiClient & getClient(const String & url)
       // default cloud endpoint is plain http, so this only affects
       // user-configured https targets.
       espClient_ssl->setBufferSizes(512, 512);
-      // Optional certificate check: with a SHA-1 fingerprint configured the
-      // server's certificate must match it exactly (no clock needed, unlike a
-      // CA chain). Without one the connection is encrypted but unverified.
-      const String &fp = tehybug.serveData.httpsFingerprint;
-      if (fp.length() == 0) {
+      if (pin.length() == 0) {
         espClient_ssl->setInsecure();
-      } else if (!espClient_ssl->setFingerprint(fp.c_str())) {
+      } else if (!espClient_ssl->setFingerprint(pin.c_str())) {
         // Fail closed: a pin that cannot be parsed must not silently turn
         // into "no check". With nothing trusted, BearSSL refuses to connect.
         D_println(F("HTTPS fingerprint is malformed - https requests will fail"));
       }
+      activePin = pin;
     }
     return *espClient_ssl;
   }
