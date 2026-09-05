@@ -32,6 +32,10 @@ static constexpr size_t CONFIG_DOC_SIZE = 5632;
 static constexpr size_t CONFIG_DOC_SIZE = 4608;
 #endif
 
+// What the UI sees instead of a stored MQTT password (and what it sends back
+// when the field was left alone).
+static const char PASSWORD_PLACEHOLDER[] = "********";
+
 class TeHyBugConfig {
   public:
 
@@ -116,7 +120,13 @@ class TeHyBugConfig {
       put(json, full, "mqttActive", m_serveData.mqtt.active, serveData.mqtt.active);
       put(json, full, "mqttRetained", m_serveData.mqtt.retained, serveData.mqtt.retained);
       put(json, full, "mqttUser", m_serveData.mqtt.user, serveData.mqtt.user);
-      put(json, full, "mqttPassword", m_serveData.mqtt.password, serveData.mqtt.password);
+      // The UI dump never carries the broker password itself, only whether
+      // one is set: anyone on the LAN can read /api/config. Saving the
+      // placeholder back leaves the stored password untouched (see setData).
+      // The flash file (full=false) still stores the real value.
+      put(json, full, "mqttPassword",
+          full && m_serveData.mqtt.password.length() ? String(PASSWORD_PLACEHOLDER) : m_serveData.mqtt.password,
+          serveData.mqtt.password);
       put(json, full, "mqttServer", m_serveData.mqtt.server, serveData.mqtt.server);
       put(json, full, "mqttMasterTopic", m_serveData.mqtt.topic, serveData.mqtt.topic);
       put(json, full, "mqttMessage", m_serveData.mqtt.message,  serveData.mqtt.message);
@@ -171,6 +181,10 @@ class TeHyBugConfig {
 
       put(json, full, "rc_active", m_device.remoteControl.active, device.remoteControl.active);
       put(json, full, "rc_url", m_device.remoteControl.url, device.remoteControl.url);
+
+      put(json, full, "ntpActive", m_device.ntpActive, device.ntpActive);
+      put(json, full, "ntpServer", m_device.ntpServer, device.ntpServer);
+      put(json, full, "timezone", m_device.timezone, device.timezone);
 
 #if TEHYBUG_DISPLAY
       // Display board only. The key names are the original display
@@ -325,7 +339,9 @@ class TeHyBugConfig {
       setData(json, "mqttActive", m_serveData.mqtt.active);
       setData(json, "mqttRetained", m_serveData.mqtt.retained);
       setData(json, "mqttUser", m_serveData.mqtt.user);
-      setData(json, "mqttPassword", m_serveData.mqtt.password);
+      if (json.containsKey("mqttPassword") && json["mqttPassword"].as<String>() != PASSWORD_PLACEHOLDER) {
+        m_serveData.mqtt.password = json["mqttPassword"].as<String>();
+      }
       setData(json, "mqttServer", m_serveData.mqtt.server);
       setData(json, "mqttMasterTopic", m_serveData.mqtt.topic);
       setData(json, "mqttMessage", m_serveData.mqtt.message);
@@ -378,6 +394,9 @@ class TeHyBugConfig {
 
       setData(json, "rc_active", m_device.remoteControl.active);
       setData(json, "rc_url", m_device.remoteControl.url);
+      setData(json, "ntpActive", m_device.ntpActive);
+      setData(json, "ntpServer", m_device.ntpServer);
+      setData(json, "timezone", m_device.timezone);
       // saveConfig() writes "key", so it must be read back here too — without
       // this the stored device key was ignored and regenerated on every boot.
       setData(json, "key", m_device.key);

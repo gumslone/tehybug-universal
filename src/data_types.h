@@ -15,6 +15,12 @@ struct Device {
   // boot to re-enter config mode (WiFi on) and read the log.
   bool offlineMode{false};
   RemoteControl remoteControl{};
+  // Clock from the network (see ntp_time.h): on by default, the pool as
+  // the server, and the time zone as a POSIX TZ string ("" = UTC) — the
+  // data log and the display alarms run on local time.
+  bool ntpActive{true};
+  String ntpServer{"pool.ntp.org"};
+  String timezone{};
 };
 struct Sensor {
   bool bmx{false};

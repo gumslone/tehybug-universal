@@ -78,6 +78,7 @@ TickerScheduler ticker(6);
 #include "src/http_request.h"
 #include "src/mode_button.h"
 #include "src/mqtt_service.h"
+#include "src/ntp_time.h"
 #include "src/sensors.h"
 #include "src/serve_tickers.h"
 #include "src/sleep_modes.h"
@@ -253,6 +254,15 @@ void setup() {
   }
 
   setupSensors();
+
+  // Clock from the network, now that WiFi is up and the RTC (if any) has
+  // been detected. A sleeping battery board only asks while its clock is
+  // unset, so the periodic wakes stay short; without an RTC chip a sleeping
+  // board never asks (there would be nothing to keep the answer).
+  if (tehybug.inConfigMode() || !mode_logic::isSleeping(tehybug.mode()) ||
+      (tehybug.peripherals.ds3231 && !tehybug.time.isTimeSet())) {
+    syncClockFromNtp();
+  }
 
   // process changes requested by remote control
   if (plan.remoteControl) {

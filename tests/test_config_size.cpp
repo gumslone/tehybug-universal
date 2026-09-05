@@ -50,7 +50,10 @@ static size_t buildWorstCase(size_t poolSize, bool display, bool &overflowed) {
 
   // HTTP
   json[std::string("httpGetURL")] = filler(200);
-  json[std::string("httpsFingerprint")] = filler(59); // "AB:CD:..." x 20
+  json[std::string("httpsFingerprint")] = filler(240); // three "host AB:CD:..." entries
+  json[std::string("ntpActive")] = true;
+  json[std::string("ntpServer")] = filler(40);
+  json[std::string("timezone")] = filler(40); // a POSIX TZ string with DST rules
   json[std::string("httpGetActive")] = true;
   json[std::string("httpGetFrequency")] = 900;
   json[std::string("httpPostURL")] = filler(200);
