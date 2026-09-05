@@ -101,6 +101,11 @@ struct DataServ {
   MqttDataServ mqtt{};
   HaDataServ ha{};
   EepromDataServ eeprom{};
+  // Optional certificate pin for every https:// target: the SHA-1
+  // fingerprint ("AB:CD:...", 20 pairs) the server's certificate must match.
+  // Empty means encrypted but unverified (the device has no clock to check a
+  // certificate chain against, so a pin is the check it can do).
+  String httpsFingerprint;
 };
 
 /* Display board (TeHyBug Display Weatherstation) ----------------------------

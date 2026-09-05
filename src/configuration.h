@@ -139,6 +139,7 @@ class TeHyBugConfig {
       put(json, full, "httpPostActive", m_serveData.post.active, serveData.post.active);
       put(json, full, "httpPostFrequency", m_serveData.post.frequency, serveData.post.frequency);
       put(json, full, "httpPostJson", m_serveData.post.message, serveData.post.message);
+      put(json, full, "httpsFingerprint", m_serveData.httpsFingerprint, serveData.httpsFingerprint);
 
       put(json, full, "calibrationActive", m_calibration.active, calibration.active);
       put(json, full, "calibrationTemp",  m_calibration.temp, calibration.temp);
@@ -349,6 +350,7 @@ class TeHyBugConfig {
       setFrequency(json, "httpPostFrequency", m_serveData.post.frequency);
 
       setData(json, "httpPostJson", m_serveData.post.message);
+      setData(json, "httpsFingerprint", m_serveData.httpsFingerprint);
       setData(json, "configModeActive", m_device.configMode);
       setData(json, "calibrationActive", m_calibration.active);
       setData(json, "calibrationTemp", m_calibration.temp);

@@ -28,7 +28,17 @@ WiFiClient & getClient(const String & url)
       // default cloud endpoint is plain http, so this only affects
       // user-configured https targets.
       espClient_ssl->setBufferSizes(512, 512);
-      espClient_ssl->setInsecure();             // skip cert verification
+      // Optional certificate check: with a SHA-1 fingerprint configured the
+      // server's certificate must match it exactly (no clock needed, unlike a
+      // CA chain). Without one the connection is encrypted but unverified.
+      const String &fp = tehybug.serveData.httpsFingerprint;
+      if (fp.length() == 0) {
+        espClient_ssl->setInsecure();
+      } else if (!espClient_ssl->setFingerprint(fp.c_str())) {
+        // Fail closed: a pin that cannot be parsed must not silently turn
+        // into "no check". With nothing trusted, BearSSL refuses to connect.
+        D_println(F("HTTPS fingerprint is malformed - https requests will fail"));
+      }
     }
     return *espClient_ssl;
   }
@@ -38,9 +48,27 @@ WiFiClient & getClient(const String & url)
   return espClient;
 }
 
+// After a failed https request, what BearSSL objected to. A certificate
+// that does not match the configured fingerprint only reaches the HTTP layer
+// as "connection lost"; this names the reason on the dashboard log.
+void Log(const String &function, const String &message); // web_api.h, later in the sketch
+void logSslError() {
+#if !defined(ARDUINO_ESP8266_GENERIC)
+  if (!espClient_ssl) {
+    return;
+  }
+  char reason[96];
+  const int code = espClient_ssl->getLastSSLError(reason, sizeof(reason));
+  if (code != 0) {
+    Log(F("HTTPS"), String(F("TLS error ")) + String(code) + ": " + reason);
+  }
+#endif
+}
+
 void httpGet() {
   const String url = tehybug.replacePlaceholders(tehybug.serveData.get.url);
   http::get(httpClient, getClient(url), url);
+  logSslError();
 }
 
 void httpPost() {
@@ -49,6 +77,7 @@ void httpPost() {
   const String url = tehybug.replacePlaceholders(tehybug.serveData.post.url);
   http::post(httpClient, getClient(url), url,
              tehybug.replacePlaceholders(tehybug.serveData.post.message));
+  logSslError();
 }
 
 // Pushes the current readings to every configured target, then sleeps once.
