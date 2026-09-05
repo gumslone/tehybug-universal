@@ -17,7 +17,9 @@
     },
     field(o) {
       const type = o.type || 'text';
-      const input = html`<input id="${o.id}" type="${type}" value="${o.value == null ? '' : o.value}" placeholder="${o.placeholder || ''}" ${raw(o.attrs || '')}>`;
+      const input = o.textarea
+        ? html`<textarea id="${o.id}" rows="${o.rows || 3}" placeholder="${o.placeholder || ''}" ${raw(o.attrs || '')}>${o.value == null ? '' : o.value}</textarea>`
+        : html`<input id="${o.id}" type="${type}" value="${o.value == null ? '' : o.value}" placeholder="${o.placeholder || ''}" ${raw(o.attrs || '')}>`;
       return html`<div class="field" data-field="${o.id}">
         <label for="${o.id}">${o.label}${o.labelHint ? html` <span class="hint">${o.labelHint}</span>` : ''}</label>
         ${o.button ? html`<div class="with-btn">${input}${o.button}</div>` : input}
@@ -73,6 +75,32 @@
     },
     disclosure(title, body, open, cls) {
       return html`<details class="disclosure ${cls || ''}" ${open ? 'open' : ''}><summary>${T.icon('chevron-right')}${title}</summary><div class="disclosure-body">${body}</div></details>`;
+    },
+    // Clock-from-the-network settings, shared by the Data log and Display
+    // pages. The time zone is stored as the POSIX string the firmware needs;
+    // the list maps the browser's zone name to it, anything else is typed in.
+    clockFields(c) {
+      const zones = T.TIMEZONES;
+      const stored = c.timezone == null ? '' : String(c.timezone);
+      let browserZone = '';
+      try { browserZone = Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch (e) { /* no Intl */ }
+      const guessed = zones.find(z => z[0] === browserZone);
+      const known = zones.find(z => z[1] === stored);
+      const selected = stored ? (known ? known[1] : '__custom') : (guessed ? guessed[1] : 'UTC0');
+      return html`
+        ${UI.toggle({ id: 'ntpActive', label: 'Set the clock from the internet', checked: c.ntpActive !== false, hint: 'At start-up, whenever WiFi is up (a sleeping battery board only does it while its clock is unset, so wakes stay short). The clock chip keeps the time in between.' })}
+        <div class="fields-inline mt">
+          ${UI.select({ id: 'timezoneSelect', label: 'Time zone', options: zones.map(z => ({ value: z[1], label: z[0] })).concat([{ value: '__custom', label: 'Custom (POSIX TZ string)' }]), value: selected, hint: !stored && guessed ? 'From your browser — stored when you save this page.' : '' })}
+          ${UI.field({ id: 'ntpServer', label: 'NTP server', value: c.ntpServer || 'pool.ntp.org', placeholder: 'pool.ntp.org', attrs: 'autocomplete="off" spellcheck="false"' })}
+        </div>
+        <div id="timezone-custom" ${selected === '__custom' ? '' : 'hidden'}>${UI.field({ id: 'timezone', label: 'POSIX TZ string', value: stored, placeholder: 'CET-1CEST,M3.5.0,M10.5.0/3', attrs: 'autocomplete="off" spellcheck="false"', hint: html`What the ESP8266 understands, e.g. <code>CET-1CEST,M3.5.0,M10.5.0/3</code> for Central Europe or <code>EST5EDT,M3.2.0,M11.1.0</code> for New York.` })}</div>`;
+    },
+    // the clock settings as config keys; throws when the custom zone is empty
+    clockValues() {
+      const sel = T.val('timezoneSelect');
+      const tz = sel === '__custom' ? T.val('timezone').trim() : sel;
+      if (sel === '__custom' && !tz) throw T.fail('Enter a POSIX TZ string, or pick a zone from the list', 'timezone');
+      return { ntpActive: T.checked('ntpActive'), ntpServer: T.val('ntpServer').trim() || 'pool.ntp.org', timezone: tz === 'UTC0' ? '' : tz };
     },
     unitsSeg() {
       const u = T.units();
@@ -613,7 +641,11 @@
     });
     const main = $('#main');
     main.addEventListener('input', markDirty);
-    main.addEventListener('change', e => { markDirty(e); syncChoices(main); });
+    main.addEventListener('change', e => {
+      markDirty(e);
+      syncChoices(main);
+      if (e.target.id === 'timezoneSelect') T.show('timezone-custom', e.target.value === '__custom');
+    });
     window.addEventListener('hashchange', onHashChange);
     window.addEventListener('beforeunload', e => { if (Shell.dirty) { e.preventDefault(); e.returnValue = ''; } });
     window.addEventListener('resize', () => updateSaveBar());

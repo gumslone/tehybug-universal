@@ -93,7 +93,18 @@
     if (T.isGeneric()) return '';
     return UI.card({ title: 'HTTPS certificate check', icon: 'key', body: html`
       <p class="hint">Optional. An https:// target is encrypted either way, but by default the device does not verify who it is talking to. Set the fingerprint of your server's certificate and it refuses anything else.</p>
-      ${UI.field({ id: 'httpsFingerprint', label: 'SHA-1 fingerprint of the server certificate', labelHint: 'optional', value: c.httpsFingerprint, placeholder: 'AB:CD:EF:… (20 pairs)', attrs: 'autocomplete="off" spellcheck="false"', hint: html`Read it in your browser's certificate viewer, or with <code>openssl s_client -connect host:443 -servername host &lt;/dev/null | openssl x509 -noout -fingerprint -sha1</code>. One fingerprint for all HTTPS targets. Certificates get renewed (Let's Encrypt about every two months): after a renewal the sends fail until you update it — the dashboard log then shows the TLS reason. Leave empty for no check. MQTT has no TLS at all.` })}` });
+      ${UI.field({ id: 'httpsFingerprint', textarea: true, rows: 2, label: 'SHA-1 fingerprint of the server certificate', labelHint: 'optional', value: c.httpsFingerprint, placeholder: 'AB:CD:EF:… (20 pairs)', attrs: 'autocomplete="off" spellcheck="false"', hint: html`Read it in your browser's certificate viewer, or with <code>openssl s_client -connect host:443 -servername host &lt;/dev/null | openssl x509 -noout -fingerprint -sha1</code>. One bare fingerprint applies to every HTTPS target; for several servers write one entry per line as <code>host.example.com AB:CD:…</code> (a host without an entry is sent to unverified). Certificates get renewed (Let's Encrypt about every two months): after a renewal the sends fail until you update it — the dashboard log then shows the TLS reason. Leave empty for no check. MQTT has no TLS at all.` })}` });
+  }
+
+  // "AB:CD:…" or "host AB:CD:…" per line/comma; returns the canonical entry
+  // or throws with the offending text
+  function normalisePin(entry) {
+    // an optional host, then 20 hex pairs with any separator (or none)
+    const m = /^\s*(?:([A-Za-z0-9.-]+)\s+)?((?:[0-9a-fA-F]{2}[\s:.-]*){19}[0-9a-fA-F]{2})\s*$/.exec(entry);
+    if (!m) throw T.fail('Check the fingerprint entry "' + entry.trim() + '": a SHA-1 fingerprint is 40 hex digits (20 pairs), optionally preceded by a host name', 'httpsFingerprint');
+    const host = (m[1] || '').toLowerCase();
+    const hex = m[2].replace(/[^0-9a-fA-F]/g, '').toUpperCase();
+    return (host ? host + ' ' : '') + hex.match(/../g).join(':');
   }
 
   // The rules the firmware lives by, applied as switches flip:
@@ -196,10 +207,8 @@
       if (ha) { out.httpGetActive = false; out.httpPostActive = false; }
       if (out.httpGetActive || out.httpPostActive || ha || mqtt) out.offlineModeActive = false;
       if (!T.isGeneric()) {
-        // accept "ab:cd", "AB CD", "abcd..."; store the canonical "AB:CD:..."
-        const hex = T.val('httpsFingerprint').replace(/[^0-9a-fA-F]/g, '').toUpperCase();
-        if (hex.length && hex.length !== 40) throw T.fail('A SHA-1 fingerprint is 40 hex digits (20 pairs like AB:CD:…)', 'httpsFingerprint');
-        out.httpsFingerprint = hex ? hex.match(/../g).join(':') : '';
+        // one entry per line (or comma); stored canonical, newline-separated
+        out.httpsFingerprint = T.val('httpsFingerprint').split(/[\n,;]+/).map(s => s.trim()).filter(Boolean).map(normalisePin).join('\n');
       }
       return out;
     }

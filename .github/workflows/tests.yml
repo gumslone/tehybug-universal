@@ -26,6 +26,14 @@ jobs:
       - name: Static analysis
         run: ./tests/tidy.sh
 
+  web-ui:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '22' }
+      - run: ./tests/ui/run.sh
+
   platformio:
     runs-on: ubuntu-latest
     steps:

@@ -52,8 +52,9 @@
       </div>
       ${d.capacity ? html`<p class="hint mt">Memory: ${Math.round(d.capacity / 1024)} KB${chip ? ' (' + chip + ')' : ''}, about ${d.slotBytes} bytes per file.</p>` : ''}
       ${files.length
-        ? UI.table(['Date', 'File', 'Size', ''], files.map(f => [f.date || ('Day ' + String(f.name).replace('.txt', '')), html`<span class="hint">${f.name}</span>`, f.size + ' B', html`<button type="button" class="btn btn-sm" data-view="${f.name}" data-nosave>View</button>`]))
+        ? UI.table(['Date', 'File', 'Size', ''], files.map(f => [f.date || ('Day ' + String(f.name).replace('.txt', '')), html`<span class="hint">${f.name}</span>`, f.size + ' B', html`<span class="row"><button type="button" class="btn btn-sm" data-view="${f.name}" data-nosave>View</button><button type="button" class="btn btn-sm" data-download="${f.name}" data-nosave title="Download this file">${T.icon('download')}</button></span>`]))
         : html`<div class="empty mt">No log files yet.</div>`}
+      ${files.length ? html`<div class="row mt"><button type="button" class="btn btn-sm" id="log-csv" data-nosave>${T.icon('download')} Everything as CSV</button><span class="hint">All files, one row per value: date, time, reading, value.</span></div>` : ''}
       <div id="log-view" class="mt" hidden><div class="row"><strong id="log-view-name"></strong><span class="spacer"></span><button type="button" class="btn btn-sm" id="log-copy" data-nosave>${T.icon('copy')} Copy</button></div><pre id="log-view-content" class="mt"></pre></div>
       ${UI.disclosure('Reading a line', html`<p class="hint">Each line is the time of day followed by tagged values, e.g. <code>07:55 22.6t 48.3h 1013.2p</code>. Tags: <code>t</code> temperature, <code>t2</code> temperature 2, <code>h</code>/<code>h2</code> humidity, <code>p</code> pressure, <code>al</code> altitude, <code>l</code> light, <code>x</code> ADC, <code>q</code> IAQ, <code>c</code> eCO₂, <code>v</code> bVOC, <code>a</code> gas resistance. The date is the file. A custom “which values” template stores your own text instead.</p>`)}`;
   }
@@ -66,6 +67,55 @@
   async function setClock() {
     try { await T.Api.setTime(); T.Shell.toast('Clock set'); await loadLog(); }
     catch (e) { T.Shell.toast('Could not set the clock: ' + e.message, 'danger'); }
+  }
+  // Hands the browser a file to save. (The device cannot set a download
+  // header itself, and its files are named by day number, not date.)
+  function saveAs(name, text, type) {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([text], { type: type || 'text/plain' }));
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  }
+  const TAGS = { t: 'temp', t2: 'temp2', h: 'humi', h2: 'humi2', p: 'qfe', al: 'alt', l: 'lux', x: 'adc', q: 'iaq', c: 'eco2', v: 'bvoc', a: 'air' };
+  // "07:55 22.6t 48.3h 1013.2p" -> rows [time, reading, value]; a custom
+  // template's line comes through as one raw row
+  function parseLine(line) {
+    const m = /^(\d{1,2}:\d{2})\s*(.*)$/.exec(line.trim());
+    if (!m) return line.trim() ? [['', 'raw', line.trim()]] : [];
+    const tokens = m[2].split(/\s+/).filter(Boolean);
+    const rows = [];
+    let allTagged = tokens.length > 0;
+    tokens.forEach(tok => {
+      const v = /^(-?\d+(?:\.\d+)?)([a-z][a-z0-9]?)$/.exec(tok);
+      if (v) rows.push([m[1], TAGS[v[2]] || v[2], v[1]]);
+      else allTagged = false;
+    });
+    return allTagged ? rows : [[m[1], 'raw', m[2]]];
+  }
+  const csvCell = s => /[",\n]/.test(s) ? '"' + String(s).replace(/"/g, '""') + '"' : String(s);
+  async function downloadFile(name) {
+    try {
+      const text = await T.Api.datalogFile(name);
+      const f = (lastLog && lastLog.files || []).find(x => x.name === name);
+      saveAs('tehybug-' + ((f && f.date) || name.replace('.txt', '')) + '.txt', text);
+    } catch (e) { T.Shell.toast('Could not load the file: ' + e.message, 'danger'); }
+  }
+  async function downloadCsv() {
+    const btn = $('#log-csv');
+    if (!lastLog || !lastLog.files || !lastLog.files.length) return;
+    if (btn) btn.disabled = true;
+    const rows = [['date', 'time', 'reading', 'value']];
+    try {
+      for (const f of lastLog.files) {
+        const text = await T.Api.datalogFile(f.name);
+        const date = f.date || f.name.replace('.txt', '');
+        text.split('\n').forEach(line => parseLine(line).forEach(r => rows.push([date].concat(r))));
+      }
+      saveAs('tehybug-log.csv', rows.map(r => r.map(csvCell).join(',')).join('\n') + '\n', 'text/csv');
+    } catch (e) { T.Shell.toast('Could not read the log: ' + e.message, 'danger'); }
+    finally { if (btn) btn.disabled = false; }
   }
   async function viewFile(name) {
     const box = $('#log-view');
@@ -103,6 +153,7 @@
         ${T.isGeneric() ? UI.note('warn', 'The 1 MB build for first-generation boards has no data-log support; these settings have no effect on this device.') : ''}
         ${eepromCard(c)}
         ${offlineCard(c)}
+        ${UI.card({ title: 'Clock', icon: 'clock', body: html`<p class="hint">Timestamps in the log are local time. The clock is set from the network when WiFi is up; the button under Stored data sets it from this browser instead.</p>${UI.clockFields(c)}` })}
         ${UI.card({ title: 'Stored data', icon: 'file-text', body: html`<div id="log-files">${filesInner()}</div>` })}`;
     },
     mount(root) {
@@ -112,6 +163,9 @@
         if (e.target.closest('#reload-log')) loadLog();
         const v = e.target.closest('[data-view]');
         if (v) viewFile(v.getAttribute('data-view'));
+        const d = e.target.closest('[data-download]');
+        if (d) downloadFile(d.getAttribute('data-download'));
+        if (e.target.closest('#log-csv')) downloadCsv();
         if (e.target.closest('#log-copy')) T.copy($('#log-view-content').textContent).then(ok => T.Shell.toast(ok ? 'Copied' : 'Could not copy', ok ? '' : 'warn'));
       });
     },
@@ -124,6 +178,7 @@
         eepromLogMessage: T.val('eepromLogMessage').trim(),
         offlineModeActive: offline
       };
+      Object.assign(out, UI.clockValues());
       if (offline) {
         // Without the module a battery board cannot enter offline mode at all:
         // it would go live with nothing to send and no interface to come

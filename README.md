@@ -42,7 +42,7 @@ The device waits **1 second** after a reset for a MODE press. Scheduled deep-sle
 
 ## Offline data logging (RTC + EEPROM)
 
-With a DS3231 RTC + I²C EEPROM module attached, TeHyBug can store timestamped readings on the device itself — no server, broker or network required. Configure and read the log on the **Data Log** page of the web interface.
+With a DS3231 RTC + I²C EEPROM module attached, TeHyBug can store timestamped readings on the device itself — no server, broker or network required. Configure and read the log on the **Data Log** page of the web interface, where each day's file can be viewed or downloaded and the whole log exported as one CSV (date, time, reading, value).
 
 - **One file per day, a full month retained.** A file per day of month is written. The EEPROM is split into 32 slots, so every day of the month gets its own file; when no free slot is left the oldest day file is recycled. The chip size is detected at boot: current modules carry a 64 KB FT24C512A (~2 KB per day file), earlier ones a 32 KB FT24C256A (~1 KB). The Data Log page shows which was found. **Upgrading a 64 KB module from an older firmware re-lays out the log once and erases what was stored — download anything you want to keep first.**
 - **Log period (month or day).** The default keeps a rolling month (one file per day of month). Switch to **per-hour** logging on the Data Log page for a rolling 24 hours at finer detail (one file per hour of day, reused the next day). Changing the period wipes the log automatically so it starts clean in the new layout.
@@ -65,7 +65,7 @@ On top of everything above (sensors, MQTT/Home Assistant, cloud, scenarios, data
 - **Night mode** — the panel switches off inside a configurable window (may cross midnight); alarms and data serving keep running.
 - **Offline display mode** — WiFi completely off, clock and sensors keep running. Toggle it by holding the right (IO_5) button for 10 seconds (LED turns purple, device restarts).
 
-Configure it all on the **Display &amp; Alarms** page of the web interface (it appears automatically for display devices). Set the clock there once — the DS3231 keeps it on its backup battery.
+Configure it all on the **Display &amp; Alarms** page of the web interface (it appears automatically for display devices). A ringing alarm is muted with any display button and stops by itself after five minutes. Set the clock there once — the DS3231 keeps it on its backup battery.
 
 Buttons on the display board:
 
@@ -198,8 +198,14 @@ Then, on the web interface:
 3. **Go live** — the button on the Dashboard (or on *Power & go live*): pick the power mode (Deep sleep for battery) and confirm. The device restarts and starts sending; on battery boards the web interface stops being served, which is expected. The Dashboard's set-up checklist shows which of the three steps are done.
 4. **Getting back in later** — press RESET, then MODE within a second (see "Return to Config mode" above). A device that has nothing configured to serve always starts its setup portal, so it can't lock you out.
 
+### Clock
+The device sets its clock from the internet (NTP) at start-up whenever WiFi is up — on a sleeping battery board only while the clock is still unset, so wakes stay short. Pick the time zone on *Data log → Clock* (or *Display &amp; alarms → Clock*): the list is pre-filled from your browser's zone, anything else can be typed as a POSIX TZ string. The DS3231 clock module keeps the time in between; the *set from this browser* button remains for devices without internet.
+
+### Privacy on the LAN
+Anyone on your network can open the device page in setup mode. The MQTT password is therefore never sent back to the browser — the field shows a placeholder, and saving the page with the placeholder untouched keeps the stored password.
+
 ### HTTPS certificate check (optional)
-An `https://` target (HTTP GET/POST, scenarios) is encrypted either way, but by default the device does not verify the server's certificate: an ESP8266 has no trusted clock to validate a certificate chain against. What it can do is **pin the certificate**: on *Send data → HTTPS certificate check*, enter the SHA-1 fingerprint of your server's certificate (from the browser's certificate viewer, or `openssl s_client -connect host:443 -servername host </dev/null | openssl x509 -noout -fingerprint -sha1`) and the device refuses to send to anything else. One fingerprint covers all HTTPS targets. Certificates get renewed — Let's Encrypt about every two months — after which the sends fail (the dashboard log shows the TLS reason) until you update the pin. MQTT has no TLS; the 1 MB build for first-generation boards has no TLS client at all.
+An `https://` target (HTTP GET/POST, scenarios) is encrypted either way, but by default the device does not verify the server's certificate: an ESP8266 has no trusted clock to validate a certificate chain against. What it can do is **pin the certificate**: on *Send data → HTTPS certificate check*, enter the SHA-1 fingerprint of your server's certificate (from the browser's certificate viewer, or `openssl s_client -connect host:443 -servername host </dev/null | openssl x509 -noout -fingerprint -sha1`) and the device refuses to send to anything else. A bare fingerprint covers all HTTPS targets; with several servers, write one entry per line as `host.example.com AB:CD:…` (a host without an entry is sent to unverified). Certificates get renewed — Let's Encrypt about every two months — after which the sends fail (the dashboard log shows the TLS reason) until you update the pin. MQTT has no TLS; the 1 MB build for first-generation boards has no TLS client at all.
 
 ## Factory reset
 To delete all the configs, reset the wifi configuration and erase the on-device data log (the RTC + EEPROM module, if attached).

@@ -50,6 +50,8 @@
           ${UI.toggle({ id: 'clock_12h', label: '12-hour clock', checked: !!c.clock_12h, hint: '1–12 with am/pm instead of 0–23.' })}
           ${UI.toggle({ id: 'clock_show_ip', label: 'Show the IP address', checked: c.clock_show_ip !== false, hint: 'In tiny type along the edge of the clock page, so the device is always easy to find. “wifi off” when WiFi is off.' })}
           <hr>
+          ${UI.clockFields(c)}
+          <hr>
           <p><strong>Device clock:</strong> <span id="display-clock" class="muted">…</span></p>
           <button type="button" class="btn btn-sm" id="set-clock" data-nosave>${T.icon('clock')} Set from this browser</button>
           <p class="hint mt">The DS3231 keeps time on its backup battery once set. Alarms and the data log need it set.</p>` })}
@@ -62,7 +64,7 @@
           <p class="hint mt mb0">A window across midnight (22:00 → 07:00) works as expected.</p>` })}
         </div>
         <h2>Alarms</h2>
-        <p class="hint">Up to three weekday alarms. When one fires the buzzer alternates two tones once a second and the screen shows the message. <strong>Press any screen button to mute.</strong></p>
+        <p class="hint">Up to three weekday alarms. When one fires the buzzer alternates two tones once a second and the screen shows the message. <strong>Press any screen button to mute</strong>; an alarm nobody mutes stops by itself after five minutes.</p>
         <div class="grid-3">${[1, 2, 3].map(n => alarmCard(n, c))}</div>
         ${UI.card({ title: 'Buttons on the device', icon: 'cpu', body: UI.table(['Button', 'Press', 'Does'], [
           [html`<strong>Left / Right</strong>`, 'click', 'Switch between the clock and sensor pages — or mute a ringing alarm.'],
@@ -91,6 +93,7 @@
         clock_sleep: T.checked('clock_sleep'),
         clock_sleep_start: hhmm(T.val('clock_sleep_start')), clock_sleep_finish: hhmm(T.val('clock_sleep_finish'))
       };
+      Object.assign(out, UI.clockValues());
       if (out.clock_sleep && (!out.clock_sleep_start || !out.clock_sleep_finish)) throw T.fail('Night mode needs both times', out.clock_sleep_start ? 'clock_sleep_finish' : 'clock_sleep_start');
       for (let n = 1; n <= 3; n++) {
         const p = 'alarm' + n;
