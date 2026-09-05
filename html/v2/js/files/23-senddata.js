@@ -93,7 +93,50 @@
     if (T.isGeneric()) return '';
     return UI.card({ title: 'HTTPS certificate check', icon: 'key', body: html`
       <p class="hint">Optional. An https:// target is encrypted either way, but by default the device does not verify who it is talking to. Set the fingerprint of your server's certificate and it refuses anything else.</p>
-      ${UI.field({ id: 'httpsFingerprint', textarea: true, rows: 2, label: 'SHA-1 fingerprint of the server certificate', labelHint: 'optional', value: c.httpsFingerprint, placeholder: 'AB:CD:EF:… (20 pairs)', attrs: 'autocomplete="off" spellcheck="false"', hint: html`Read it in your browser's certificate viewer, or with <code>openssl s_client -connect host:443 -servername host &lt;/dev/null | openssl x509 -noout -fingerprint -sha1</code>. One bare fingerprint applies to every HTTPS target; for several servers write one entry per line as <code>host.example.com AB:CD:…</code> (a host without an entry is sent to unverified). Certificates get renewed (Let's Encrypt about every two months): after a renewal the sends fail until you update it — the dashboard log then shows the TLS reason. Leave empty for no check. MQTT has no TLS at all.` })}` });
+      ${UI.field({ id: 'httpsFingerprint', textarea: true, rows: 2, label: 'SHA-1 fingerprint of the server certificate', labelHint: 'optional', value: c.httpsFingerprint, placeholder: 'AB:CD:EF:… (20 pairs)', attrs: 'autocomplete="off" spellcheck="false"', hint: html`Read it in your browser's certificate viewer, or with <code>openssl s_client -connect host:443 -servername host &lt;/dev/null | openssl x509 -noout -fingerprint -sha1</code>. One bare fingerprint applies to every HTTPS target; for several servers write one entry per line as <code>host.example.com AB:CD:…</code> (a host without an entry is sent to unverified). Certificates get renewed (Let's Encrypt about every two months): after a renewal the sends fail until you update it — the dashboard log then shows the TLS reason. Leave empty for no check. MQTT has no TLS at all.` })}
+      <div class="row"><button type="button" class="btn btn-sm" id="tls-test" data-nosave>${T.icon('check')} Test the HTTPS targets now</button><span class="hint">The device connects to each https:// address on this page with the fingerprint above, before anything is saved.</span></div>
+      <div id="tls-test-result" class="mt"></div>` });
+  }
+
+  // the firmware's rule (pinForHost in data_service.h): a host's own entry
+  // wins over a bare one; no entry means no pin
+  function pinFor(entries, host) {
+    let bare = '';
+    for (const e of entries) {
+      const sp = e.lastIndexOf(' ');
+      if (sp < 0) { if (!bare) bare = e; continue; }
+      if (e.slice(0, sp).toLowerCase() === host.toLowerCase()) return e.slice(sp + 1);
+    }
+    return bare;
+  }
+  async function testTls() {
+    const box = $('#tls-test-result'), btn = $('#tls-test');
+    let entries;
+    try { entries = T.val('httpsFingerprint').split(/[\n,;]+/).map(s => s.trim()).filter(Boolean).map(normalisePin); }
+    catch (e) { T.Shell.toast(e.message, 'danger', 5000); return; }
+    const urls = [];
+    if (T.checked('getActive') && /^https:/i.test(T.val('httpGetURL'))) urls.push(T.val('httpGetURL').trim());
+    if (T.checked('postActive') && /^https:/i.test(T.val('httpPostURL'))) urls.push(T.val('httpPostURL').trim());
+    // hosts named in the pins but not among the targets are worth a look too
+    const bareHost = u => T.hostOf(u).replace(/:\d+$/, '').toLowerCase();
+    entries.forEach(e => { const sp = e.lastIndexOf(' '); if (sp > 0) { const h = e.slice(0, sp); if (!urls.some(u => bareHost(u) === h)) urls.push('https://' + h + '/'); } });
+    if (!urls.length) { T.render(box, UI.note('info', 'Nothing to test: switch on an https:// HTTP GET or POST target above (or name a host in the fingerprint field) first.')); return; }
+    btn.disabled = true;
+    T.render(box, html`<div class="hint">Testing ${urls.length} target${urls.length === 1 ? '' : 's'}… each handshake takes a few seconds.</div>`);
+    const rows = [];
+    for (const url of urls) {
+      const host = T.hostOf(url);
+      const pin = pinFor(entries, host.replace(/:\d+$/, ''));
+      try {
+        const r = await T.Api.testTls(url, pin);
+        if (r.ok && r.verified) rows.push(['ok', host, 'certificate matches the fingerprint']);
+        else if (r.ok) rows.push(['info', host, 'reachable — no fingerprint for this host, so the connection would be unverified']);
+        else if (r.code === 62) rows.push(['danger', host, 'the certificate does not match the fingerprint (wrong entry, or the server renewed its certificate)']);
+        else rows.push(['danger', host, (r.error || 'failed') + (r.code ? ' (TLS error ' + r.code + ')' : '')]);
+      } catch (e) { rows.push(['danger', host, 'the device did not answer: ' + e.message]); }
+    }
+    T.render(box, html`${rows.map(r => UI.note(r[0], html`<strong>${r[1]}</strong>: ${r[2]}`))}`);
+    btn.disabled = false;
   }
 
   // "AB:CD:…" or "host AB:CD:…" per line/comma; returns the canonical entry
@@ -163,6 +206,7 @@
         const id = e.target.name === 'mqttMode' ? 'mqttMode' : e.target.id;
         if (['mqttMode', 'cloudActive', 'getActive', 'postActive'].indexOf(id) >= 0) applyRules(id);
       });
+      root.addEventListener('click', e => { if (e.target.closest('#tls-test')) testTls(); });
     },
     on: {
       sensors() { T.render($('#ph-list'), UI.placeholderList()); const p = $('#cloud-url'); if (p) p.textContent = cloudPreview(); },

@@ -65,6 +65,7 @@
     datalog: () => down ? busy() : later({ active: true, timeSet: clockSet, time: '2026-09-02 14:05', capacity: 65536, slotBytes: 2031, files: [{ name: '1.txt', size: 812, date: '2026-09-01' }, { name: '2.txt', size: 396, date: '2026-09-02' }] }),
     datalogFile: name => later('07:55 22.6t 48.3h 1013.2p\n08:55 22.8t 47.9h 1013.0p\n09:55 23.1t 47.2h 1012.7p'),
     time: () => later({ rtc: true, timeSet: clockSet, time: '2026-09-02 14:05' }),
+    testTls: (url, fp) => later({ ok: !fp || /^AA/.test(fp), host: url.replace(/^https?:\/\//, '').split('/')[0], verified: !!fp, code: fp && !/^AA/.test(fp) ? 62 : 0, error: fp && !/^AA/.test(fp) ? 'Chain could not be linked to a trust anchor' : '' }, 700),
     setTime: () => { clockSet = true; return later({ response: 'OK' }); },
     async saveConfig(obj) {
       if (down) throw new Error('Failed to fetch');

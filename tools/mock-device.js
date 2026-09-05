@@ -176,6 +176,15 @@ http.createServer(async (req, res) => {
   if (p === '/api/time') return json(res, { rtc: true, timeSet: clockSet, time: '2026-09-02 14:05' });
   if (p === '/api/settime') { clockSet = true; return json(res, { response: 'OK', time: '2026-09-02 14:05' }); }
   if (p === '/api/getip') return text(res, '127.0.0.1', 'text/html');
+  if (p === '/api/testtls') {
+    // a fingerprint starting with AA "matches"; anything else is a mismatch
+    const u = url.searchParams.get('url') || '', fp = url.searchParams.get('fp') || '';
+    const host = u.replace(/^https?:\/\//, '').split('/')[0].replace(/^.*@/, '').replace(/:\d+$/, '');
+    await new Promise(r => setTimeout(r, 700));
+    if (!/^https:\/\//.test(u)) return json(res, { ok: false, host, error: 'not an https:// address' });
+    if (fp && !/^AA/.test(fp)) return json(res, { ok: false, host, code: 62, error: 'Chain could not be linked to a trust anchor' });
+    return json(res, { ok: true, host, verified: !!fp });
+  }
   if (p === '/update' && req.method === 'GET') return text(res, "<form method='POST' action='/update' enctype='multipart/form-data'><input type='file' name='firmware'><input type='submit' value='Update'></form>", 'text/html');
   if (p === '/update' && req.method === 'POST') {
     const body = await readBody(req);

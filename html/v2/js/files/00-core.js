@@ -262,6 +262,8 @@
       return r.text();
     },
     time: () => getJson('/api/time', 6000),
+    // the device performs a TLS handshake against `url` with `fp` (or none)
+    testTls: (url, fp) => getJson('/api/testtls?url=' + encodeURIComponent(url) + '&fp=' + encodeURIComponent(fp || ''), 20000),
     // sets the DS3231 from the browser's clock; wd is 1=Sunday..7=Saturday
     setTime() {
       const n = new Date();
