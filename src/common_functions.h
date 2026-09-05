@@ -3,6 +3,49 @@
 #include <ArduinoJson.h>
 #include "DHTesp.h"
 
+/// The host part of a URL ("https://user@Host.example.com:8443/x" -> the host).
+inline String hostOfUrl(const String &url) {
+  int start = url.indexOf("://");
+  start = start < 0 ? 0 : start + 3;
+  int end = url.indexOf('/', start);
+  if (end < 0) {
+    end = url.length();
+  }
+  String host = url.substring(start, end);
+  const int at = host.lastIndexOf('@');
+  if (at >= 0) {
+    host = host.substring(at + 1);
+  }
+  const int colon = host.indexOf(':');
+  if (colon >= 0) {
+    host = host.substring(0, colon);
+  }
+  return host;
+}
+
+/// The port of a URL, or the scheme's default (443 for https, else 80).
+inline uint16_t portOfUrl(const String &url) {
+  int start = url.indexOf("://");
+  start = start < 0 ? 0 : start + 3;
+  int end = url.indexOf('/', start);
+  if (end < 0) {
+    end = url.length();
+  }
+  String host = url.substring(start, end);
+  const int at = host.lastIndexOf('@');
+  if (at >= 0) {
+    host = host.substring(at + 1);
+  }
+  const int colon = host.indexOf(':');
+  if (colon >= 0) {
+    const int port = host.substring(colon + 1).toInt();
+    if (port > 0 && port < 65536) {
+      return port;
+    }
+  }
+  return url.startsWith("https") ? 443 : 80;
+}
+
 /// Expands %key% placeholders in `text` from `values`.
 ///
 /// Scans the text once and looks up only the placeholders it actually contains.

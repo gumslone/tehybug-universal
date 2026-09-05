@@ -331,6 +331,58 @@ void handleSetTime() {
               "{\"response\":\"OK\",\"time\":\"" + tehybug.time.timestamp() + "\"}");
 }
 
+// GET /api/testtls?url=https://host/...&fp=AB:CD:...
+//   -> {"ok":true,"host":"..."} when the TLS handshake succeeds with that
+//      fingerprint (or unverified when fp is empty), otherwise
+//      {"ok":false,"host":"...","code":N,"error":"..."} with BearSSL's reason.
+// Lets the setup page check a pin against the real server before it is saved
+// - a wrong or renewed certificate is otherwise only found out in the field,
+// where the failed sends are silent. A throw-away client, so the shared one
+// keeps whatever it was configured with.
+void handleTestTls() {
+  server.sendHeader("Connection", "close");
+  DynamicJsonDocument doc(384);
+#if defined(ARDUINO_ESP8266_GENERIC)
+  doc["ok"] = false;
+  doc["error"] = "this build has no TLS client";
+#else
+  const String url = server.arg("url");
+  const String fp = server.arg("fp");
+  const String host = hostOfUrl(url);
+  doc["host"] = host;
+  if (!url.startsWith("https://") || host.length() == 0) {
+    doc["ok"] = false;
+    doc["error"] = "not an https:// address";
+  } else {
+    BearSSL::WiFiClientSecure client;
+    client.setBufferSizes(512, 512);
+    client.setTimeout(5000);
+    bool ok = true;
+    if (fp.length() == 0) {
+      client.setInsecure();
+    } else if (!client.setFingerprint(fp.c_str())) {
+      ok = false;
+      doc["error"] = "fingerprint is malformed";
+    }
+    if (ok) {
+      ok = client.connect(host.c_str(), portOfUrl(url));
+      if (!ok) {
+        char reason[96] = {0};
+        const int code = client.getLastSSLError(reason, sizeof(reason));
+        doc["code"] = code;
+        doc["error"] = code != 0 ? String(reason) : String("could not connect (DNS, network, or the port is closed)");
+      }
+      client.stop();
+    }
+    doc["ok"] = ok;
+    doc["verified"] = fp.length() > 0;
+  }
+#endif
+  String out;
+  serializeJson(doc, out);
+  server.send(200, "application/json", out);
+}
+
 void handleFactoryReset() {
   tehybug.pixel.on(255, 0, 0);
   D_println("Factory reset!");
@@ -425,6 +477,7 @@ void setupWebServer() {
   server.on(F("/api/time"), HTTP_GET, handleGetTime);
   server.on(F("/api/settime"), HTTP_GET, handleSetTime);
   server.on(F("/api/getip"), HTTP_GET, handleGetIp);
+  server.on(F("/api/testtls"), HTTP_GET, handleTestTls);
   server.on(F("/"), HTTP_GET, handleGetMainPage);
   server.onNotFound(handleNotFound);
   server.begin();

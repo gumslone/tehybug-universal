@@ -65,6 +65,10 @@ class String {
     size_t p = m_s.find(c, (size_t)from);
     return p == std::string::npos ? -1 : (int)p;
   }
+  int lastIndexOf(char c) const {
+    const auto p = m_s.rfind(c);
+    return p == std::string::npos ? -1 : (int)p;
+  }
   int indexOf(const String &s, int from = 0) const {
     size_t p = m_s.find(s.m_s, (size_t)from);
     return p == std::string::npos ? -1 : (int)p;

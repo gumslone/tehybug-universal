@@ -13,26 +13,6 @@
 // has already arrived by the time the sleep path runs.
 constexpr unsigned long MQTT_DRAIN_MS = 250;
 
-// The host part of a URL ("https://user@Host.example.com:8443/x" -> the host).
-String hostOfUrl(const String &url) {
-  int start = url.indexOf("://");
-  start = start < 0 ? 0 : start + 3;
-  int end = url.indexOf('/', start);
-  if (end < 0) {
-    end = url.length();
-  }
-  String host = url.substring(start, end);
-  const int at = host.lastIndexOf('@');
-  if (at >= 0) {
-    host = host.substring(at + 1);
-  }
-  const int colon = host.indexOf(':');
-  if (colon >= 0) {
-    host = host.substring(0, colon);
-  }
-  return host;
-}
-
 // The certificate pin for a host. The setting holds one entry per line:
 // "AB:CD:..." applies to every host, "host.example.com AB:CD:..." to that
 // host only; a host's own entry wins over a bare one. Empty: no pin.
