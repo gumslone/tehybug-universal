@@ -209,6 +209,22 @@ bool tryFastConnect() {
   return false;
 }
 
+// How long the portal's access point stays up after the new network has
+// connected: the "saved" page on the phone reads the device's new address
+// through it (see portalRoutes) before the firmware raises its own AP.
+constexpr unsigned long PORTAL_GRACE_MS = 6000;
+
+// Extra routes on WiFiManager's own server (registered through its
+// callback once that server exists). /ip answers with the station address
+// as plain text - "0.0.0.0" until connected - so the saved page can show
+// where the device went, which the firmware's server cannot do while the
+// portal still owns port 80.
+void portalRoutes() {
+  wifiManager.server->on("/ip", []() {
+    wifiManager.server->send(200, "text/plain", WiFi.localIP().toString());
+  });
+}
+
 void setupWifi() {
   D_println("Setup WIFI");
 
@@ -263,8 +279,9 @@ void setupWifi() {
   // heap dry on a crowded WiFi. They are copied out of PROGMEM only in config
   // mode and freed again right after the portal (see below).
   static const char PORTAL_HEAD[] PROGMEM = R"HTML(<style>button{background:#1FA67A}</style><script>var n=0,i;function g(){location='http://192.168.4.1/'}
-function w(){i=setInterval(function(){if(++n>40)clearInterval(i);fetch('/api/getip').then(function(r){return r.text()}).then(function(t){t=t.trim();if(/^\d+\.\d+\.\d+\.\d+$/.test(t)){clearInterval(i);tbNote('Connected. On your network the device is at <a href=http://'+t+'/>http://'+t+'/</a> - opening the configuration here&hellip;');setTimeout(g,4000)}else if(t.indexOf('network')>=0){clearInterval(i);g()}}).catch(function(){})},3000)}
-function tbNote(h){document.body.insertAdjacentHTML('beforeend','<p>'+h+'</p>')}function s(){tbNote('Opening the configuration&hellip;');fetch('/exit').catch(function(){});setTimeout(w,1500)}if(location.pathname=='/wifisave'){addEventListener('DOMContentLoaded',function(){tbNote('Next: once the device is connected, its address on your network shows here and the configuration opens by itself - or open <a href=http://192.168.4.1/>192.168.4.1</a> / <a href=http://tehybug.local/>tehybug.local</a>.');w()})}</script>)HTML";
+function tbNote(h){document.body.insertAdjacentHTML('beforeend','<p>'+h+'</p>')}
+function w(){i=setInterval(function(){if(++n>60)clearInterval(i);fetch('/api/getip').then(function(r){return r.text()}).then(function(t){if(/^\d+\.\d+\.\d+\.\d+$|network/.test(t.trim())){clearInterval(i);g()}}).catch(function(){})},3000)}
+function v(){i=setInterval(function(){if(++n>60)clearInterval(i);fetch('/ip').then(function(r){return r.text()}).then(function(t){t=t.trim();if(/^\d+\.\d+\.\d+\.\d+$/.test(t)&&t!='0.0.0.0'){clearInterval(i);n=0;tbNote('<b>Connected.</b> On your network the device is at <a href=http://'+t+'/>http://'+t+'/</a>. This page opens the configuration here in a moment&hellip;');setTimeout(w,5000)}}).catch(function(){})},1000)}function s(){tbNote('Opening the configuration&hellip;');fetch('/exit').catch(function(){});setTimeout(w,1500)}if(location.pathname=='/wifisave'){addEventListener('DOMContentLoaded',function(){tbNote('Next: once the device is connected, its address on your network shows here and the configuration opens by itself - or open <a href=http://192.168.4.1/>192.168.4.1</a> / <a href=http://tehybug.local/>tehybug.local</a>.');v()})}</script>)HTML";
   static const char PORTAL_MENU[] PROGMEM = R"HTML(<p style=text-align:left>Setup continues in the <b>configuration</b> once WiFi is saved: <a href=http://192.168.4.1/>192.168.4.1</a> (this access point) or <a href=http://tehybug.local/>tehybug.local</a>.</p><button type=button onclick=s()>Skip WiFi &rarr; open the configuration</button>)HTML";
   static String portalHead;
   static String portalMenu;
@@ -294,9 +311,38 @@ function tbNote(h){document.body.insertAdjacentHTML('beforeend','<p>'+h+'</p>')}
   D_println(ESP.getFreeHeap());
   yield();
 
-  const bool connected = portalWanted
-      ? wifiManager.startConfigPortal(wifiSsid, wifiPassword)
-      : wifiManager.autoConnect(wifiSsid, wifiPassword);
+  // The portal runs non-blocking, driven from here, so that after a
+  // successful save its access point can be kept for PORTAL_GRACE_MS: in
+  // blocking mode WiFiManager shut the AP down the instant the new network
+  // connected, and the phone - still on that AP - never learned the device's
+  // new address (and, having lost the AP, often could not reach 192.168.4.1
+  // again either). Exit and the 180 s timeout still end the portal.
+  wifiManager.setConfigPortalBlocking(false);
+  wifiManager.setDisableConfigPortal(false); // do not tear the AP down on connect; we do
+  wifiManager.setWebServerCallback(portalRoutes);
+  bool connected = false;
+  if (portalWanted) {
+    wifiManager.startConfigPortal(wifiSsid, wifiPassword);
+  } else {
+    connected = wifiManager.autoConnect(wifiSsid, wifiPassword);
+  }
+  if (!connected && wifiManager.getConfigPortalActive()) {
+    unsigned long graceUntil = 0;
+    while (wifiManager.getConfigPortalActive()) {
+      // true once, on the connect that a save triggered
+      if (wifiManager.process() && !connected) {
+        connected = true;
+        graceUntil = millis() + PORTAL_GRACE_MS;
+        D_println(F("Portal: connected, keeping the AP up for the saved page"));
+      }
+      if (connected && (long)(millis() - graceUntil) >= 0) {
+        wifiManager.stopConfigPortal();
+        break;
+      }
+      delay(10);
+      yield();
+    }
+  }
   // The portal is over either way; give its page text back to the heap. The
   // pointers WiFiManager holds are not used again (the firmware never reopens
   // the portal in this boot).
