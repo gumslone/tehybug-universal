@@ -51,6 +51,7 @@ String getInfo() {
   root["deepSleepMax"] = (int)(ESP.deepSleepMax() / 1000000);
   root["key"] = tehybug.device.key;
   root["uptimeS"] = millis() / 1000;
+  root["apSsid"] = wifiSsid; // the device's own access point, for the portal instructions
 #if !defined(ARDUINO_ESP8266_GENERIC)
   // which copy of the web UI is built in (the /ui/ fallback)
   root["uiBuild"] = UI_BUNDLE_STAMP;
@@ -366,6 +367,20 @@ void handleTestTls() {
   server.send(200, "application/json", out);
 }
 
+void setPortalRequest(); // sleep_modes.h, earlier in the sketch
+
+// POST /api/wifiportal -> restarts into the WiFi portal ("Change WiFi
+// network" in the web UI), without touching the saved credentials.
+void handleWifiPortal() {
+  server.sendHeader("Connection", "close");
+  setPortalRequest();
+  server.send(200, "application/json", "{\"response\":\"OK\",\"reboot\":true}");
+  server.client().stop();
+  tehybug.pixel.off();
+  delay(200);
+  ESP.restart();
+}
+
 void handleFactoryReset() {
   tehybug.pixel.on(255, 0, 0);
   D_println("Factory reset!");
@@ -461,6 +476,7 @@ void setupWebServer() {
   server.on(F("/api/settime"), HTTP_GET, handleSetTime);
   server.on(F("/api/getip"), HTTP_GET, handleGetIp);
   server.on(F("/api/testtls"), HTTP_GET, handleTestTls);
+  server.on(F("/api/wifiportal"), HTTP_POST, handleWifiPortal);
   server.on(F("/"), HTTP_GET, handleGetMainPage);
 #if !defined(ARDUINO_ESP8266_GENERIC)
   server.on(F("/ui/app.js"), HTTP_GET, handleUiJs);

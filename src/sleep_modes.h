@@ -56,6 +56,30 @@ void clearBootMark() {
   ESP.rtcUserMemoryWrite(BOOT_MARK_RTC_SLOT, &v, sizeof(v));
 }
 
+/* A one-boot request from the web UI to open the WiFi portal instead of
+ * joining the saved network ("Change WiFi network"). Set right before the
+ * restart, consumed by setupWifi(). Like the boot mark it lives in RTC
+ * memory: it survives the reset, not a power cycle, so it can never stick.
+ */
+constexpr uint32_t PORTAL_REQUEST_RTC_SLOT = 52;  // boot mark at 50, HA memo at 64
+constexpr uint32_t PORTAL_REQUEST_MAGIC = 0x57494649;  // 'WIFI'
+
+bool portalRequested() {
+  uint32_t v = 0;
+  return ESP.rtcUserMemoryRead(PORTAL_REQUEST_RTC_SLOT, &v, sizeof(v)) &&
+         v == PORTAL_REQUEST_MAGIC;
+}
+
+void setPortalRequest() {
+  uint32_t v = PORTAL_REQUEST_MAGIC;
+  ESP.rtcUserMemoryWrite(PORTAL_REQUEST_RTC_SLOT, &v, sizeof(v));
+}
+
+void clearPortalRequest() {
+  uint32_t v = 0;
+  ESP.rtcUserMemoryWrite(PORTAL_REQUEST_RTC_SLOT, &v, sizeof(v));
+}
+
 void wakeupCallback()
 {
   D_println("Light sleep callback...");

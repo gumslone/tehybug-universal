@@ -212,9 +212,17 @@ bool tryFastConnect() {
 void setupWifi() {
   D_println("Setup WIFI");
 
-  // Fast path first: this is what makes a deep-sleep wake cheap. It only
-  // succeeds when a previous connection cached a still-valid hint.
-  if (tryFastConnect()) {
+  // "Change WiFi network" from the web UI: open the portal straight away
+  // instead of joining the saved network. The saved credentials stay until
+  // new ones are saved; Exit in the portal reconnects to the old network.
+  const bool portalWanted = portalRequested();
+  if (portalWanted) {
+    clearPortalRequest();
+    tehybug.device.configMode = true; // the portal is a config-mode thing
+    D_println(F("WiFi portal requested from the web UI"));
+  } else if (tryFastConnect()) {
+    // Fast path first: this is what makes a deep-sleep wake cheap. It only
+    // succeeds when a previous connection cached a still-valid hint.
     D_println(F("Wifi successfully connected!"));
     return;
   }
@@ -284,7 +292,9 @@ void setupWifi() {
   D_println(ESP.getFreeHeap());
   yield();
 
-  const bool connected = wifiManager.autoConnect(wifiSsid, wifiPassword);
+  const bool connected = portalWanted
+      ? wifiManager.startConfigPortal(wifiSsid, wifiPassword)
+      : wifiManager.autoConnect(wifiSsid, wifiPassword);
   // The portal is over either way; give its page text back to the heap. The
   // pointers WiFiManager holds are not used again (the firmware never reopens
   // the portal in this boot).
