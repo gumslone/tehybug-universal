@@ -30,7 +30,7 @@
     gumboardVersion: '1.0.0', fwBuild: '2609021200', board,
     sketchSize: 561232, freeSketchSpace: 1449984, wifiRSSI: '-61', wifiQuality: 78, wifiSSID: 'Demo WiFi', ipAddress: '192.168.1.42',
     freeHeap: 24816, chipID: 1054321, cpuFreqMHz: 80, sleepModeActive: config.sleepModeActive, deepSleepMax: 12884, key: config.key,
-    uptimeS: Math.round((Date.now() - t0) / 1000),
+    uptimeS: Math.round((Date.now() - t0) / 1000), apSsid: 'TEHYBUG-A1B2C3',
     detected: { bmx: true, bme680: false, aht20: false, am2320: false, max44009: false, sgp30: false, ds3231: true, eeprom: true }
   });
   let clockSet = true;
@@ -67,6 +67,7 @@
     time: () => later({ rtc: true, timeSet: clockSet, time: '2026-09-02 14:05' }),
     testTls: (url, fp) => later({ ok: !fp || /^AA/.test(fp), host: url.replace(/^https?:\/\//, '').split('/')[0], verified: !!fp, code: fp && !/^AA/.test(fp) ? 62 : 0, error: fp && !/^AA/.test(fp) ? 'Chain could not be linked to a trust anchor' : '' }, 700),
     setTime: () => { clockSet = true; return later({ response: 'OK' }); },
+    wifiPortal: () => { simulateReboot(); return later(true, 300); },
     async saveConfig(obj) {
       if (down) throw new Error('Failed to fetch');
       const o = Object.assign({}, obj);

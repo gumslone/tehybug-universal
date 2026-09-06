@@ -199,6 +199,7 @@ Then, on the web interface:
 2. **Send data** — TeHyBug Cloud, Home Assistant, MQTT, or your own server by HTTP, all on one page. The *"Fill from my sensors"* links build the MQTT payload / POST body / GET query from the sensors this device actually reports, in °C or °F. Save.
 3. **Go live** — the button on the Dashboard (or on *Power & go live*): pick the power mode (Deep sleep for battery) and confirm. The device restarts and starts sending; on battery boards the web interface stops being served, which is expected. The Dashboard's set-up checklist shows which of the three steps are done.
 4. **Getting back in later** — press RESET, then MODE within a second (see "Return to Config mode" above). A device that has nothing configured to serve always starts its setup portal, so it can't lock you out.
+5. **Changing the WiFi network** — *Power & go live → Change WiFi network* restarts the device into its own access point with the network chooser; nothing else is erased, and *Exit* keeps the old network. If the saved network is simply gone, setup mode opens the chooser by itself.
 
 ### Clock
 The device sets its clock from the internet (NTP) at start-up whenever WiFi is up — on a sleeping battery board only while the clock is still unset, so wakes stay short. Pick the time zone on *Data log → Clock* (or *Display &amp; alarms → Clock*): the list is pre-filled from your browser's zone, anything else can be typed as a POSIX TZ string. The DS3231 clock module keeps the time in between; the *set from this browser* button remains for devices without internet.

@@ -42,7 +42,7 @@ if (BOARD === 'display') {
 const t0 = Date.now();
 const info = () => ({
   gumboardVersion: '1.0.0', fwBuild: '2609021200', board: BOARD, sketchSize: 561232, freeSketchSpace: 1449984, wifiRSSI: '-58', wifiQuality: 84, wifiSSID: 'MockNet', ipAddress: '127.0.0.1',
-  freeHeap: 25000, chipID: 424242, cpuFreqMHz: 80, sleepModeActive: config.sleepModeActive, deepSleepMax: 12884, key: config.key, uptimeS: Math.round((Date.now() - t0) / 1000),
+  freeHeap: 25000, chipID: 424242, cpuFreqMHz: 80, sleepModeActive: config.sleepModeActive, deepSleepMax: 12884, key: config.key, uptimeS: Math.round((Date.now() - t0) / 1000), apSsid: 'TEHYBUG-67932',
   detected: { bmx: true, bme680: false, aht20: false, am2320: false, max44009: false, sgp30: false, ds3231: true, eeprom: true }
 });
 const wobble = (v, r) => (v + (Math.random() - 0.5) * r).toFixed(1);
@@ -181,6 +181,7 @@ http.createServer(async (req, res) => {
   if (p === '/api/time') return json(res, { rtc: true, timeSet: clockSet, time: '2026-09-02 14:05' });
   if (p === '/api/settime') { clockSet = true; return json(res, { response: 'OK', time: '2026-09-02 14:05' }); }
   if (p === '/api/getip') return text(res, '127.0.0.1', 'text/html');
+  if (p === '/api/wifiportal' && req.method === 'POST') { applyConfig({ reboot: true }); log('WiFi', 'portal requested, restarting'); return json(res, { response: 'OK', reboot: true }); }
   if (p === '/api/testtls') {
     // a fingerprint starting with AA "matches"; anything else is a mismatch
     const u = url.searchParams.get('url') || '', fp = url.searchParams.get('fp') || '';
