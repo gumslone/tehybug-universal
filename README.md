@@ -186,7 +186,7 @@ Demo of the web interface (a simulated device, nothing to flash): https://tehybu
 - TeHyBug will boot, the LED will turn solid blue
 - Connect to a TeHyBug wifi network like the image below (Password: TeHyBug123)
 - <img src="images/wifimanager.png" width="350">
-- open http://192.168.4.1/ in your browser, and click the configuration button
+- open http://192.168.4.1/ in your browser, and click the configuration button (the page also offers *Skip WiFi for now → open the configuration*, which takes you straight to the TeHyBug configuration on this access point; and after saving your WiFi it hands you over there by itself)
 - <img src="images/credentials.png" width="350">
 - Provide credentials of your WIFI network and save them
 - If your credentials were correct, the TeHyBug WIFI network will disapear

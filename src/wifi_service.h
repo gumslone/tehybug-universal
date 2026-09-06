@@ -239,11 +239,38 @@ void setupWifi() {
   // set custom ip for portal
   wifiManager.setAPStaticIPConfig(apIP, apIP, IPAddress(255, 255, 255, 0));
 
-  std::vector<const char *> wm_menu = {"wifi", "exit"};
+  // The portal is the first thing a new owner sees; say what comes after it.
+  // The configuration page is served by the firmware on this same access
+  // point (192.168.4.1) once the portal closes - after "Save" or "Exit" - or
+  // on the home network as tehybug.local. The menu block offers both, plus a
+  // way to skip WiFi altogether (the built-in copy of the UI needs no
+  // internet); the head script adds the note to the "saving" page and hands
+  // the browser over as soon as the firmware's server answers: it polls
+  // /api/getip, which only that server has (the portal answers such paths
+  // with its 404 text, never with an address or the "not on your network"
+  // line).
+  //
+  // Kept deliberately terse: WiFiManager appends these as plain char* while
+  // it builds the scan page in one String, and that page is what runs the
+  // heap dry on a crowded WiFi. They are copied out of PROGMEM only in config
+  // mode and freed again right after the portal (see below).
+  static const char PORTAL_HEAD[] PROGMEM = R"HTML(<style>button{background:#1FA67A}</style><script>var n=0,i;function w(){i=setInterval(function(){if(++n>40)clearInterval(i);fetch('/api/getip').then(function(r){return r.text()}).then(function(t){if(/^\d+\.\d+\.\d+\.\d+$|network/.test(t.trim())){clearInterval(i);location='http://192.168.4.1/'}}).catch(function(){})},3000)}function s(){document.body.insertAdjacentHTML('beforeend','<p>Opening the configuration&hellip;</p>');fetch('/exit').catch(function(){});setTimeout(w,1500)}if(location.pathname=='/wifisave'){addEventListener('DOMContentLoaded',function(){document.body.insertAdjacentHTML('beforeend','<p>Next: the configuration opens here by itself once connected, or open <a href=http://192.168.4.1/>192.168.4.1</a> / <a href=http://tehybug.local/>tehybug.local</a>.</p>');w()})}</script>)HTML";
+  static const char PORTAL_MENU[] PROGMEM = R"HTML(<p style=text-align:left>Setup continues in the <b>configuration</b> once WiFi is saved: <a href=http://192.168.4.1/>192.168.4.1</a> (this access point) or <a href=http://tehybug.local/>tehybug.local</a>.</p><button type=button onclick=s()>Skip WiFi &rarr; open the configuration</button>)HTML";
+  static String portalHead;
+  static String portalMenu;
+  std::vector<const char *> wm_menu = {"wifi", "custom", "sep", "exit"};
+  if (tehybug.device.configMode) {
+    portalHead = FPSTR(PORTAL_HEAD);
+    portalMenu = FPSTR(PORTAL_MENU);
+    wifiManager.setCustomHeadElement(portalHead.c_str());
+    wifiManager.setCustomMenuHTML(portalMenu.c_str());
+  } else {
+    wifiManager.setCustomHeadElement("<style>button{background:#1FA67A}</style>");
+  }
   wifiManager.setShowInfoUpdate(false);
   wifiManager.setShowInfoErase(false);
   wifiManager.setMenu(wm_menu);
-  wifiManager.setCustomHeadElement("<style>button {background-color: #1FA67A;}</style>");
+  wifiManager.setTitle("TeHyBug");
 
   // Only open the blocking AP config portal when config mode is requested
   // (MODE button / first start). In serving mode a failed connect should
@@ -257,7 +284,15 @@ void setupWifi() {
   D_println(ESP.getFreeHeap());
   yield();
 
-  if (!wifiManager.autoConnect(wifiSsid, wifiPassword)) {
+  const bool connected = wifiManager.autoConnect(wifiSsid, wifiPassword);
+  // The portal is over either way; give its page text back to the heap. The
+  // pointers WiFiManager holds are not used again (the firmware never reopens
+  // the portal in this boot).
+  wifiManager.setCustomHeadElement(nullptr);
+  wifiManager.setCustomMenuHTML(nullptr);
+  portalHead = String();
+  portalMenu = String();
+  if (!connected) {
     D_println(F("Setup: Wifi failed to connect"));
     yield();
 
