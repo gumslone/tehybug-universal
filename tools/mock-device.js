@@ -121,17 +121,15 @@ function applyConfig(obj) {
 }
 
 /* ---- HTTP ---- */
-// The device page is the firmware's own, read from src/web_api.h so the two
-// cannot drift (the UI renders into that page's #page, and every inline
-// style there shows). Online asset URLs become local ones; with --offline
-// they point at a dead port, so the page's fallback to the built-in copy
-// (/ui/, from .build/ui/ - run tools/embed-ui.py) is exercised.
+// The device page is the firmware's own (html/v2/device.html, which
+// tools/embed-ui.py gzips into the firmware), so the two cannot drift: the UI
+// renders into that page's #page, and every inline style there shows. Online
+// asset URLs become local ones; with --offline they point at a dead port, so
+// the page's fallback to the built-in copy (/ui/, from .build/ui/) is
+// exercised.
 const OFFLINE = args.indexOf('--offline') >= 0;
 function bootstrap() {
-  const src = fs.readFileSync(path.join(__dirname, '..', 'src', 'web_api.h'), 'utf8');
-  const m = /R"=====\(\n?([\s\S]*?)\)====="/.exec(src);
-  if (!m) throw new Error('mainPage not found in src/web_api.h');
-  let page = m[1];
+  let page = fs.readFileSync(path.join(ROOT, 'device.html'), 'utf8');
   page = page.replace('https://tehybug.com/tehybug/v2/css/style.php', OFFLINE ? 'http://localhost:1/style.css' : '/v2/css/style.php');
   page = page.replace('https://tehybug.com/tehybug/v2/js/javascript.php', OFFLINE ? 'http://localhost:1/app.js' : '/v2/js/javascript.php');
   return page.replace('</body>', `<script>window.TEHYBUG_WS_PORT=${WS_PORT};</script>\n</body>`);

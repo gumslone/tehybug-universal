@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f7a58">
+<title>TeHyBug</title>
+<style>
+body{margin:0;font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:#eef1f4;color:#182029}
+/* Only the placeholder card is styled: the web UI renders itself into #page
+   and takes the whole viewport, so #page must stay unstyled. */
+.hello{box-sizing:border-box;width:calc(100% - 32px);max-width:520px;margin:24px auto;background:#fff;border:1px solid #dde3e9;border-radius:14px;padding:20px}
+.hello h1{font-size:1.3rem;margin:0 0 8px;color:#0f7a58}
+.hello code{background:#f4f6f8;padding:2px 6px;border-radius:6px}
+@media(prefers-color-scheme:dark){body{background:#0d1218;color:#e7ecf1}.hello{background:#161c23;border-color:#28323c}.hello code{background:#1d252e}}
+</style>
+</head>
+<body>
+<div id="page">
+<div class="hello">
+<h1>TeHyBug</h1>
+<p>On your own network this device is at <b><span id="ip">tehybug.local</span></b>.</p>
+<p>Loading the full interface&hellip;</p>
+<p>If it does not appear, you are probably still on the TeHyBug access point, which has no internet. Rejoin your home WiFi and open the address above.</p>
+</div>
+</div>
+<script>
+// Fill in the device address from the device itself. This is the only part of
+// the page that works on the TeHyBug access point, so it must not depend on
+// anything loading from the internet.
+function setBugIp() {
+  var xhr = new XMLHttpRequest();
+  xhr.open('GET', '/api/getip');
+  xhr.onload = function() {
+    var el = document.getElementById("ip");
+    if (xhr.status == 200 && el) { el.textContent = xhr.responseText; }
+  };
+  xhr.send();
+}
+setBugIp();
+</script>
+<!-- The interface itself is hosted on tehybug.com, so it only loads once the
+     browser is back on a network with internet. Both are pulled in without
+     blocking: a stylesheet in <head> blocks painting and a plain <script src>
+     there blocks parsing, so on the access point (no internet) the browser
+     stalled before it drew anything at all and the page came up empty. -->
+<link rel="stylesheet" href="https://tehybug.com/tehybug/v2/css/style.php" media="print" onload="this.media='all'" onerror="tehybugFallback()">
+<script src="https://tehybug.com/tehybug/v2/js/javascript.php" defer onerror="tehybugFallback()"></script>
+<script>
+// No internet (the TeHyBug access point, an outage): use the copy of the
+// interface built into the firmware, served at /ui/. Either asset failing,
+// or nothing having loaded after a few seconds, switches over. The bundle
+// refuses to run twice, so an online copy arriving late does no harm.
+var tehybugFallbackDone = false;
+function tehybugFallback() {
+  if (tehybugFallbackDone) return;
+  tehybugFallbackDone = true;
+  window.TEHYBUG_OFFLINE_UI = true;
+  var l = document.createElement('link'); l.rel = 'stylesheet'; l.href = '/ui/app.css';
+  document.head.appendChild(l);
+  var s = document.createElement('script'); s.src = '/ui/app.js';
+  document.body.appendChild(s);
+}
+setTimeout(function () { if (!window.TeHyBug) tehybugFallback(); }, 6000);
+</script>
+</body>
+</html>
