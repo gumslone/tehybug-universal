@@ -150,14 +150,19 @@ void Log(const String &function, const String &message) {
 // UI - see tools/embed-ui.py) straight from flash in small chunks: no heap
 // copy. Cached by the browser with the firmware build as its ETag, since
 // the content only changes with the firmware.
-void sendEmbedded(PGM_P contentType, PGM_P data, size_t length) {
+// `longCache`: the UI assets have their own URLs that only this server has,
+// so a day in the browser cache is fine. The page at / is NOT cacheable
+// that way: the same address serves the WiFi chooser while the portal is
+// open, and a cached configuration page hid it. It revalidates every time
+// instead - still a 304 from here when nothing changed.
+void sendEmbedded(PGM_P contentType, PGM_P data, size_t length, bool longCache = true) {
   const String etag = "\"" + buildTimestamp + "\"";
   if (server.hasHeader(F("If-None-Match")) && server.header(F("If-None-Match")) == etag) {
     server.send(304, "text/plain", "");
     return;
   }
   server.sendHeader(F("Content-Encoding"), F("gzip"));
-  server.sendHeader(F("Cache-Control"), F("max-age=86400"));
+  server.sendHeader(F("Cache-Control"), longCache ? F("max-age=86400") : F("no-cache"));
   server.sendHeader(F("ETag"), etag);
   server.send_P(200, contentType, data, length);
 }
@@ -168,7 +173,7 @@ void handleUiCss() { sendEmbedded(PSTR("text/css"), (PGM_P)UI_CSS_GZ, UI_CSS_GZ_
 
 void handleGetMainPage() {
   server.sendHeader("Access-Control-Allow-Origin", "*");
-  sendEmbedded(PSTR("text/html"), (PGM_P)DEVICE_PAGE_GZ, DEVICE_PAGE_GZ_LEN);
+  sendEmbedded(PSTR("text/html"), (PGM_P)DEVICE_PAGE_GZ, DEVICE_PAGE_GZ_LEN, false);
 }
 
 void handleNotFound() {
