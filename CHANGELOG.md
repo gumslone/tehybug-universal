@@ -5,6 +5,37 @@ build on every release (see [`ci/changelog.sh`](ci/changelog.sh)). Firmware
 versions are date-based (`YYMMDDHHMM`); see the
 [releases](https://github.com/gumslone/tehybug-universal/releases) for the tags.
 
+## v1.0.0 (2026-09-03)
+
+- Device page: gutter on the card, not on #page; no interval ceiling on the display board
+- Web UI v2: fixes from the third review
+- README: show the v2 web interface
+- v1 firmware page: escape quotes in changelog link URLs
+- Scope the device page's styles to its card; answer 500 when a save misses flash
+- Web UI v2: fixes from the second review
+- Expand placeholders in a scenario's POST URL
+- Web UI v2: say only what the firmware does
+- Show LED colours as the LED's colour
+- Bundler in PHP 5 syntax: the web server's PHP is older than the CLI's
+- Fix the v1 Scenarios page's config keys
+- Serve the v2 UI, confirm saves before restarting, report what was detected
+- Web UI v2: a mobile-first rebuild of the configuration portal
+- Restore the sensor bus clock when night mode blanks the panel
+- Keep the display board's web UI up in live mode
+- Tell display users what the go-live switch really does
+- Actually analyse the new headers, and keep the font file honest
+- Stop the configuration silently outgrowing its JSON pool
+- Say what is wrong when the clock is unset; stop misleading display users
+- Name the board and build in the UI, and offer the display binaries
+- Fix two display-board defects found reviewing the port
+- Version the firmware semantically, starting at 1.0.0
+- Web UI: Display & Alarms page; document the display board
+- Add the prebuilt display binaries
+- Build the display variant everywhere the esp8285 one is built
+- Support the TeHyBug Display Weatherstation as a display build variant
+- Vendor U8g2 (trimmed) and SparkFun SGP30 libraries
+- Fix the four defects the whole-code review found
+
 ## v2608031837 (2026-08-03)
 
 - Reach the portal when the saved network is gone; sleep without crashing
