@@ -1,0 +1,12 @@
+{
+  "name": "tehybug-universal-tools",
+  "private": true,
+  "description": "Dev tooling for the TeHyBug firmware: terser minifies the web UI that tools/embed-ui.py builds into the firmware image.",
+  "scripts": {
+    "embed-ui": "python3 tools/embed-ui.py",
+    "test:ui": "tests/ui/run.sh"
+  },
+  "devDependencies": {
+    "terser": "^5.51.2"
+  }
+}

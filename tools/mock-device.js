@@ -28,7 +28,7 @@ const manifest = JSON.parse(fs.readFileSync(path.join(ROOT, 'manifest.json'), 'u
 const config = {
   key: 'mock00112233', mqttActive: false, mqttRetained: false, mqttUser: '', mqttPassword: '', mqttServer: '0.0.0.0', mqttMasterTopic: '/tehybug', mqttMessage: '', mqttPort: 1883, mqttFrequency: 900,
   haActive: false, eepromLogActive: false, eepromLogFrequency: 60, eepromLogMessage: '', eepromLogHourly: false, offlineModeActive: false,
-  httpGetURL: '', httpGetActive: false, httpGetFrequency: 900, httpPostURL: '', httpPostActive: false, httpPostFrequency: 900, httpPostJson: '',
+  httpGetURL: '', httpGetActive: false, httpGetFrequency: 900, httpPostURL: '', httpPostActive: false, httpPostFrequency: 900, httpPostJson: '', httpsFingerprint: '', ntpActive: true, ntpServer: 'pool.ntp.org', timezone: '',
   calibrationActive: false, calibrationTemp: 0, calibrationHumi: 0, calibrationQfe: 0, configModeActive: true, sleepModeActive: false, lightSleepModeActive: false,
   dht_sensor: false, second_dht_sensor: false, ds18b20_sensor: false, second_ds18b20_sensor: false, adc_sensor: false, rc_active: false, rc_url: ''
 };
@@ -42,7 +42,7 @@ if (BOARD === 'display') {
 const t0 = Date.now();
 const info = () => ({
   gumboardVersion: '1.0.0', fwBuild: '2609021200', board: BOARD, sketchSize: 561232, freeSketchSpace: 1449984, wifiRSSI: '-58', wifiQuality: 84, wifiSSID: 'MockNet', ipAddress: '127.0.0.1',
-  freeHeap: 25000, chipID: 424242, cpuFreqMHz: 80, sleepModeActive: config.sleepModeActive, deepSleepMax: 12884, key: config.key, uptimeS: Math.round((Date.now() - t0) / 1000),
+  freeHeap: 25000, chipID: 424242, cpuFreqMHz: 80, sleepModeActive: config.sleepModeActive, deepSleepMax: 12884, key: config.key, uptimeS: Math.round((Date.now() - t0) / 1000), apSsid: 'TEHYBUG-67932',
   detected: { bmx: true, bme680: false, aht20: false, am2320: false, max44009: false, sgp30: false, ds3231: true, eeprom: true }
 });
 const wobble = (v, r) => (v + (Math.random() - 0.5) * r).toFixed(1);
@@ -121,23 +121,26 @@ function applyConfig(obj) {
 }
 
 /* ---- HTTP ---- */
-// The same inline styles the firmware page carries (src/web_api.h mainPage),
-// plus the older firmware's #page rule: the UI renders into #page, so
-// anything either page does to it must be visible here, not only on a real
-// device. Keep this in step with mainPage whenever it changes.
-const bootstrap = () => `<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><meta name="theme-color" content="#0f7a58"><title>TeHyBug (mock)</title>
-<style>
-body{margin:0;font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:#eef1f4;color:#182029}
-#page{max-width:520px;margin:0 auto;padding:24px 16px}
-.hello{box-sizing:border-box;width:calc(100% - 32px);max-width:520px;margin:24px auto;background:#fff;border:1px solid #dde3e9;border-radius:14px;padding:20px}
-.hello h1{font-size:1.3rem;margin:0 0 8px;color:#0f7a58}
-</style></head>
-<body><div id="page"><div class="hello"><h1>TeHyBug</h1><p>On your own network this device is at <b><span id="ip">tehybug.local</span></b>.</p><p>Loading the full interface…</p></div></div>
-<script>window.TEHYBUG_WS_PORT=${WS_PORT};</script>
-<link rel="stylesheet" href="/v2/css/style.php" media="print" onload="this.media='all'">
-<script src="/v2/js/javascript.php" defer></script>
-</body></html>`;
+// The device page is the firmware's own (html/v2/device.html, which
+// tools/embed-ui.py gzips into the firmware), so the two cannot drift: the UI
+// renders into that page's #page, and every inline style there shows. Online
+// asset URLs become local ones; with --offline they point at a dead port, so
+// the page's fallback to the built-in copy (/ui/, from .build/ui/) is
+// exercised.
+const OFFLINE = args.indexOf('--offline') >= 0;
+function bootstrap() {
+  let page = fs.readFileSync(path.join(ROOT, 'device.html'), 'utf8');
+  page = page.replace('https://tehybug.com/tehybug/v2/css/style.php', OFFLINE ? 'http://localhost:1/style.css' : '/v2/css/style.php');
+  page = page.replace('https://tehybug.com/tehybug/v2/js/javascript.php', OFFLINE ? 'http://localhost:1/app.js' : '/v2/js/javascript.php');
+  return page.replace('</body>', `<script>window.TEHYBUG_WS_PORT=${WS_PORT};</script>\n</body>`);
+}
+const UI_DIR = path.join(__dirname, '..', '.build', 'ui');
+function embedded(res, name, type) {
+  const file = path.join(UI_DIR, name + '.gz');
+  if (!fs.existsSync(file)) return text(res, 'run tools/embed-ui.py first', 'text/plain', 404);
+  res.writeHead(200, { 'Content-Type': type, 'Content-Encoding': 'gzip', 'Cache-Control': 'no-store', Connection: 'close' });
+  res.end(fs.readFileSync(file));
+}
 const TYPES = { '.js': 'text/javascript', '.css': 'text/css', '.html': 'text/html', '.json': 'application/json' };
 function bundle(kind) {
   const sep = kind === 'js' ? '\n;\n' : '\n';
@@ -154,7 +157,9 @@ http.createServer(async (req, res) => {
   if (Date.now() < rebootingUntil) { req.socket.destroy(); return; }
   if (p === '/') return text(res, bootstrap(), 'text/html');
   if (p === '/v2/css/style.php') return text(res, bundle('css'), 'text/css');
-  if (p === '/v2/js/javascript.php') return text(res, bundle('js'), 'text/javascript');
+  if (p === '/v2/js/javascript.php') return text(res, 'if (!window.TeHyBug) {\n' + bundle('js') + '\n}\n', 'text/javascript');
+  if (p === '/ui/app.js') return embedded(res, 'app.js', 'text/javascript');
+  if (p === '/ui/app.css') return embedded(res, 'app.css', 'text/css');
   if (p.startsWith('/v2/')) {
     const file = path.join(ROOT, p.slice(4));
     if (file.startsWith(ROOT) && fs.existsSync(file) && fs.statSync(file).isFile()) return text(res, fs.readFileSync(file), TYPES[path.extname(file)] || 'application/octet-stream');
@@ -176,6 +181,16 @@ http.createServer(async (req, res) => {
   if (p === '/api/time') return json(res, { rtc: true, timeSet: clockSet, time: '2026-09-02 14:05' });
   if (p === '/api/settime') { clockSet = true; return json(res, { response: 'OK', time: '2026-09-02 14:05' }); }
   if (p === '/api/getip') return text(res, '127.0.0.1', 'text/html');
+  if (p === '/api/wifiportal' && req.method === 'POST') { applyConfig({ reboot: true }); log('WiFi', 'portal requested, restarting'); return json(res, { response: 'OK', reboot: true }); }
+  if (p === '/api/testtls') {
+    // a fingerprint starting with AA "matches"; anything else is a mismatch
+    const u = url.searchParams.get('url') || '', fp = url.searchParams.get('fp') || '';
+    const host = u.replace(/^https?:\/\//, '').split('/')[0].replace(/^.*@/, '').replace(/:\d+$/, '');
+    await new Promise(r => setTimeout(r, 700));
+    if (!/^https:\/\//.test(u)) return json(res, { ok: false, host, error: 'not an https:// address' });
+    if (fp && !/^AA/.test(fp)) return json(res, { ok: false, host, code: 62, error: 'Chain could not be linked to a trust anchor' });
+    return json(res, { ok: true, host, verified: !!fp });
+  }
   if (p === '/update' && req.method === 'GET') return text(res, "<form method='POST' action='/update' enctype='multipart/form-data'><input type='file' name='firmware'><input type='submit' value='Update'></form>", 'text/html');
   if (p === '/update' && req.method === 'POST') {
     const body = await readBody(req);

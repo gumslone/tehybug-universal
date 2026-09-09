@@ -15,7 +15,7 @@
     haActive: false,
     eepromLogActive: false, eepromLogFrequency: 60, eepromLogMessage: '', eepromLogHourly: false, offlineModeActive: false,
     httpGetURL: '', httpGetActive: false, httpGetFrequency: 900,
-    httpPostURL: '', httpPostActive: false, httpPostFrequency: 900, httpPostJson: '',
+    httpPostURL: '', httpPostActive: false, httpPostFrequency: 900, httpPostJson: '', httpsFingerprint: '', ntpActive: true, ntpServer: 'pool.ntp.org', timezone: '',
     calibrationActive: false, calibrationTemp: 0, calibrationHumi: 0, calibrationQfe: 0,
     configModeActive: true, sleepModeActive: false, lightSleepModeActive: false,
     dht_sensor: false, second_dht_sensor: false, ds18b20_sensor: false, second_ds18b20_sensor: false, adc_sensor: false,
@@ -30,7 +30,7 @@
     gumboardVersion: '1.0.0', fwBuild: '2609021200', board,
     sketchSize: 561232, freeSketchSpace: 1449984, wifiRSSI: '-61', wifiQuality: 78, wifiSSID: 'Demo WiFi', ipAddress: '192.168.1.42',
     freeHeap: 24816, chipID: 1054321, cpuFreqMHz: 80, sleepModeActive: config.sleepModeActive, deepSleepMax: 12884, key: config.key,
-    uptimeS: Math.round((Date.now() - t0) / 1000),
+    uptimeS: Math.round((Date.now() - t0) / 1000), apSsid: 'TEHYBUG-A1B2C3',
     detected: { bmx: true, bme680: false, aht20: false, am2320: false, max44009: false, sgp30: false, ds3231: true, eeprom: true }
   });
   let clockSet = true;
@@ -65,7 +65,9 @@
     datalog: () => down ? busy() : later({ active: true, timeSet: clockSet, time: '2026-09-02 14:05', capacity: 65536, slotBytes: 2031, files: [{ name: '1.txt', size: 812, date: '2026-09-01' }, { name: '2.txt', size: 396, date: '2026-09-02' }] }),
     datalogFile: name => later('07:55 22.6t 48.3h 1013.2p\n08:55 22.8t 47.9h 1013.0p\n09:55 23.1t 47.2h 1012.7p'),
     time: () => later({ rtc: true, timeSet: clockSet, time: '2026-09-02 14:05' }),
+    testTls: (url, fp) => later({ ok: !fp || /^AA/.test(fp), host: url.replace(/^https?:\/\//, '').split('/')[0], verified: !!fp, code: fp && !/^AA/.test(fp) ? 62 : 0, error: fp && !/^AA/.test(fp) ? 'Chain could not be linked to a trust anchor' : '' }, 700),
     setTime: () => { clockSet = true; return later({ response: 'OK' }); },
+    wifiPortal: () => { simulateReboot(); return later(true, 300); },
     async saveConfig(obj) {
       if (down) throw new Error('Failed to fetch');
       const o = Object.assign({}, obj);

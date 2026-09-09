@@ -26,7 +26,7 @@
         ['Firmware size', i.sketchSize ? T.fmt.bytes(i.sketchSize) + ' used · ' + T.fmt.bytes(i.freeSketchSpace) + ' free for updates' : ''],
         ['Longest deep sleep', i.deepSleepMax ? T.fmt.secs(i.deepSleepMax) : ''],
         ['Up since restart', i.uptimeS != null ? T.fmt.duration(i.uptimeS) : ''],
-        ['Web UI', T.UI_VERSION]
+        ['Web UI', T.UI_VERSION + (window.TEHYBUG_OFFLINE_UI ? ' (built-in copy)' : '') + (i.uiBuild ? ' · built-in copy ' + i.uiBuild : '')]
       ]))}`;
   }
 
@@ -46,7 +46,7 @@
         action: html`<a class="btn btn-sm" href="#/senddata">Send data ${T.icon('chevron-right')}</a>` },
       { title: 'Go live', done: live,
         text: live ? 'The device is live and sending' : 'Leaves setup mode and starts sending on schedule',
-        action: live ? '' : html`<button type="button" class="btn btn-sm ${dest.length ? 'btn-primary' : ''}" data-golive>${T.icon('radio')} Go live</button>` }
+        action: live ? '' : html`<button type="button" class="btn btn-sm ${dest.length ? 'btn-primary' : ''}" data-golive ${dest.length ? '' : 'disabled'} ${dest.length ? '' : 'title="Set a destination first"'}>${T.icon('radio')} Go live</button>` }
     ];
     return html`<ol class="steps">${steps.map((s, i) => html`<li class="step ${s.done ? 'done' : ''}"><div class="num">${s.done ? T.icon('check') : i + 1}</div><div class="body"><div class="title">${s.title}</div><div class="text">${s.text}</div></div><div class="act">${s.action}</div></li>`)}</ol>`;
   }

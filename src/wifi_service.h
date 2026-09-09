@@ -209,12 +209,36 @@ bool tryFastConnect() {
   return false;
 }
 
+// How long the portal's access point stays up after the new network has
+// connected: the "saved" page on the phone reads the device's new address
+// through it (see portalRoutes) before the firmware raises its own AP.
+constexpr unsigned long PORTAL_GRACE_MS = 6000;
+
+// Extra routes on WiFiManager's own server (registered through its
+// callback once that server exists). /ip answers with the station address
+// as plain text - "0.0.0.0" until connected - so the saved page can show
+// where the device went, which the firmware's server cannot do while the
+// portal still owns port 80.
+void portalRoutes() {
+  wifiManager.server->on("/ip", []() {
+    wifiManager.server->send(200, "text/plain", WiFi.localIP().toString());
+  });
+}
+
 void setupWifi() {
   D_println("Setup WIFI");
 
-  // Fast path first: this is what makes a deep-sleep wake cheap. It only
-  // succeeds when a previous connection cached a still-valid hint.
-  if (tryFastConnect()) {
+  // "Change WiFi network" from the web UI: open the portal straight away
+  // instead of joining the saved network. The saved credentials stay until
+  // new ones are saved; Exit in the portal reconnects to the old network.
+  const bool portalWanted = portalRequested();
+  if (portalWanted) {
+    clearPortalRequest();
+    tehybug.device.configMode = true; // the portal is a config-mode thing
+    D_println(F("WiFi portal requested from the web UI"));
+  } else if (tryFastConnect()) {
+    // Fast path first: this is what makes a deep-sleep wake cheap. It only
+    // succeeds when a previous connection cached a still-valid hint.
     D_println(F("Wifi successfully connected!"));
     return;
   }
@@ -239,11 +263,41 @@ void setupWifi() {
   // set custom ip for portal
   wifiManager.setAPStaticIPConfig(apIP, apIP, IPAddress(255, 255, 255, 0));
 
-  std::vector<const char *> wm_menu = {"wifi", "exit"};
+  // The portal is the first thing a new owner sees; say what comes after it.
+  // The configuration page is served by the firmware on this same access
+  // point (192.168.4.1) once the portal closes - after "Save" or "Exit" - or
+  // on the home network as tehybug.local. The menu block offers both, plus a
+  // way to skip WiFi altogether (the built-in copy of the UI needs no
+  // internet); the head script adds the note to the "saving" page and hands
+  // the browser over as soon as the firmware's server answers: it polls
+  // /api/getip, which only that server has (the portal answers such paths
+  // with its 404 text, never with an address or the "not on your network"
+  // line).
+  //
+  // Kept deliberately terse: WiFiManager appends these as plain char* while
+  // it builds the scan page in one String, and that page is what runs the
+  // heap dry on a crowded WiFi. They are copied out of PROGMEM only in config
+  // mode and freed again right after the portal (see below).
+  static const char PORTAL_HEAD[] PROGMEM = R"HTML(<style>button{background:#1FA67A}</style><script>var n=0,d=0,i;function g(){location='http://192.168.4.1/'}
+function tbNote(h){document.body.insertAdjacentHTML('beforeend','<p>'+h+'</p>')}
+function w(){i=setInterval(function(){if(++n>60)clearInterval(i);fetch('/api/getip').then(function(r){return r.text()}).then(function(t){if(d<2&&/^\d+\.\d+\.\d+\.\d+$|network/.test(t.trim())){d=2;clearInterval(i);g()}}).catch(function(){})},3000)}
+function v(){i=setInterval(function(){if(++n>60)clearInterval(i);fetch('/ip').then(function(r){return r.text()}).then(function(t){t=t.trim();if(!d&&/^\d+\.\d+\.\d+\.\d+$/.test(t)&&t!='0.0.0.0'){d=1;clearInterval(i);n=0;tbNote('<b>Connected.</b> On your network the device is at <a href=http://'+t+'/>http://'+t+'/</a>. This page opens the configuration here in a moment&hellip;');setTimeout(w,5000)}}).catch(function(){})},1000)}function s(){tbNote('Opening the configuration&hellip;');fetch('/exit').catch(function(){});setTimeout(w,1500)}if(location.pathname=='/wifisave'){addEventListener('DOMContentLoaded',function(){tbNote('Next: once the device is connected, its address on your network shows here and the configuration opens by itself - or open <a href=http://192.168.4.1/>192.168.4.1</a> / <a href=http://tehybug.local/>tehybug.local</a>.');v()})}</script>)HTML";
+  static const char PORTAL_MENU[] PROGMEM = R"HTML(<p style=text-align:left>Setup continues in the <b>configuration</b> once WiFi is saved: <a href=http://192.168.4.1/>192.168.4.1</a> (this access point) or <a href=http://tehybug.local/>tehybug.local</a>.</p><button type=button onclick=s()>Skip WiFi &rarr; open the configuration</button>)HTML";
+  static String portalHead;
+  static String portalMenu;
+  std::vector<const char *> wm_menu = {"wifi", "custom", "sep", "exit"};
+  if (tehybug.device.configMode) {
+    portalHead = FPSTR(PORTAL_HEAD);
+    portalMenu = FPSTR(PORTAL_MENU);
+    wifiManager.setCustomHeadElement(portalHead.c_str());
+    wifiManager.setCustomMenuHTML(portalMenu.c_str());
+  } else {
+    wifiManager.setCustomHeadElement("<style>button{background:#1FA67A}</style>");
+  }
   wifiManager.setShowInfoUpdate(false);
   wifiManager.setShowInfoErase(false);
   wifiManager.setMenu(wm_menu);
-  wifiManager.setCustomHeadElement("<style>button {background-color: #1FA67A;}</style>");
+  wifiManager.setTitle("TeHyBug");
 
   // Only open the blocking AP config portal when config mode is requested
   // (MODE button / first start). In serving mode a failed connect should
@@ -257,7 +311,46 @@ void setupWifi() {
   D_println(ESP.getFreeHeap());
   yield();
 
-  if (!wifiManager.autoConnect(wifiSsid, wifiPassword)) {
+  // The portal runs non-blocking, driven from here, so that after a
+  // successful save its access point can be kept for PORTAL_GRACE_MS: in
+  // blocking mode WiFiManager shut the AP down the instant the new network
+  // connected, and the phone - still on that AP - never learned the device's
+  // new address (and, having lost the AP, often could not reach 192.168.4.1
+  // again either). Exit and the 180 s timeout still end the portal.
+  wifiManager.setConfigPortalBlocking(false);
+  wifiManager.setDisableConfigPortal(false); // do not tear the AP down on connect; we do
+  wifiManager.setWebServerCallback(portalRoutes);
+  bool connected = false;
+  if (portalWanted) {
+    wifiManager.startConfigPortal(wifiSsid, wifiPassword);
+  } else {
+    connected = wifiManager.autoConnect(wifiSsid, wifiPassword);
+  }
+  if (!connected && wifiManager.getConfigPortalActive()) {
+    unsigned long graceUntil = 0;
+    while (wifiManager.getConfigPortalActive()) {
+      // true once, on the connect that a save triggered
+      if (wifiManager.process() && !connected) {
+        connected = true;
+        graceUntil = millis() + PORTAL_GRACE_MS;
+        D_println(F("Portal: connected, keeping the AP up for the saved page"));
+      }
+      if (connected && (long)(millis() - graceUntil) >= 0) {
+        wifiManager.stopConfigPortal();
+        break;
+      }
+      delay(10);
+      yield();
+    }
+  }
+  // The portal is over either way; give its page text back to the heap. The
+  // pointers WiFiManager holds are not used again (the firmware never reopens
+  // the portal in this boot).
+  wifiManager.setCustomHeadElement(nullptr);
+  wifiManager.setCustomMenuHTML(nullptr);
+  portalHead = String();
+  portalMenu = String();
+  if (!connected) {
     D_println(F("Setup: Wifi failed to connect"));
     yield();
 

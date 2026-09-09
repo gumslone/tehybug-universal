@@ -45,7 +45,7 @@ const getJson = (u, method) => new Promise((res, rej) => {
   process.on('exit', cleanup);
   try {
     let target = null, lastError = '';
-    for (let i = 0; i < 75 && !target; i++) { await sleep(200); try { target = await getJson('http://127.0.0.1:' + port + '/json/new?about:blank', 'PUT'); } catch (e) { lastError = e.message; } }
+    for (let i = 0; i < 200 && !target; i++) { await sleep(200); try { target = await getJson('http://127.0.0.1:' + port + '/json/new?about:blank', 'PUT'); } catch (e) { lastError = e.message; } }
     if (!target) throw new Error('Chrome did not come up on port ' + port + ' (' + lastError + ')');
     const ws = new WebSocket(target.webSocketDebuggerUrl);
     await new Promise((res, rej) => { ws.onopen = res; ws.onerror = () => rej(new Error('devtools socket failed')); });

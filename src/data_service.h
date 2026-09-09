@@ -13,12 +13,58 @@
 // has already arrived by the time the sleep path runs.
 constexpr unsigned long MQTT_DRAIN_MS = 250;
 
+// The certificate pin for a host. The setting holds one entry per line:
+// "AB:CD:..." applies to every host, "host.example.com AB:CD:..." to that
+// host only; a host's own entry wins over a bare one. Empty: no pin.
+String pinForHost(const String &host) {
+  const String &all = tehybug.serveData.httpsFingerprint;
+  String bare;
+  int start = 0;
+  while (start < (int)all.length()) {
+    int end = all.indexOf('\n', start);
+    if (end < 0) {
+      end = all.length();
+    }
+    String entry = all.substring(start, end);
+    entry.trim();
+    start = end + 1;
+    if (entry.length() == 0) {
+      continue;
+    }
+    const int space = entry.lastIndexOf(' ');
+    if (space < 0) {
+      if (bare.length() == 0) {
+        bare = entry;
+      }
+      continue;
+    }
+    String entryHost = entry.substring(0, space);
+    entryHost.trim();
+    if (entryHost.equalsIgnoreCase(host)) {
+      return entry.substring(space + 1);
+    }
+  }
+  return bare;
+}
+
 WiFiClient & getClient(const String & url)
 {
 #if !defined(ARDUINO_ESP8266_GENERIC)
   if (url.startsWith("https")) {
-    // Create the BearSSL client on first use and keep it for the session, so
-    // its buffers only cost heap once HTTPS is actually needed.
+    // Optional certificate check: with a pin configured for this host the
+    // server's certificate must match it exactly (no clock needed, unlike a
+    // CA chain). Without one the connection is encrypted but unverified.
+    const String pin = pinForHost(hostOfUrl(url));
+    // The BearSSL client keeps whichever trust setting it was given first
+    // (setInsecure() sticks), so a request that needs a different pin than
+    // the last one gets a fresh client. Normally the client is created on
+    // first https use and kept for the session, so its buffers only cost
+    // heap once HTTPS is actually needed.
+    static String activePin;
+    if (espClient_ssl && activePin != pin) {
+      delete espClient_ssl;
+      espClient_ssl = nullptr;
+    }
     if (!espClient_ssl) {
       espClient_ssl = new BearSSL::WiFiClientSecure();
       // 512 is the smallest the core accepts - it silently clamps anything
@@ -28,7 +74,14 @@ WiFiClient & getClient(const String & url)
       // default cloud endpoint is plain http, so this only affects
       // user-configured https targets.
       espClient_ssl->setBufferSizes(512, 512);
-      espClient_ssl->setInsecure();             // skip cert verification
+      if (pin.length() == 0) {
+        espClient_ssl->setInsecure();
+      } else if (!espClient_ssl->setFingerprint(pin.c_str())) {
+        // Fail closed: a pin that cannot be parsed must not silently turn
+        // into "no check". With nothing trusted, BearSSL refuses to connect.
+        D_println(F("HTTPS fingerprint is malformed - https requests will fail"));
+      }
+      activePin = pin;
     }
     return *espClient_ssl;
   }
@@ -38,9 +91,27 @@ WiFiClient & getClient(const String & url)
   return espClient;
 }
 
+// After a failed https request, what BearSSL objected to. A certificate
+// that does not match the configured fingerprint only reaches the HTTP layer
+// as "connection lost"; this names the reason on the dashboard log.
+void Log(const String &function, const String &message); // web_api.h, later in the sketch
+void logSslError() {
+#if !defined(ARDUINO_ESP8266_GENERIC)
+  if (!espClient_ssl) {
+    return;
+  }
+  char reason[96];
+  const int code = espClient_ssl->getLastSSLError(reason, sizeof(reason));
+  if (code != 0) {
+    Log(F("HTTPS"), String(F("TLS error ")) + String(code) + ": " + reason);
+  }
+#endif
+}
+
 void httpGet() {
   const String url = tehybug.replacePlaceholders(tehybug.serveData.get.url);
   http::get(httpClient, getClient(url), url);
+  logSslError();
 }
 
 void httpPost() {
@@ -49,6 +120,7 @@ void httpPost() {
   const String url = tehybug.replacePlaceholders(tehybug.serveData.post.url);
   http::post(httpClient, getClient(url), url,
              tehybug.replacePlaceholders(tehybug.serveData.post.message));
+  logSslError();
 }
 
 // Pushes the current readings to every configured target, then sleeps once.

@@ -17,7 +17,9 @@
     },
     field(o) {
       const type = o.type || 'text';
-      const input = html`<input id="${o.id}" type="${type}" value="${o.value == null ? '' : o.value}" placeholder="${o.placeholder || ''}" ${raw(o.attrs || '')}>`;
+      const input = o.textarea
+        ? html`<textarea id="${o.id}" rows="${o.rows || 3}" placeholder="${o.placeholder || ''}" ${raw(o.attrs || '')}>${o.value == null ? '' : o.value}</textarea>`
+        : html`<input id="${o.id}" type="${type}" value="${o.value == null ? '' : o.value}" placeholder="${o.placeholder || ''}" ${raw(o.attrs || '')}>`;
       return html`<div class="field" data-field="${o.id}">
         <label for="${o.id}">${o.label}${o.labelHint ? html` <span class="hint">${o.labelHint}</span>` : ''}</label>
         ${o.button ? html`<div class="with-btn">${input}${o.button}</div>` : input}
@@ -60,10 +62,29 @@
       return html`<div class="hint">${label || 'Fill from my sensors:'} <a href="#" data-fill="${kind}" data-target="${target}">${kind === 'query' ? 'build the query string' : kind === 'json' ? 'build the JSON' : 'list my readings'}</a> <span class="units-label">(${T.units() === 'imperial' ? '°F' : '°C'})</span></div>`;
     },
     // placeholder chips that insert %key% into a field
-    chips(target, keys) {
+    chips(target, keys, sep) {
       keys = keys || T.Readings.known();
       if (!keys.length) return html`<div class="hint">Waiting for readings from the device…</div>`;
-      return html`<div class="chips">${keys.map(k => html`<button type="button" class="chip" data-insert="%${k}%" data-target="${target}" title="${T.Readings.name(k)}"><code>%${k}%</code></button>`)}</div>`;
+      return html`<div class="chips">${keys.map(k => html`<button type="button" class="chip" data-insert="%${k}%" data-target="${target}" ${sep ? raw('data-sep="' + T.esc(sep) + '"') : ''} title="${T.Readings.name(k)}"><code>%${k}%</code></button>`)}</div>`;
+    },
+    // An interval in seconds, with presets and an echo in minutes/hours. The
+    // firmware clamps the value to min..max; the echo says so before saving.
+    interval(o) {
+      const min = o.min == null ? 10 : o.min, max = o.max || 0;
+      const presets = (o.presets || [60, 300, 900, 3600]).filter(x => x >= min && (!max || x <= max));
+      return UI.field({
+        id: o.id, label: o.label || 'Send every', labelHint: 'seconds', type: 'number', value: o.value,
+        attrs: 'min="' + min + '"' + (max ? ' max="' + max + '"' : '') + ' inputmode="numeric" data-interval="1" data-min="' + min + '" data-max="' + max + '"',
+        after: html`<div class="presets"><span class="hint echo" data-echo="${o.id}">${UI.intervalEcho(o.value, min, max)}</span>${presets.map(x => html`<button type="button" class="chip" data-set="${x}" data-target="${o.id}">${T.fmt.secs(x)}</button>`)}</div>`,
+        hint: o.hint
+      });
+    },
+    intervalEcho(v, min, max) {
+      v = parseInt(v, 10);
+      if (!isFinite(v)) return '';
+      if (v < min) return '= ' + T.fmt.secs(v) + ' — below the minimum, saved as ' + T.fmt.secs(min);
+      if (max && v > max) return '= ' + T.fmt.secs(v) + ' — longer than the chip can sleep, saved as ' + T.fmt.secs(max);
+      return '= ' + T.fmt.secs(v);
     },
     kv(rows) {
       return html`<dl class="kv">${rows.filter(r => r[1] != null && r[1] !== '').map(r => html`<dt>${r[0]}</dt><dd>${r[1]}</dd>`)}</dl>`;
@@ -73,6 +94,32 @@
     },
     disclosure(title, body, open, cls) {
       return html`<details class="disclosure ${cls || ''}" ${open ? 'open' : ''}><summary>${T.icon('chevron-right')}${title}</summary><div class="disclosure-body">${body}</div></details>`;
+    },
+    // Clock-from-the-network settings, shared by the Data log and Display
+    // pages. The time zone is stored as the POSIX string the firmware needs;
+    // the list maps the browser's zone name to it, anything else is typed in.
+    clockFields(c) {
+      const zones = T.TIMEZONES;
+      const stored = c.timezone == null ? '' : String(c.timezone);
+      let browserZone = '';
+      try { browserZone = Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch (e) { /* no Intl */ }
+      const guessed = zones.find(z => z[0] === browserZone);
+      const known = zones.find(z => z[1] === stored);
+      const selected = stored ? (known ? known[1] : '__custom') : (guessed ? guessed[1] : 'UTC0');
+      return html`
+        ${UI.toggle({ id: 'ntpActive', label: 'Set the clock from the internet', checked: c.ntpActive !== false, hint: 'At start-up, whenever WiFi is up (a sleeping battery board only does it while its clock is unset, so wakes stay short). The clock chip keeps the time in between.' })}
+        <div class="fields-inline mt">
+          ${UI.select({ id: 'timezoneSelect', label: 'Time zone', options: zones.map(z => ({ value: z[1], label: z[0] })).concat([{ value: '__custom', label: 'Custom (POSIX TZ string)' }]), value: selected, hint: !stored && guessed ? 'From your browser — stored with the next save of this page.' : '' })}
+          ${UI.field({ id: 'ntpServer', label: 'NTP server', value: c.ntpServer || 'pool.ntp.org', placeholder: 'pool.ntp.org', attrs: 'autocomplete="off" spellcheck="false"' })}
+        </div>
+        <div id="timezone-custom" ${selected === '__custom' ? '' : 'hidden'}>${UI.field({ id: 'timezone', label: 'POSIX TZ string', value: stored, placeholder: 'CET-1CEST,M3.5.0,M10.5.0/3', attrs: 'autocomplete="off" spellcheck="false"', hint: html`What the ESP8266 understands, e.g. <code>CET-1CEST,M3.5.0,M10.5.0/3</code> for Central Europe or <code>EST5EDT,M3.2.0,M11.1.0</code> for New York.` })}</div>`;
+    },
+    // the clock settings as config keys; throws when the custom zone is empty
+    clockValues() {
+      const sel = T.val('timezoneSelect');
+      const tz = sel === '__custom' ? T.val('timezone').trim() : sel;
+      if (sel === '__custom' && !tz) throw T.fail('Enter a POSIX TZ string, or pick a zone from the list', 'timezone');
+      return { ntpActive: T.checked('ntpActive'), ntpServer: T.val('ntpServer').trim() || 'pool.ntp.org', timezone: tz === 'UTC0' ? '' : tz };
     },
     unitsSeg() {
       const u = T.units();
@@ -111,6 +158,7 @@
   function layout() {
     return html`<div class="app">
       ${window.TEHYBUG_DEMO ? html`<div class="demo-banner">Demo — a simulated TeHyBug; nothing here reaches a real device</div>` : ''}
+      ${window.TEHYBUG_OFFLINE_UI ? html`<div class="demo-banner">Built-in copy of the interface (tehybug.com not reachable) — everything works; the online version may be newer.</div>` : ''}
       <header class="topbar">
         <button type="button" class="icon-btn menu-btn" id="menu-btn" aria-label="Menu">${T.icon('menu')}</button>
         <div class="brand">TeHyBug<span class="brand-sub" id="brand-sub"></span></div>
@@ -208,24 +256,53 @@
     const cfg = saveCfg(Shell.current);
     bar.hidden = !cfg;
     if (cfg) $('#save-label').textContent = cfg.label || 'Save';
-    // Until the configuration has loaded, a page shows firmware defaults;
-    // saving then would write those defaults over the device's real settings.
-    $('#save-btn').disabled = Shell.saving || (!!cfg && !T.State.configLoaded);
     document.documentElement.style.setProperty('--savebar-h', cfg ? bar.offsetHeight + 'px' : '0px');
-    Shell.setDirty(Shell.dirty);
+    Shell.setDirty(Shell.dirty, Shell.changes);
   }
-  Shell.setDirty = on => {
+  // The save bar reflects the page's edits: Save stays off until a value
+  // differs from what the page was drawn with, and says how many do.
+  Shell.setDirty = (on, count) => {
     Shell.dirty = !!on;
-    const st = $('#save-status');
+    Shell.changes = on ? (count || Shell.changes || 1) : 0;
+    const st = $('#save-status'), btn = $('#save-btn');
     if (!st) return;
     const cfg = saveCfg(Shell.current);
+    // Until the configuration has loaded, a page shows firmware defaults;
+    // saving then would write those defaults over the device's real settings.
     if (cfg && !T.State.configLoaded) {
       st.textContent = 'The settings have not loaded from the device yet — retrying; saving is off until they do.';
       st.className = 'save-status blocked';
+      if (btn) btn.disabled = true;
       return;
     }
-    st.textContent = on ? 'Unsaved changes' : (cfg && cfg.reboot ? 'Saving restarts the device' : '');
+    if (btn) btn.disabled = Shell.saving || !on;
+    const n = Shell.changes;
+    st.textContent = on ? n + (n === 1 ? ' change' : ' changes') + (cfg && cfg.reboot ? ' · saving restarts the device' : '') : 'No changes yet';
     st.className = 'save-status' + (on ? ' dirty' : '');
+  };
+  // The form as the page drew it. An edit is compared against this, so a
+  // value typed back to what it was does not count as a change.
+  function formKey(el) {
+    if (el.closest('[data-nosave]')) return '';
+    if (el.type === 'radio') return el.name ? 'radio:' + el.name : '';
+    return el.id ? 'id:' + el.id : '';
+  }
+  function formValue(el) {
+    if (el.type === 'radio') { const on = document.querySelector('input[name="' + el.name + '"]:checked'); return on ? on.value : ''; }
+    if (el.type === 'checkbox') return el.checked ? '1' : '0';
+    if (el.type === 'file') return '';
+    return el.value;
+  }
+  function formState() {
+    const out = {};
+    $$('input, select, textarea', $('#main')).forEach(el => { const k = formKey(el); if (k) out[k] = formValue(el); });
+    return out;
+  }
+  Shell.snapshot = () => { Shell.baseline = formState(); };
+  // fields whose value differs from the snapshot (one drawn later is unchanged)
+  Shell.changedFields = () => {
+    const now = formState(), base = Shell.baseline || {};
+    return Object.keys(now).filter(k => (k in base) && now[k] !== base[k]);
   };
 
   function unwire() {
@@ -254,6 +331,7 @@
     syncChoices(root);
     Object.keys(page.on || {}).forEach(evt => Shell.subs.push(T.Bus.on(evt, page.on[evt].bind(page))));
     if (page.mount) page.mount(root);
+    Shell.snapshot();
     setActiveNav(page.id);
     closeDrawer();
     updateSaveBar();
@@ -370,25 +448,10 @@
       data = page.collect();
     } catch (e) {
       Shell.toast(e.message || 'Please check the highlighted field', 'danger', 5000);
-      if (e.fieldId) {
-        const el = document.getElementById(e.fieldId);
-        if (el) {
-          // the toast alone is silent to a screen reader (focus moves first),
-          // so the message also lands in the field itself
-          const f = el.closest('.field');
-          if (f) {
-            f.classList.add('invalid');
-            const err = document.createElement('div');
-            err.className = 'hint field-error';
-            err.id = e.fieldId + '-err';
-            err.textContent = e.message || 'Please check this field';
-            f.appendChild(err);
-            el.setAttribute('aria-invalid', 'true');
-            el.setAttribute('aria-describedby', err.id);
-          }
-          el.focus();
-        }
-      }
+      // the toast alone is silent to a screen reader (focus moves first),
+      // so the message also lands in the field itself
+      const el = e.fieldId && document.getElementById(e.fieldId);
+      if (el) { showFieldError(el, e.message || 'Please check this field'); el.focus(); }
       return;
     }
     if (cfg.confirm) { const ok = await cfg.confirm(data); if (!ok) return; }
@@ -399,6 +462,7 @@
       const payload = Object.assign({}, data, cfg.reboot ? { reboot: true } : {});
       await T.Api.saveConfig(payload);
       T.applyConfig(data);
+      Shell.snapshot();
       Shell.setDirty(false);
       T.Bus.emit('saved', { page: page.id, data });
       // Leaving setup mode on a battery board, or switching WiFi off with
@@ -479,13 +543,18 @@
       const offline = !!c.offlineModeActive;
       const power = c.sleepModeActive ? 'deep' : (c.lightSleepModeActive ? 'light' : 'on');
       const iaq = !!T.State.seen.iaq;
+      const seen = T.Readings.known().filter(k => !/^cs2?$/.test(k)).length;
+      const check = (ok, text) => html`<li class="${ok ? 'ok' : 'warn'}">${T.icon(ok ? 'check' : 'alert-triangle')}<span>${text}</span></li>`;
       const body = html`
         <p>${offline
           ? html`Offline mode is switched on, so leaving setup mode runs the device <strong>with WiFi off</strong>: it logs to its memory module and nothing is sent. Switch offline mode off on <a href="#/datalog">Data log</a> first if you want it to send.`
           : html`Going live ends setup mode and starts sending. ${display ? '' : 'The device restarts and this interface stops being served.'}`}</p>
-        ${dest.length
-          ? html`<p class="mb0"><strong>Readings go to</strong></p><ul>${dest.map(d => html`<li>${d.label} <span class="hint">${d.detail}</span></li>`)}</ul>`
-          : UI.note('warn', html`Nothing is switched on yet, so the device would go live and send nowhere — and with nothing to serve it just returns to setup mode. Set a destination on <a href="#/senddata">Send data</a> first.`)}
+        <ul class="checklist">
+          ${check(seen > 0, seen ? seen + ' reading' + (seen === 1 ? '' : 's') + ' coming in' : html`No readings yet — check <a href="#/sensors">Sensors</a>, or wait a moment`)}
+          ${dest.length
+            ? dest.map(d => check(true, html`${d.label} <span class="hint">${d.detail}</span>`))
+            : check(false, html`Nothing switched on: the device would send nowhere and return to setup mode. Set a destination on <a href="#/senddata">Send data</a> first`)}
+        </ul>
         ${display || offline ? '' : html`<h3 class="mt">Power</h3>${UI.choice({ name: 'golive-power', value: power, options: [
           { value: 'deep', label: 'Deep sleep — battery', hint: 'Powers down between sends (≈20 µA). Months on a battery; unreachable while asleep.' },
           { value: 'light', label: 'Light sleep', hint: 'Sleeps between sends but keeps WiFi associated, so it wakes fast. A middle ground.' },
@@ -556,11 +625,43 @@
     if (err) err.remove();
     $$('[aria-invalid]', f).forEach(inp => { inp.removeAttribute('aria-invalid'); inp.removeAttribute('aria-describedby'); });
   }
+  function showFieldError(el, msg) {
+    const f = el.closest('.field');
+    if (!f) return;
+    clearFieldError(f);
+    f.classList.add('invalid');
+    const err = document.createElement('div');
+    err.className = 'hint field-error';
+    err.id = (el.id || 'field') + '-err';
+    err.textContent = msg;
+    f.appendChild(err);
+    el.setAttribute('aria-invalid', 'true');
+    el.setAttribute('aria-describedby', err.id);
+  }
+  // What is wrong with a field's value on its own — checked as focus leaves
+  // it, so a typo shows where it was made rather than on Save. A page's
+  // collect() still has the last word.
+  function fieldProblem(el) {
+    if (el.tagName !== 'INPUT' && el.tagName !== 'TEXTAREA') return '';
+    const v = (el.value || '').trim();
+    if (el.type === 'url' && v) {
+      if (!T.isUrl(v)) return 'Enter the full address, starting with http:// or https://';
+      if (T.isGeneric() && /^https:/i.test(v)) return 'First-generation boards have no TLS client — use an http:// address';
+    }
+    if (!v && el.hasAttribute('data-required')) return el.getAttribute('data-required') || 'This field is needed';
+    return '';
+  }
   function markDirty(e) {
     if (e.target.closest('[data-nosave]') || e.target.closest('.overlay')) return;
     const f = e.target.closest('.field');
     if (f) clearFieldError(f);
-    Shell.setDirty(true);
+    const n = Shell.changedFields().length;
+    Shell.setDirty(n > 0, n);
+  }
+  function syncEcho(el) {
+    if (!el.hasAttribute('data-interval')) return;
+    const echo = document.querySelector('[data-echo="' + el.id + '"]');
+    if (echo) echo.textContent = UI.intervalEcho(el.value, parseInt(el.getAttribute('data-min'), 10) || 0, parseInt(el.getAttribute('data-max'), 10) || 0);
   }
   function doFill(targetId, kind) {
     if (!T.Suggest.have()) { Shell.toast('No sensor readings received yet — wait a moment and try again', 'warn', 4000); return; }
@@ -575,11 +676,13 @@
     else if (kind === 'log') el.value = T.Suggest.logTemplate(units);
     el.dispatchEvent(new Event('input', { bubbles: true }));
   }
-  function insertAt(targetId, text) {
+  function insertAt(targetId, text, sep) {
     const el = document.getElementById(targetId);
     if (!el) return;
     const s = el.selectionStart == null ? el.value.length : el.selectionStart;
     const e = el.selectionEnd == null ? s : el.selectionEnd;
+    // a separator between placeholders, unless one is already there
+    if (sep && s > 0 && !/\s$/.test(el.value.slice(0, s))) text = sep + text;
     el.value = el.value.slice(0, s) + text + el.value.slice(e);
     el.focus();
     try { el.setSelectionRange(s + text.length, s + text.length); } catch (err) { /* number inputs */ }
@@ -605,15 +708,27 @@
       const fill = t.closest('[data-fill]');
       if (fill) { e.preventDefault(); doFill(fill.getAttribute('data-target'), fill.getAttribute('data-fill')); return; }
       const ins = t.closest('[data-insert]');
-      if (ins) { e.preventDefault(); insertAt(ins.getAttribute('data-target'), ins.getAttribute('data-insert')); return; }
+      if (ins) { e.preventDefault(); insertAt(ins.getAttribute('data-target'), ins.getAttribute('data-insert'), ins.getAttribute('data-sep')); return; }
+      const set = t.closest('[data-set]');
+      if (set) { const inp = document.getElementById(set.getAttribute('data-target')); if (inp) { inp.value = set.getAttribute('data-set'); inp.dispatchEvent(new Event('input', { bubbles: true })); } return; }
       const pw = t.closest('[data-toggle-password]');
       if (pw) { const inp = document.getElementById(pw.getAttribute('data-toggle-password')); if (inp) inp.type = inp.type === 'password' ? 'text' : 'password'; return; }
       const seg = t.closest('.seg[data-units] button');
       if (seg) { T.setUnits(seg.getAttribute('data-value')); return; }
     });
     const main = $('#main');
-    main.addEventListener('input', markDirty);
-    main.addEventListener('change', e => { markDirty(e); syncChoices(main); });
+    main.addEventListener('input', e => { markDirty(e); syncEcho(e.target); });
+    main.addEventListener('focusout', e => {
+      const el = e.target;
+      if (!el || !el.closest || el.closest('[data-nosave]')) return;
+      const msg = fieldProblem(el);
+      if (msg) showFieldError(el, msg);
+    });
+    main.addEventListener('change', e => {
+      markDirty(e);
+      syncChoices(main);
+      if (e.target.id === 'timezoneSelect') T.show('timezone-custom', e.target.value === '__custom');
+    });
     window.addEventListener('hashchange', onHashChange);
     window.addEventListener('beforeunload', e => { if (Shell.dirty) { e.preventDefault(); e.returnValue = ''; } });
     window.addEventListener('resize', () => updateSaveBar());
@@ -630,8 +745,9 @@
   async function stylesheetReady() {
     const link = $('link[href*="style.php"]');
     // only the device page uses the print-until-loaded trick; a plain
-    // stylesheet link (demo.html) has already applied or has a sheet
-    if (!link || link.media !== 'print' || link.sheet) return;
+    // stylesheet link (demo.html) has already applied or has a sheet. On
+    // the built-in copy the online link never loads - its CSS came from /ui/.
+    if (!link || link.media !== 'print' || link.sheet || window.TEHYBUG_OFFLINE_UI) return;
     await new Promise(res => {
       const t = setTimeout(res, 3000);
       link.addEventListener('load', () => { clearTimeout(t); res(); }, { once: true });
@@ -676,7 +792,11 @@
     const [info, config] = await Promise.all([T.Api.info().catch(() => null), T.Api.config().catch(() => null)]);
     if (info) T.applyInfo(info);
     if (config) T.applyConfig(config);
-    Shell.show((location.hash || '').replace(/^#\/?/, '') || 'dashboard');
+    let first = (location.hash || '').replace(/^#\/?/, '');
+    // A device with nothing set up yet opens on Get started rather than on a
+    // dashboard of undone steps; once a destination exists, the dashboard.
+    if (!first && config && config.configModeActive !== false && !T.destinations().length) first = 'start';
+    Shell.show(first || 'dashboard');
     if (!config) { Shell.toast('Could not load the settings from the device yet — retrying', 'warn', 6000); loadConfigWithRetry(); }
     T.Live.start();
   };
@@ -689,5 +809,8 @@
     try { T.applyConfig(await T.Api.config()); }
     catch (e) { configRetryTimer = setTimeout(loadConfigWithRetry, 5000); }
   }
-  document.addEventListener('DOMContentLoaded', () => { T.Shell.boot(); });
+  // The built-in copy is injected after the page has parsed (the fallback
+  // runs on the online bundle's error), so DOMContentLoaded may be long gone.
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => { T.Shell.boot(); });
+  else T.Shell.boot();
 })();

@@ -54,7 +54,7 @@
             <li>If the LED stays dark, press RESET twice about a second apart, then MODE (a device that had deep-slept needs the second reset).</li>
           </ol>
           ${UI.note('warn', html`Do not hold MODE <em>while</em> pressing RESET: MODE sits on the chip's boot pin, and holding it through a reset starts the firmware-flashing mode instead. Press RESET first, let go, then MODE.`)}
-          <p class="hint">A device with nothing configured to send always starts setup mode by itself, so you cannot lock yourself out. On its own access point (<code>TEHYBUG-…</code>, password <code>${T.AP_PASSWORD}</code>) the page at <code>192.168.4.1</code> shows the address to use on your network.</p>` })}`;
+          <p class="hint">To move the device to another WiFi network, use <a href="#/system">Power &amp; go live → Change WiFi network</a>; if the saved network is simply gone, setup mode opens the network chooser by itself. A device with nothing configured to send always starts setup mode by itself, so you cannot lock yourself out. On its own access point (<code>TEHYBUG-…</code>, password <code>${T.AP_PASSWORD}</code>) the page at <code>192.168.4.1</code> shows the address to use on your network.</p>` })}`;
     }
   });
 })();

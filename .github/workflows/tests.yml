@@ -26,10 +26,23 @@ jobs:
       - name: Static analysis
         run: ./tests/tidy.sh
 
+  web-ui:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '22' }
+      - run: ./tests/ui/run.sh
+
   platformio:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v4
+        with: { node-version: '22' }
+      - name: Install terser (minifies the built-in web UI)
+        run: npm ci
 
       - uses: actions/setup-python@v6
         with:

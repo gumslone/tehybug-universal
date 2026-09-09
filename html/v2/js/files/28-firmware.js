@@ -46,6 +46,39 @@
     } finally { btn.disabled = !picked; }
   }
 
+  // Compares the installed version with the newest GitHub release. Versions
+  // are semantic since 1.0.0; builds before that reported a date stamp,
+  // which compares as older than any semantic version.
+  function versionParts(v) {
+    const m = /^v?(\d+)\.(\d+)\.(\d+)/.exec(String(v || '').trim());
+    return m ? [+m[1], +m[2], +m[3]] : null;
+  }
+  function newerThan(a, b) {
+    const pa = versionParts(a), pb = versionParts(b);
+    if (!pa) return false;
+    if (!pb) return true;
+    for (let i = 0; i < 3; i++) { if (pa[i] !== pb[i]) return pa[i] > pb[i]; }
+    return false;
+  }
+  function checkLatest() {
+    const target = $('#update-check');
+    if (!target) return;
+    fetch('https://api.github.com/repos/gumslone/tehybug-universal/releases/latest', { cache: 'no-store' })
+      .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
+      .then(rel => {
+        const el = $('#update-check');
+        if (!el) return;
+        const latest = rel.tag_name || rel.name || '';
+        const installed = T.State.info.gumboardVersion;
+        if (newerThan(latest, installed)) {
+          T.render(el, html`${UI.note('info', html`<strong>${latest.replace(/^v/, '')} is available</strong> (you run ${installed || '?'}). ${rel.html_url ? html`<a href="${rel.html_url}" target="_blank" rel="noopener">What changed</a> · ` : ''}download your board's file below and install it.`)}`);
+        } else {
+          T.render(el, html`You run the newest release${latest ? ' (' + latest.replace(/^v/, '') + ')' : ''}.`);
+        }
+      })
+      .catch(() => { const el = $('#update-check'); if (el) T.render(el, html`Could not check GitHub for a newer release — see the changelog below.`); });
+  }
+
   function loadChangelog() {
     const target = $('#changelog');
     if (!target) return;
@@ -82,35 +115,40 @@
       const i = T.State.info;
       const mine = T.buildName();
       return html`${UI.pagehead('Firmware')}
-        ${UI.card({ title: 'Installed', icon: 'cpu', body: UI.kv([
+        ${UI.card({ title: 'Installed', icon: 'cpu', body: html`${UI.kv([
           ['Version', i.gumboardVersion ? i.gumboardVersion + ' (build ' + (i.fwBuild || '—') + ')' : '…'],
           ['Board', T.boardName() + (mine ? ' — the ' + mine + ' build' : '')],
           ['Room for an update', i.freeSketchSpace ? T.fmt.bytes(i.freeSketchSpace) : '']
-        ]) })}
+        ])}<div id="update-check" class="hint mt">Checking for a newer release…</div>` })}
         ${UI.note('info', html`<strong>Update only if you need to.</strong> If the device does what you want, leave it: every update can change behaviour you rely on. Update for a feature you miss or a problem you have, and note your current version first.`)}
         ${UI.card({ title: 'Install an update', icon: 'upload', body: html`
           <div class="filepick" data-nosave>
             <input type="file" id="ota-file" accept=".bin,.bin.gz">
             <label for="ota-file" class="btn">${T.icon('file-text')} Choose .bin file</label>
-            <span class="fname hint" id="ota-name">No file chosen</span>
+            <div class="fname" id="ota-name"><span class="hint">No file chosen yet</span></div>
           </div>
           <div class="row mt"><button type="button" class="btn btn-primary" id="ota-install" disabled>${T.icon('upload')} Install</button><span class="hint" id="ota-status"></span></div>
           <div class="progress mt" id="ota-progress" hidden><div></div></div>
           <p class="hint mt">Download the file for your board below, pick it here, install. The device flashes it and restarts; settings are kept. The device's own bare upload page is at <a href="/update" target="_blank" rel="noopener">/update</a>.</p>` })}
         ${UI.card({ title: 'Downloads', icon: 'download', body: html`
           <p class="hint">The current binaries from the repository. <a href="${T.REPO}/releases/latest" target="_blank" rel="noopener">Releases on GitHub</a> list what changed.</p>
-          ${UI.table(['Build', 'For', ''], BUILDS.map(b => [html`<code>${b[0]}</code>${b[2] === mine && !/_debug/.test(b[0]) ? html` <span class="badge ok">your board</span>` : ''}`, b[1], html`<a class="btn btn-sm" href="${RAW}tehybug.ino.${b[0]}.bin" target="_blank" rel="noopener">${T.icon('download')} Download</a>`]))}
+          ${UI.table(['Build', ''], BUILDS.map(b => [html`<code>${b[0]}</code>${b[2] === mine && !/_debug/.test(b[0]) ? html` <span class="badge ok">your board</span>` : ''}<div class="hint">${b[1]}</div>`, html`<a class="btn btn-sm" href="${RAW}tehybug.ino.${b[0]}.bin" target="_blank" rel="noopener">${T.icon('download')} Download</a>`]))}
           <p class="hint">The <code>_debug</code> builds print over serial and are larger — only for troubleshooting.</p>` })}
         ${UI.card({ title: 'Changelog', icon: 'list', body: html`<div id="changelog" class="small"><p class="hint">Loading…</p></div>` })}`;
     },
     mount(root) {
       loadChangelog();
+      checkLatest();
       root.addEventListener('change', e => {
         if (e.target.id !== 'ota-file') return;
         picked = e.target.files && e.target.files[0] ? e.target.files[0] : null;
-        $('#ota-name').textContent = picked ? picked.name + ' (' + T.fmt.bytes(picked.size) + ')' : 'No file chosen';
+        const match = picked && fileMatchesBoard(picked.name);
+        T.render($('#ota-name'), picked
+          ? html`<strong>${picked.name}</strong> <span class="hint">${T.fmt.bytes(picked.size)}</span> ${match ? html`<span class="badge ok">your board</span>` : html`<span class="badge warn">not the ${T.buildName()} build</span>`}`
+          : html`<span class="hint">No file chosen yet</span>`);
         $('#ota-install').disabled = !picked;
-        $('#ota-status').textContent = picked && !fileMatchesBoard(picked.name) ? 'This does not look like the ' + T.buildName() + ' build.' : '';
+        T.render($('#ota-install'), html`${T.icon('upload')} ${picked && !match ? 'Install anyway…' : 'Install'}`);
+        $('#ota-status').textContent = picked && !match ? 'Check the Downloads list below for the right file.' : '';
       });
       root.addEventListener('click', e => { if (e.target.closest('#ota-install')) install(); });
     },

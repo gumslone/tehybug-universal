@@ -279,6 +279,21 @@ void setupDht(DHTesp &sensor, uint8_t pin) {
   D_println(F("), assuming DHT22"));
 }
 
+// Called repeatedly while a sensor read waits out a sampling period, so the
+// display board can keep drawing its clock (displaySetup installs
+// displayTick here). nullptr on the other boards.
+void (*sensorWaitHook)() = nullptr;
+void sensorWait(unsigned long ms) {
+  const unsigned long start = millis();
+  while (millis() - start < ms) {
+    if (sensorWaitHook) {
+      sensorWaitHook();
+    }
+    delay(20);
+    yield();
+  }
+}
+
 void read_dht_custom(DHTesp &sensor, const String &temp, const String &humi) {
   TempAndHumidity prev = sensor.getTempAndHumidity(); // first read
   if (tehybug.device.configMode)
@@ -294,8 +309,7 @@ void read_dht_custom(DHTesp &sensor, const String &temp, const String &humi) {
   constexpr int DHT_MAX_SAMPLES = 3;
   bool recorded = false;
   for (int i = 0; i < DHT_MAX_SAMPLES; i++) {
-    delay(sensor.getMinimumSamplingPeriod());
-    yield();
+    sensorWait(sensor.getMinimumSamplingPeriod());
     TempAndHumidity tehy = sensor.getTempAndHumidity();
     // Check if any reads failed and exit early (to try again).
     if (isnan(tehy.temperature) || isnan(tehy.humidity)) {

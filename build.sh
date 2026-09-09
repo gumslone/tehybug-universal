@@ -77,6 +77,10 @@ if [ "$TOOL" = "platformio" ] || [ "$TOOL" = "pio" ]; then
   exit 0
 fi
 
+# The web UI copy built into the 2 MB images (src/web_ui_bundle.h, served at
+# /ui/ when tehybug.com is unreachable) is regenerated from html/v2 first.
+python3 "$SKETCH_DIR/tools/embed-ui.py"
+
 ESP8285_FQBN="esp8266:esp8266:esp8285:$ESP8285_OPTS,$DBG_OPT"
 
 # TeHyBug Display Weatherstation: the same ESP8285 module and board options,
