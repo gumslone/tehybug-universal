@@ -5,7 +5,7 @@
 // release workflow reads this define, tags the release v<FW_VERSION> and
 // publishes it — and skips the release when the tag already exists, so a
 // merge without a bump just refreshes the committed binaries.
-#define FW_VERSION "1.0.0"
+#define FW_VERSION "1.1.0"
 
 const String version = FW_VERSION;
 
