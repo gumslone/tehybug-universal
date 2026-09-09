@@ -10,8 +10,8 @@
   function eepromCard(c) {
     return UI.card({ title: 'Log to the device', icon: 'hard-drive', body: html`
       ${UI.toggle({ id: 'eepromLogActive', cls: 'big', label: 'Write readings to the EEPROM', checked: !!c.eepromLogActive })}
-      ${UI.field({ id: 'eepromLogFrequency', label: 'Every', labelHint: 'seconds', type: 'number', value: c.eepromLogFrequency || 60, attrs: 'min="60" inputmode="numeric"', hint: 'Timestamps have one-minute resolution, so 60 s or more. When the device sleeps between sends, this interval also decides how often it wakes: the log and the sends share the shortest interval configured. In offline mode it is the wake interval outright.' })}
-      ${UI.field({ id: 'eepromLogMessage', label: 'Which values', labelHint: 'optional', value: c.eepromLogMessage, placeholder: 'empty = the default set of measured values', after: UI.fill('eepromLogMessage', 'log'), hint: html`Placeholders such as <code>%temp% %humi%</code>. Fewer values per line means more history fits.` })}
+      ${UI.interval({ id: 'eepromLogFrequency', label: 'Log every', value: c.eepromLogFrequency || 60, min: 60, presets: [60, 300, 900, 1800, 3600], hint: 'Timestamps have one-minute resolution. When the device sleeps between sends, the log and the sends share the shortest interval; in offline mode this is the wake interval outright.' })}
+      ${UI.field({ id: 'eepromLogMessage', label: 'Which values', labelHint: 'optional', value: c.eepromLogMessage, placeholder: 'empty = every measured value', after: html`<div id="log-chips" class="mt-s">${UI.chips('eepromLogMessage', null, ' ')}</div>${UI.fill('eepromLogMessage', 'log', 'Or all at once:')}`, hint: 'Tap a reading to add it. Fewer values per line means more history fits.' })}
       ${UI.toggle({ id: 'eepromLogHourly', label: 'One file per hour (last 24 h) instead of per day (last month)', checked: !!c.eepromLogHourly, hint: 'Per day keeps a rolling month at day resolution; per hour keeps a rolling 24 hours at finer detail. Changing this erases the existing log.' })}
       ${UI.disclosure('How much fits?', html`
         <p class="hint">Each day (or hour) file holds about 2 KB on the 64 KB chip (FT24C512A, current modules) or 1 KB on the 32 KB chip (earlier modules) — the device detects which. A file that fills up wraps around and overwrites its own oldest lines, so the newest readings are always kept.</p>
@@ -156,6 +156,7 @@
         ${UI.card({ title: 'Clock', icon: 'clock', body: html`<p class="hint">Timestamps in the log are local time. The clock is set from the network when WiFi is up; the button under Stored data sets it from this browser instead.</p>${UI.clockFields(c)}` })}
         ${UI.card({ title: 'Stored data', icon: 'file-text', body: html`<div id="log-files">${filesInner()}</div>` })}`;
     },
+    on: { sensors() { const el = $('#log-chips'); if (el) T.render(el, UI.chips('eepromLogMessage', null, ' ')); } },
     mount(root) {
       loadLog();
       root.addEventListener('click', e => {

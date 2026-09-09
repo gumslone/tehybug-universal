@@ -125,14 +125,14 @@
           <div class="filepick" data-nosave>
             <input type="file" id="ota-file" accept=".bin,.bin.gz">
             <label for="ota-file" class="btn">${T.icon('file-text')} Choose .bin file</label>
-            <span class="fname hint" id="ota-name">No file chosen</span>
+            <div class="fname" id="ota-name"><span class="hint">No file chosen yet</span></div>
           </div>
           <div class="row mt"><button type="button" class="btn btn-primary" id="ota-install" disabled>${T.icon('upload')} Install</button><span class="hint" id="ota-status"></span></div>
           <div class="progress mt" id="ota-progress" hidden><div></div></div>
           <p class="hint mt">Download the file for your board below, pick it here, install. The device flashes it and restarts; settings are kept. The device's own bare upload page is at <a href="/update" target="_blank" rel="noopener">/update</a>.</p>` })}
         ${UI.card({ title: 'Downloads', icon: 'download', body: html`
           <p class="hint">The current binaries from the repository. <a href="${T.REPO}/releases/latest" target="_blank" rel="noopener">Releases on GitHub</a> list what changed.</p>
-          ${UI.table(['Build', 'For', ''], BUILDS.map(b => [html`<code>${b[0]}</code>${b[2] === mine && !/_debug/.test(b[0]) ? html` <span class="badge ok">your board</span>` : ''}`, b[1], html`<a class="btn btn-sm" href="${RAW}tehybug.ino.${b[0]}.bin" target="_blank" rel="noopener">${T.icon('download')} Download</a>`]))}
+          ${UI.table(['Build', ''], BUILDS.map(b => [html`<code>${b[0]}</code>${b[2] === mine && !/_debug/.test(b[0]) ? html` <span class="badge ok">your board</span>` : ''}<div class="hint">${b[1]}</div>`, html`<a class="btn btn-sm" href="${RAW}tehybug.ino.${b[0]}.bin" target="_blank" rel="noopener">${T.icon('download')} Download</a>`]))}
           <p class="hint">The <code>_debug</code> builds print over serial and are larger — only for troubleshooting.</p>` })}
         ${UI.card({ title: 'Changelog', icon: 'list', body: html`<div id="changelog" class="small"><p class="hint">Loading…</p></div>` })}`;
     },
@@ -142,9 +142,13 @@
       root.addEventListener('change', e => {
         if (e.target.id !== 'ota-file') return;
         picked = e.target.files && e.target.files[0] ? e.target.files[0] : null;
-        $('#ota-name').textContent = picked ? picked.name + ' (' + T.fmt.bytes(picked.size) + ')' : 'No file chosen';
+        const match = picked && fileMatchesBoard(picked.name);
+        T.render($('#ota-name'), picked
+          ? html`<strong>${picked.name}</strong> <span class="hint">${T.fmt.bytes(picked.size)}</span> ${match ? html`<span class="badge ok">your board</span>` : html`<span class="badge warn">not the ${T.buildName()} build</span>`}`
+          : html`<span class="hint">No file chosen yet</span>`);
         $('#ota-install').disabled = !picked;
-        $('#ota-status').textContent = picked && !fileMatchesBoard(picked.name) ? 'This does not look like the ' + T.buildName() + ' build.' : '';
+        T.render($('#ota-install'), html`${T.icon('upload')} ${picked && !match ? 'Install anyway…' : 'Install'}`);
+        $('#ota-status').textContent = picked && !match ? 'Check the Downloads list below for the right file.' : '';
       });
       root.addEventListener('click', e => { if (e.target.closest('#ota-install')) install(); });
     },

@@ -9,7 +9,6 @@
   // The firmware clamps intervals to 10 s .. the longest deep sleep the chip
   // can do (about 3.5 h); say so where the number is typed.
   const maxInterval = () => (T.isDisplay() ? 0 : parseInt(T.State.info.deepSleepMax, 10) || 0);
-  const intervalHint = () => (maxInterval() ? 'At least 10 s, at most ' + T.fmt.secs(maxInterval()) + ' (the longest sleep the chip can do).' : 'At least 10 s.');
   const clampInterval = v => { const m = maxInterval(); return Math.max(10, m ? Math.min(m, v) : v); };
   // https needs the TLS client, which the 1 MB build for first-generation boards leaves out
   const checkScheme = (url, fieldId) => { if (T.isGeneric() && /^https:/i.test(url)) throw T.fail('First-generation boards have no TLS client — use an http:// address', fieldId); };
@@ -30,7 +29,7 @@
       ${UI.toggle({ id: 'cloudActive', cls: 'big', label: 'Send to TeHyBug Cloud', checked: on })}
       <div id="cloud-fields" ${on ? '' : 'hidden'}>
         <div class="field"><label>Your device key</label><div class="row"><code>${key || '…'}</code>${key ? html`<button type="button" class="btn btn-sm" data-copy="${key}">${T.icon('copy')} Copy</button>` : ''}</div><div class="hint">Add the device to your tehybug.com account with this key.</div></div>
-        ${UI.field({ id: 'cloudFreq', label: 'Send every', labelHint: 'seconds', type: 'number', value: on && c.httpGetFrequency ? c.httpGetFrequency : 900, attrs: 'min="60" inputmode="numeric"', hint: '900 s (15 min) suits a battery device; the cloud keeps the history either way. ' + intervalHint() })}
+        ${UI.interval({ id: 'cloudFreq', value: on && c.httpGetFrequency ? c.httpGetFrequency : 900, min: 60, max: maxInterval(), hint: '15 minutes suits a battery device; the cloud keeps the history either way.' })}
         <div class="hint">The device will request <code id="cloud-url">${cloudPreview()}</code> — always in °C, whatever the °C/°F switch shows.</div>
       </div>` });
   }
@@ -45,11 +44,11 @@
       ${UI.choice({ name: 'mqttMode', value: mode, options })}
       <div id="mqtt-fields" ${mode === 'off' ? 'hidden' : ''}>
         <h3 class="mt">Broker</h3>
-        ${UI.field({ id: 'mqttServer', label: 'Server', labelHint: 'IP or hostname', value: c.mqttServer === '0.0.0.0' ? '' : c.mqttServer, placeholder: '192.168.1.10 or homeassistant.local', attrs: 'autocomplete="off" maxlength="63" inputmode="url"' })}
         <div class="fields-inline">
-          ${UI.field({ id: 'mqttPort', label: 'Port', type: 'number', value: c.mqttPort || 1883, attrs: 'inputmode="numeric"', hint: 'Usually 1883 — plain MQTT; this firmware does not speak TLS.' })}
-          ${UI.field({ id: 'mqttFrequency', label: 'Send every', labelHint: 's', type: 'number', value: c.mqttFrequency || 600, attrs: 'min="10" inputmode="numeric"', hint: intervalHint() })}
+          ${UI.field({ id: 'mqttServer', label: 'Server', labelHint: 'IP or hostname', value: c.mqttServer === '0.0.0.0' ? '' : c.mqttServer, placeholder: '192.168.1.10 or homeassistant.local', attrs: 'autocomplete="off" maxlength="63" inputmode="url" data-required="Enter the broker address"' })}
+          ${UI.field({ id: 'mqttPort', label: 'Port', type: 'number', value: c.mqttPort || 1883, attrs: 'inputmode="numeric"', hint: 'Usually 1883 — plain MQTT, no TLS.' })}
         </div>
+        ${UI.interval({ id: 'mqttFrequency', value: c.mqttFrequency || 600, max: maxInterval() })}
         <div class="fields-inline">
           ${UI.field({ id: 'mqttUser', label: 'User', value: c.mqttUser, placeholder: 'optional', attrs: 'autocomplete="off"' })}
           ${UI.password({ id: 'mqttPassword', label: 'Password', value: c.mqttPassword, placeholder: 'optional', hint: c.mqttPassword === '********' ? 'A password is stored; it is never shown here. Type to replace it, clear the field to remove it.' : '' })}
@@ -57,7 +56,7 @@
         <div id="mqtt-ha" ${mode === 'ha' ? '' : 'hidden'}>${UI.note('info', html`In Home Assistant: install the <strong>Mosquitto broker</strong> add-on, create a user for it (Settings → People), enable the <strong>MQTT</strong> integration, and enter that user above with Home Assistant's address as the server. The TeHyBug shows up under Settings → Devices &amp; services → MQTT after its first send.`)}</div>
         <div id="mqtt-custom" ${mode === 'custom' ? '' : 'hidden'}>
           <h3 class="mt">Topic &amp; payload</h3>
-          ${UI.field({ id: 'mqttMasterTopic', label: 'Topic', value: c.mqttMasterTopic, placeholder: 'home/sensors/tehybug' })}
+          ${UI.field({ id: 'mqttMasterTopic', label: 'Topic', value: c.mqttMasterTopic, placeholder: 'home/sensors/tehybug', attrs: 'data-required="Enter the topic to publish to"' })}
           ${UI.field({ id: 'mqttMessage', label: 'Payload template', value: c.mqttMessage, placeholder: '{"temp":"%temp%", "humi":"%humi%"}', after: UI.fill('mqttMessage', 'json'), hint: html`<code>%placeholders%</code> are replaced with readings before publishing; an unknown one is sent as written, which is how you spot a typo.` })}
           ${UI.toggle({ id: 'mqttRetained', label: 'Retained', checked: !!c.mqttRetained, hint: 'The broker keeps the last message for new subscribers.' })}
         </div>
@@ -71,7 +70,7 @@
       ${UI.toggle({ id: 'getActive', label: 'Request a URL with the readings', checked: custom, hint: 'For simple logging services and webhooks: the values ride in the query string.' })}
       <div id="get-fields" ${custom ? '' : 'hidden'}>
         ${UI.field({ id: 'httpGetURL', label: 'URL', type: 'url', value: url, placeholder: 'https://example.com/log?device=%key%&t=%temp%', attrs: 'inputmode="url" autocomplete="off"', after: UI.fill('httpGetURL', 'query', 'Keep the server, rebuild the query from my sensors:') })}
-        ${UI.field({ id: 'httpGetFrequency', label: 'Send every', labelHint: 'seconds', type: 'number', value: c.httpGetFrequency || 900, attrs: 'min="10" inputmode="numeric"', hint: intervalHint() })}
+        ${UI.interval({ id: 'httpGetFrequency', value: c.httpGetFrequency || 900, max: maxInterval() })}
       </div>` });
   }
 
@@ -81,7 +80,7 @@
       <div id="post-fields" ${c.httpPostActive ? '' : 'hidden'}>
         ${UI.field({ id: 'httpPostURL', label: 'URL', type: 'url', value: c.httpPostURL, placeholder: 'https://example.com/api/readings', attrs: 'inputmode="url" autocomplete="off"' })}
         ${UI.field({ id: 'httpPostJson', label: 'JSON body template', value: c.httpPostJson, placeholder: '{"device":"%key%","temp":"%temp%","humi":"%humi%"}', after: UI.fill('httpPostJson', 'json') })}
-        ${UI.field({ id: 'httpPostFrequency', label: 'Send every', labelHint: 'seconds', type: 'number', value: c.httpPostFrequency || 900, attrs: 'min="10" inputmode="numeric"', hint: intervalHint() })}
+        ${UI.interval({ id: 'httpPostFrequency', value: c.httpPostFrequency || 900, max: maxInterval() })}
       </div>` });
   }
 

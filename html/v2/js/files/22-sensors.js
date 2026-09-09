@@ -46,7 +46,7 @@
         { value: 'adc', label: 'Analog sensor (ADC)', hint: 'Soil moisture, light, a voltage → %adc%' }
       ];
       return html`${UI.pagehead('Sensors', 'Tell the device what is plugged into its ports. I²C sensors are found by themselves.')}
-        ${UI.note('warn', 'Only switch on a sensor that is really attached: the firmware waits for it, and a missing one can keep the device restarting.')}
+        ${UI.card({ title: 'Found on I²C at start-up', icon: 'activity', body: html`<div id="i2c-found">${i2cInner()}</div>` })}
         <div class="grid-2">
         ${generic ? '' : UI.card({ title: 'Port A (black)', icon: 'cpu', body: html`
           <p class="hint">Has its own pin, so it never gets in the way of I²C sensors or the clock/data-log module. One sensor at a time.</p>
@@ -61,7 +61,7 @@
             { value: 'ds18b20', label: 'DS18B20', hint: 'Temperature → %temp%' }
           ] })}` })}
         </div>
-        ${UI.card({ title: 'I²C sensors & modules', icon: 'activity', body: html`<div id="i2c-found">${i2cInner()}</div>` })}
+        <div id="port-warn" ${portA !== 'none' || portB !== 'none' ? '' : 'hidden'}>${UI.note('warn', 'Only switch on a sensor that is really attached: the firmware waits for it, and a missing one can keep the device restarting.')}</div>
         ${UI.card({ title: 'Calibration', icon: 'sliders', body: html`
           <p class="hint">Offsets added to the readings. Compare with a reference — a good thermometer, a salt test for humidity (75 %RH over saturated NaCl), the local pressure at your altitude — and enter the difference.</p>
           ${UI.toggle({ id: 'calibrationActive', label: 'Apply the offsets', checked: !!c.calibrationActive })}
@@ -70,6 +70,13 @@
             ${UI.field({ id: 'calibrationHumi', label: 'Humidity', labelHint: '%RH', type: 'number', value: c.calibrationHumi == null ? 0 : c.calibrationHumi, attrs: 'step="0.1"' })}
             ${UI.field({ id: 'calibrationQfe', label: 'Pressure', labelHint: 'hPa', type: 'number', value: c.calibrationQfe == null ? 0 : c.calibrationQfe, attrs: 'step="0.1"', hint: 'Station pressure (QFE), not sea-level (QNH)' })}
           </div>` })}`;
+    },
+    mount(root) {
+      root.addEventListener('change', e => {
+        if (e.target.name !== 'portA' && e.target.name !== 'portB') return;
+        const any = ['portA', 'portB'].some(n => { const v = T.radio(n); return v && v !== 'none'; });
+        T.show('port-warn', any);
+      });
     },
     collect() {
       const display = T.isDisplay();

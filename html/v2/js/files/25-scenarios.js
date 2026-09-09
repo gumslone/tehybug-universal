@@ -4,10 +4,10 @@
   const T = window.TeHyBug, html = T.html, UI = T.UI, $ = T.$;
   const COUNT = 3;
   const TYPES = [
-    { value: 'get', label: 'Request a URL (HTTP GET)' },
-    { value: 'post', label: 'POST JSON to a URL' },
-    { value: 'io13_1', label: 'Switch IO_13 on (HIGH, 3.3 V)' },
-    { value: 'io13_0', label: 'Switch IO_13 off (LOW)' }
+    { value: 'get', label: 'request a URL (HTTP GET)', short: 'request a URL' },
+    { value: 'post', label: 'POST JSON to a URL', short: 'POST JSON' },
+    { value: 'io13_1', label: 'switch IO_13 on (HIGH, 3.3 V)', short: 'switch IO_13 on' },
+    { value: 'io13_0', label: 'switch IO_13 off (LOW)', short: 'switch IO_13 off' }
   ];
   const CONDITIONS = [{ value: 'gt', label: 'is above' }, { value: 'lt', label: 'is below' }, { value: 'eq', label: 'equals' }];
 
@@ -18,8 +18,25 @@
     const keys = T.Readings.known().filter(k => !/^cs2?$/.test(k));
     ['temp', 'humi'].forEach(k => { if (keys.indexOf(k) < 0) keys.push(k); });
     if (stored && keys.indexOf(stored) < 0) keys.push(stored);
-    return keys.map(k => ({ value: k, label: T.Readings.name(k) + (T.Readings.unit(k) ? ' (' + T.Readings.unit(k) + ')' : '') }));
+    return keys.map(k => ({ value: k, label: T.Readings.name(k) }));
   }
+  // "Temperature is above 30 °C → request a URL"
+  function summaryText(v) {
+    const cond = (CONDITIONS.find(x => x.value === v.condition) || CONDITIONS[0]).label;
+    const t = TYPES.find(x => x.value === v.type) || TYPES[0];
+    const unit = T.Readings.unit(v.data);
+    return T.Readings.name(v.data) + ' ' + cond + ' ' + (v.value === '' || v.value == null ? '…' : v.value) + (unit ? ' ' + unit : '') + ' → ' + t.short;
+  }
+  const nowText = k => { const v = T.Readings.value(k); const u = T.Readings.unit(k); return v ? 'now ' + v + (u ? ' ' + u : '') : ''; };
+  function refreshLive(n) {
+    const p = 'sc' + n + '_';
+    const k = T.val(p + 'data') || 'temp';
+    const unit = document.querySelector('[data-unit="' + n + '"]'), now = document.querySelector('[data-now="' + n + '"]'), sum = document.querySelector('[data-summary="' + n + '"]');
+    if (unit) unit.textContent = T.Readings.unit(k);
+    if (now) now.textContent = nowText(k);
+    if (sum) sum.textContent = summaryText({ data: k, condition: T.val(p + 'condition'), value: T.val(p + 'value'), type: T.val(p + 'type') });
+  }
+  const opts = (list, value) => html`${list.map(o => html`<option value="${o.value}" ${String(o.value) === String(value) ? 'selected' : ''}>${o.label}</option>`)}`;
   // readings arrived after the page was drawn: grow the lists in place
   function refreshDataOptions() {
     for (let n = 1; n <= COUNT; n++) {
@@ -36,19 +53,30 @@
     const p = 'sc' + n + '_';
     const type = c[p + 'type'] || 'get';
     const isHttp = type === 'get' || type === 'post';
+    const active = !!c[p + 'active'];
+    const k = c[p + 'data'] || 'temp';
+    const value = c[p + 'value'] == null ? '' : c[p + 'value'];
     return UI.card({ title: 'Scenario ' + n, icon: 'layers', body: html`
-      ${UI.toggle({ id: p + 'active', label: 'Enabled', checked: !!c[p + 'active'] })}
-      <div class="fields-inline mt">
-        ${UI.select({ id: p + 'data', label: 'When', options: dataOptions(c[p + 'data']), value: c[p + 'data'] || 'temp' })}
-        ${UI.select({ id: p + 'condition', label: 'Condition', options: CONDITIONS, value: c[p + 'condition'] || 'gt' })}
-      </div>
-      ${UI.field({ id: p + 'value', label: 'Value', type: 'number', value: c[p + 'value'] == null ? '' : c[p + 'value'], attrs: 'step="any"', placeholder: '25' })}
-      ${UI.select({ id: p + 'type', label: 'Then', options: TYPES, value: type })}
+      ${UI.toggle({ id: p + 'active', label: 'Enabled', checked: active })}
+      <div class="hint mt" data-summary="${n}" ${active ? 'hidden' : ''}>${summaryText({ data: k, condition: c[p + 'condition'] || 'gt', value, type })}</div>
+      <div data-body="${n}" ${active ? '' : 'hidden'}>
+        <div class="sentence mt">
+          <span class="word">When</span>
+          <span class="field field-inline"><select id="${p}data" aria-label="Reading">${opts(dataOptions(c[p + 'data']), k)}</select></span>
+          <span class="field field-inline"><select id="${p}condition" aria-label="Condition">${opts(CONDITIONS, c[p + 'condition'] || 'gt')}</select></span>
+          <span class="field field-inline value" data-field="${p}value"><input id="${p}value" type="number" step="any" inputmode="decimal" placeholder="25" value="${value}" aria-label="Value"><span class="unit" data-unit="${n}">${T.Readings.unit(k)}</span></span>
+          <span class="hint now" data-now="${n}">${nowText(k)}</span>
+        </div>
+        <div class="sentence">
+          <span class="word">then</span>
+          <span class="field field-inline"><select id="${p}type" aria-label="Action">${opts(TYPES, type)}</select></span>
+        </div>
       <div data-http="${n}" ${isHttp ? '' : 'hidden'}>
         ${UI.field({ id: p + 'url', label: 'URL', type: 'url', value: c[p + 'url'], placeholder: 'https://maker.ifttt.com/trigger/high_temp/with/key/…', attrs: 'inputmode="url" autocomplete="off"' })}
         <div data-post="${n}" ${type === 'post' ? '' : 'hidden'}>
           ${UI.field({ id: p + 'message', label: 'JSON body', value: c[p + 'message'], placeholder: '{"alert":"high_temp","value":"%temp%"}', after: UI.fill(p + 'message', 'json') })}
         </div>
+      </div>
       </div>` });
   }
 
@@ -68,15 +96,23 @@
             <li>Scenarios are checked while the device is live and sending. HTTP actions need the network; on the Display Weatherstation the pin actions keep working in offline mode too.</li>
           </ul>` })}`;
     },
-    on: { sensors() { refreshDataOptions(); } },
+    on: { sensors() { refreshDataOptions(); for (let n = 1; n <= COUNT; n++) refreshLive(n); } },
     mount(root) {
       root.addEventListener('change', e => {
-        const m = /^sc(\d)_type$/.exec(e.target.id || '');
+        const m = /^sc(\d)_(\w+)$/.exec(e.target.id || '');
         if (!m) return;
         const n = m[1], v = e.target.value;
-        T.$('[data-http="' + n + '"]', root).hidden = !(v === 'get' || v === 'post');
-        T.$('[data-post="' + n + '"]', root).hidden = v !== 'post';
+        if (m[2] === 'type') {
+          T.$('[data-http="' + n + '"]', root).hidden = !(v === 'get' || v === 'post');
+          T.$('[data-post="' + n + '"]', root).hidden = v !== 'post';
+        }
+        if (m[2] === 'active') {
+          T.$('[data-body="' + n + '"]', root).hidden = !e.target.checked;
+          T.$('[data-summary="' + n + '"]', root).hidden = e.target.checked;
+        }
+        refreshLive(n);
       });
+      root.addEventListener('input', e => { const m = /^sc(\d)_value$/.exec(e.target.id || ''); if (m) refreshLive(m[1]); });
     },
     collect() {
       const out = {};

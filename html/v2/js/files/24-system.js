@@ -58,8 +58,8 @@
             ? html`<p>The device is live: it sends on schedule${display ? ' while the screen and clock keep running' : ''}.</p>
               ${display ? html`<div class="row"><button type="button" class="btn" id="back-to-setup">${T.icon('settings')} Back to setup mode</button><span class="hint">Pauses sending and brings the setup access point back.</span></div>` : ''}`
             : html`<p>Sending is paused while you set things up. ${dest.length ? html`Ready to go: <strong>${dest.map(d => d.label).join(', ')}</strong>.` : html`No destination is switched on yet — see <a href="#/senddata">Send data</a>.`}</p>
-              <div class="row"><button type="button" class="btn btn-primary" data-golive>${T.icon('radio')} Go live</button>
-              <span class="hint">${display ? 'The screen, clock, alarms and this page keep running.' : 'This page stops being served; RESET then MODE brings it back.'}</span></div>`}` })}
+              <div class="row"><button type="button" class="btn btn-primary" data-golive ${dest.length ? '' : 'disabled'}>${T.icon('radio')} Go live</button>
+              <span class="hint">${dest.length ? (display ? 'The screen, clock, alarms and this page keep running.' : 'This page stops being served; RESET then MODE brings it back.') : html`Switch on a destination on <a href="#/senddata">Send data</a> first.`}</span></div>`}` })}
 
         ${display
           ? UI.card({ title: 'Power', icon: 'battery', body: html`<p class="hint mb0">The Display Weatherstation is mains powered and its screen has to keep drawing, so it has no sleep modes. To run it without WiFi, use offline mode on <a href="#/datalog">Data log</a> or hold the right button for 10 seconds.</p>` })

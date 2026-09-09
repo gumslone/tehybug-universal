@@ -372,6 +372,31 @@ body.locked { position: fixed; left: 0; right: 0; overflow: hidden; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .fields-inline { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: end; }
 .fields-inline .field { margin-bottom: 0; }
+.mt-s { margin-top: 8px; }
+
+/* Interval presets: "= 15 min" and a row of chips under the number */
+.presets { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 8px; }
+.presets .echo { margin: 0 4px 0 0; }
+.presets .chip { padding: 3px 10px; min-height: 28px; font-size: .82rem; }
+
+/* A rule written as a sentence: "When [reading] [is above] [30] °C" */
+.sentence { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 10px; }
+.sentence .word { font-weight: 600; }
+.sentence .now { flex-basis: 100%; margin-top: -2px; }
+.field.field-inline { margin: 0; display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.field.field-inline select { width: auto; max-width: 100%; }
+.field.field-inline.value input { width: 96px; }
+.field.field-inline .unit { font-weight: 600; color: var(--muted); }
+.field.field-inline .field-error { flex-basis: 100%; margin: 0; }
+
+/* Go-live checklist */
+.checklist { list-style: none; margin: 0 0 4px; padding: 0; }
+.checklist li { display: flex; gap: 10px; align-items: flex-start; padding: 6px 0; border-top: 1px solid var(--border); }
+.checklist li:first-child { border-top: 0; }
+.checklist li .i { flex: none; margin-top: .15em; }
+.checklist li.ok .i { color: var(--ok); }
+.checklist li.warn .i { color: var(--warn); }
+.checklist li.warn { font-weight: 600; }
 
 /* Switch */
 .switch {
@@ -782,7 +807,10 @@ details.disclosure.faq:first-of-type { border-top: 0; }
 /* visually hidden, not display:none — it has to stay reachable by keyboard */
 .filepick input[type="file"] { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; clip: rect(0 0 0 0); }
 .filepick input[type="file"]:focus-visible + label { outline: 2px solid var(--primary); outline-offset: 2px; }
-.filepick .fname { flex: 1; min-width: 0; word-break: break-all; font-weight: 600; }
+.filepick .fname { flex-basis: 100%; min-width: 0; display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; }
+.filepick .fname strong { overflow-wrap: anywhere; }
+.filepick .badge { white-space: nowrap; }
+.table code { white-space: nowrap; }
 
 /* Placeholder reference */
 .ph-list { display: grid; grid-template-columns: 1fr; gap: 6px 14px; font-size: .92rem; }
