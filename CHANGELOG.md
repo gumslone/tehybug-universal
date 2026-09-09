@@ -5,6 +5,30 @@ build on every release (see [`ci/changelog.sh`](ci/changelog.sh)). Firmware
 versions are date-based (`YYMMDDHHMM`); see the
 [releases](https://github.com/gumslone/tehybug-universal/releases) for the tags.
 
+## v1.1.0 (2026-09-09)
+
+- Version 1.1.0
+- README: current screenshots and first-steps text
+- Web UI v2: nine small things that make the pages more obvious
+- WiFi portal: show the new address line once
+- WiFi portal: keep the AP up after a save so the saved page can show the new address
+- Never cache the device page; show the new address after saving WiFi
+- Web UI v2: Change WiFi network button, and how to get back to WiFi setup
+- Change the WiFi network from the web UI
+- Serve the device page gzipped from flash
+- WiFi portal: point at the configuration, offer to skip WiFi
+- Review fixes: silence the buzzer once, a Linux-safe bundle check, a password hint
+- Web UI v2: boot from the built-in copy, mock serves the device's real page
+- Serve the built-in web UI when tehybug.com is out of reach
+- Build the web UI into the firmware image
+- Web UI v2: test the HTTPS targets before saving
+- Let the setup page test a certificate pin against the real server
+- Web UI v2: clock settings, per-host pins, log downloads, update check, UI tests
+- Per-host certificate pins, alarms that stop, a clock that keeps ticking
+- Set the clock from the network
+- Web UI v2: HTTPS certificate check card
+- Optional certificate pin for https targets
+
 ## v1.0.0 (2026-09-03)
 
 - Device page: gutter on the card, not on #page; no interval ceiling on the display board
