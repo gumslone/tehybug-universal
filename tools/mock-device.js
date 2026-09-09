@@ -41,7 +41,7 @@ if (BOARD === 'display') {
 }
 const t0 = Date.now();
 const info = () => ({
-  gumboardVersion: '1.0.0', fwBuild: '2609021200', board: BOARD, sketchSize: 561232, freeSketchSpace: 1449984, wifiRSSI: '-58', wifiQuality: 84, wifiSSID: 'MockNet', ipAddress: '127.0.0.1',
+  gumboardVersion: '1.1.0', fwBuild: '2609021200', board: BOARD, sketchSize: 561232, freeSketchSpace: 1449984, wifiRSSI: '-58', wifiQuality: 84, wifiSSID: 'MockNet', ipAddress: '127.0.0.1',
   freeHeap: 25000, chipID: 424242, cpuFreqMHz: 80, sleepModeActive: config.sleepModeActive, deepSleepMax: 12884, key: config.key, uptimeS: Math.round((Date.now() - t0) / 1000), apSsid: 'TEHYBUG-67932',
   detected: { bmx: true, bme680: false, aht20: false, am2320: false, max44009: false, sgp30: false, ds3231: true, eeprom: true }
 });
