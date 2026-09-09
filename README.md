@@ -186,7 +186,7 @@ Demo of the web interface (a simulated device, nothing to flash): https://tehybu
 - TeHyBug will boot, the LED will turn solid blue
 - Connect to a TeHyBug wifi network like the image below (Password: TeHyBug123)
 - <img src="images/wifimanager.png" width="350">
-- open http://192.168.4.1/ in your browser, and click the configuration button (the page also offers *Skip WiFi for now → open the configuration*, which takes you straight to the TeHyBug configuration on this access point; and after saving your WiFi it hands you over there by itself)
+- open http://192.168.4.1/ in your browser and tap *Configure WiFi* (the page also offers *Skip WiFi → open the configuration*, which takes you straight to the TeHyBug configuration on this access point; after saving your WiFi, the page shows the device's new address on your network and hands you over there by itself)
 - <img src="images/credentials.png" width="350">
 - Provide credentials of your WIFI network and save them
 - If your credentials were correct, the TeHyBug WIFI network will disapear
@@ -196,8 +196,8 @@ Demo of the web interface (a simulated device, nothing to flash): https://tehybu
 Then, on the web interface:
 
 1. **Sensors** — switch on the sensor(s) you attached (I²C sensors are detected automatically), and check the readings appear on the Dashboard.
-2. **Send data** — TeHyBug Cloud, Home Assistant, MQTT, or your own server by HTTP, all on one page. The *"Fill from my sensors"* links build the MQTT payload / POST body / GET query from the sensors this device actually reports, in °C or °F. Save.
-3. **Go live** — the button on the Dashboard (or on *Power & go live*): pick the power mode (Deep sleep for battery) and confirm. The device restarts and starts sending; on battery boards the web interface stops being served, which is expected. The Dashboard's set-up checklist shows which of the three steps are done.
+2. **Send data** — TeHyBug Cloud, Home Assistant, MQTT, or your own server by HTTP, all on one page. The *"Fill from my sensors"* links build the MQTT payload / POST body / GET query from the sensors this device actually reports, in °C or °F. Save — the button only lights up once something changed, and says whether saving restarts the device.
+3. **Go live** — the button on the Dashboard (or on *Power & go live*), greyed out until a destination is set: it opens with a checklist of readings and destinations, then pick the power mode (Deep sleep for battery) and confirm. The device restarts and starts sending; on battery boards the web interface stops being served, which is expected. The Dashboard's set-up checklist shows which of the three steps are done.
 4. **Getting back in later** — press RESET, then MODE within a second (see "Return to Config mode" above). A device that has nothing configured to serve always starts its setup portal, so it can't lock you out.
 5. **Changing the WiFi network** — *Power & go live → Change WiFi network* restarts the device into its own access point with the network chooser; nothing else is erased, and *Exit* keeps the old network. If the saved network is simply gone, setup mode opens the chooser by itself.
 
