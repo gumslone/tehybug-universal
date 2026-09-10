@@ -38,7 +38,9 @@
   // password, which the device never reveals), so the file can be kept or
   // loaded onto another TeHyBug.
   const NOT_EXPORTED = ['key', 'configModeActive', 'reboot', 'mqttPassword'];
+  const notLoaded = () => { if (T.State.configLoaded) return false; T.Shell.toast('The settings have not loaded from the device yet — try again in a moment', 'warn', 5000); return true; };
   function exportSettings() {
+    if (notLoaded()) return;
     const c = T.State.config, i = T.State.info;
     const out = { _tehybug: { firmware: i.gumboardVersion || '', board: T.board(), exported: new Date().toISOString(), note: 'TeHyBug settings backup - load it on Power & go live' } };
     Object.keys(c).forEach(k => { if (NOT_EXPORTED.indexOf(k) < 0) out[k] = c[k]; });
@@ -46,6 +48,7 @@
     T.Shell.toast('Settings saved as a file' + (c.mqttPassword === '********' ? ' - the MQTT password is not in it' : ''));
   }
   async function importSettings(file) {
+    if (notLoaded()) return;
     let data;
     try { data = JSON.parse(await file.text()); } catch (e) { T.Shell.toast('This is not a settings file', 'danger'); return; }
     if (!data || typeof data !== 'object' || Array.isArray(data)) { T.Shell.toast('This is not a settings file', 'danger'); return; }
