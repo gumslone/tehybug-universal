@@ -487,6 +487,17 @@
     } catch (e) { return false; }
   };
 
+  // Hands the browser a file to save (the device cannot set a download
+  // header itself). Used for data-log files and the settings backup.
+  T.saveAs = (name, text, type) => {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([text], { type: type || 'text/plain' }));
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  };
+
   /* ---------------- Time zones ---------------- */
   // [IANA name the browser reports, POSIX TZ string the ESP8266 understands].
   // The common zones; anything else goes in as a custom POSIX string.

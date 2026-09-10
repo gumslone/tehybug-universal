@@ -807,6 +807,7 @@ details.disclosure.faq:first-of-type { border-top: 0; }
 /* visually hidden, not display:none — it has to stay reachable by keyboard */
 .filepick input[type="file"] { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; clip: rect(0 0 0 0); }
 .filepick input[type="file"]:focus-visible + label { outline: 2px solid var(--primary); outline-offset: 2px; }
+.filepick.slim { display: inline-flex; padding: 0; border: 0; background: transparent; position: relative; }
 .filepick .fname { flex-basis: 100%; min-width: 0; display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; }
 .filepick .fname strong { overflow-wrap: anywhere; }
 .filepick .badge { white-space: nowrap; }

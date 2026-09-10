@@ -68,16 +68,8 @@
     try { await T.Api.setTime(); T.Shell.toast('Clock set'); await loadLog(); }
     catch (e) { T.Shell.toast('Could not set the clock: ' + e.message, 'danger'); }
   }
-  // Hands the browser a file to save. (The device cannot set a download
-  // header itself, and its files are named by day number, not date.)
-  function saveAs(name, text, type) {
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(new Blob([text], { type: type || 'text/plain' }));
-    a.download = name;
-    document.body.appendChild(a);
-    a.click();
-    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
-  }
+  // the device's files are named by day number, not date: name the download
+  const saveAs = T.saveAs;
   const TAGS = { t: 'temp', t2: 'temp2', h: 'humi', h2: 'humi2', p: 'qfe', al: 'alt', l: 'lux', x: 'adc', q: 'iaq', c: 'eco2', v: 'bvoc', a: 'air' };
   // "07:55 22.6t 48.3h 1013.2p" -> rows [time, reading, value]; a custom
   // template's line comes through as one raw row
