@@ -20,7 +20,7 @@ RANGE="HEAD"
 # User-facing commit subjects only: drop merges, the CI's own binary/changelog
 # commits, and anything marked [skip ci].
 COMMITS="$(git log "$RANGE" --no-merges --format='- %s' \
-  | grep -viE '\[skip ci\]|^- (Merge |Update changelog|Build firmware binaries)' \
+  | grep -viE '\[skip ci\]|^- (Merge |Update changelog|Build firmware binaries|Version [0-9]+\.[0-9]+\.[0-9]+$)' \
   || true)"
 [ -z "$COMMITS" ] && COMMITS="- Maintenance and build updates"
 

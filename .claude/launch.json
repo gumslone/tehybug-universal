@@ -1,0 +1,61 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "mock-device",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        "tools/mock-device.js",
+        "--port",
+        "8285"
+      ],
+      "port": 8285
+    },
+    {
+      "name": "mock-offline",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        "tools/mock-device.js",
+        "--port",
+        "8294",
+        "--offline"
+      ],
+      "port": 8294
+    },
+    {
+      "name": "mock-display",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        "tools/mock-device.js",
+        "--port",
+        "8290",
+        "--board",
+        "display"
+      ],
+      "port": 8290
+    },
+    {
+      "name": "mock-generic",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        "tools/mock-device.js",
+        "--port",
+        "8292",
+        "--board",
+        "generic"
+      ],
+      "port": 8292
+    },
+    {
+      "name": "demo",
+      "runtimeExecutable": "php",
+      "runtimeArgs": [
+        "-S",
+        "localhost:8295",
+        "-t",
+        "html/v2"
+      ],
+      "port": 8295
+    }
+  ]
+}
