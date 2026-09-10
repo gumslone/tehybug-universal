@@ -83,7 +83,8 @@
   T.definePage({
     id: 'scenarios', title: 'Scenarios',
     nav: { group: 'more', icon: 'layers', order: 0 },
-    save: { reboot: true, label: 'Save scenarios' },
+    // the firmware reads the rules on every send, so a save applies at once
+    save: { reboot: false, label: 'Save scenarios' },
     render() {
       const c = T.State.config;
       return html`${UI.pagehead('Scenarios', 'If a reading crosses a value, request a URL or switch a pin — checked on every send, while the device is live.')}

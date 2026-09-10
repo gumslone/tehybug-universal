@@ -31,11 +31,21 @@
     catch (e) { T.Shell.toast('Could not set the clock: ' + e.message, 'danger'); }
   }
 
+  // true when a clock field was edited on this page (compared with what the
+  // page was drawn with, so the zone guessed from the browser alone does
+  // not force a restart on every save)
+  const CLOCK_FIELDS = /^id:(ntpActive|ntpServer|timezoneSelect|timezone)$/;
+  function clockChanged() {
+    return T.Shell.changedFields().some(k => CLOCK_FIELDS.test(k));
+  }
+
   T.definePage({
     id: 'display', title: 'Display & alarms',
     nav: { group: 'more', icon: 'monitor', order: 2 },
     boards: ['display'],
-    save: { reboot: false },
+    // The screen, alarms and night mode read their settings live; only the
+    // clock source (NTP server, time zone) is applied at start-up.
+    save: () => ({ reboot: clockChanged() }),
     render() {
       const c = T.State.config;
       return html`${UI.pagehead('Display & alarms', 'The screen shows a clock page and a sensor page; the two buttons beside it switch between them. Changes apply as soon as you save.')}
