@@ -68,11 +68,24 @@ static void test_full_cycle_renews_and_repeats() {
   CHECK(!renewLease(stuck));
 }
 
+static void test_tx_power() {
+  CASE("txPowerDbm picks the power from the setting and the last signal");
+  CHECK(txPowerDbm("max", -40) == TX_POWER_MAX_DBM);
+  CHECK(txPowerDbm("low", -90) == TX_POWER_LOW_DBM);
+  CHECK(txPowerDbm(nullptr, -40) == TX_POWER_MAX_DBM);   // unset = the default
+  CHECK(txPowerDbm("auto", 0) == TX_POWER_MAX_DBM);      // no reading yet
+  CHECK(txPowerDbm("auto", -50) == TX_POWER_LOW_DBM);    // strong signal
+  CHECK(txPowerDbm("auto", -60) == 14.0f);
+  CHECK(txPowerDbm("auto", -68) == 17.0f);
+  CHECK(txPowerDbm("auto", -75) == TX_POWER_MAX_DBM);    // weak: everything
+}
+
 int main() {
   std::printf("Running wifi_policy tests...\n");
   test_renew_lease_cadence();
   test_renew_lease_period_is_configurable();
   test_next_wake_count();
   test_full_cycle_renews_and_repeats();
+  test_tx_power();
   return SUMMARY();
 }

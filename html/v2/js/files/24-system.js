@@ -120,6 +120,20 @@
           ${T.isGeneric() ? '' : UI.field({ id: 'deviceName', label: 'Device name', labelHint: 'its address on your network', value: c.deviceName || '', placeholder: 'TeHyBug', attrs: 'maxlength="32" autocomplete="off"',
             after: html`<div class="hint">Reachable at <code id="mdns-preview">http://${T.hostLabel(c.deviceName)}.local/</code>. Letters, digits and hyphens; give each device its own name if you have several. The router's client list shows it too.</div>` })}
           <div class="row"><button type="button" class="btn" id="change-wifi">${T.icon('wifi')} Change WiFi network…</button><span class="hint">Restarts into the network chooser on the device's own access point; nothing else is erased.</span></div>` })}
+        ${UI.card({ title: 'WiFi radio', icon: 'radio', body: html`
+          <p class="hint">${i.wifiRSSI ? html`Signal <strong>${i.wifiRSSI} dBm</strong>${i.wifiTxDbm ? html`, sending at <strong>${i.wifiTxDbm} dBm</strong>` : ''}. ` : ''}The chip's defaults suit most homes; these help at the edge of range, or on a battery or supply that sags during the send bursts.</p>
+          <h3>Transmit power</h3>
+          ${UI.choice({ name: 'wifiPower', value: c.wifiPower || 'max', options: [
+            { value: 'max', label: 'Maximum', hint: '20.5 dBm, the chip\'s default. The best reach.' },
+            { value: 'auto', label: 'Automatic', hint: 'Less power while the signal is strong — down to 10 dBm at −55 dBm or better. Easier on a tired battery: the transmit bursts are what dips its voltage. Back to maximum whenever a connect fails.' },
+            { value: 'low', label: 'Low', hint: '10 dBm. For a device right next to the router, or a supply that cannot deliver the bursts.' }
+          ] })}
+          <h3 class="mt">Mode</h3>
+          ${UI.choice({ name: 'wifiMode', value: c.wifiMode || 'n', options: [
+            { value: 'n', label: 'Standard (802.11n)', hint: 'The chip\'s default.' },
+            { value: 'g', label: 'Compatible (802.11g)', hint: 'Slower rates that reach a little further; every router accepts them.' },
+            { value: 'b', label: 'Long range (802.11b)', hint: 'The most sensitive receiver mode, for a device at the edge of range. Some routers and mesh systems have these legacy rates switched off — then the device cannot join at all and opens its setup access point, where you can switch back.' }
+          ] })}` })}
         ${UI.card({ title: 'Backup', icon: 'save', body: html`
           <p class="hint">All settings as one file: to keep, or to load onto another TeHyBug. WiFi credentials and the device key are not part of it.</p>
           <div class="row">
@@ -154,6 +168,8 @@
     collect() {
       const out = {};
       if (!T.isGeneric()) out.deviceName = T.val('deviceName').trim();
+      out.wifiPower = T.radio('wifiPower') || 'max';
+      out.wifiMode = T.radio('wifiMode') || 'n';
       if (!T.isDisplay()) { const p = T.radio('power'); out.sleepModeActive = p === 'deep'; out.lightSleepModeActive = p === 'light'; }
       return out;
     }

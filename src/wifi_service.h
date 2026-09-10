@@ -59,6 +59,10 @@ void connectToWiFi()
   }
   D_print(F("WiFi reconnect attempt "));
   D_println(attempts);
+  // a lowered power is the first suspect once a reconnect has failed
+  if (attempts >= 2 && tehybug.device.wifiPower == "auto") {
+    wifiFullPower();
+  }
   WiFi.reconnect();
 }
 
@@ -202,6 +206,9 @@ bool tryFastConnect() {
   }
 
   D_println(F("WiFi fast reconnect failed, falling back to a full scan"));
+  if (tehybug.device.wifiPower == "auto") {
+    wifiFullPower();
+  }
   clearWifiHint();
   // Note: not WiFi.disconnect(), which erases the stored credentials.
   wifi_station_disconnect();
@@ -227,6 +234,13 @@ void portalRoutes() {
 
 void setupWifi() {
   D_println("Setup WIFI");
+  {
+    // radio first: PHY mode and transmit power before any association,
+    // the power from the signal strength cached with the WiFi hint
+    WifiHint h;
+    const int8_t lastRssi = loadWifiHint(h) ? h.rssi : 0;
+    applyRadioSettings(tehybug.device.wifiPower, tehybug.device.wifiMode, lastRssi);
+  }
 
   // "Change WiFi network" from the web UI: open the portal straight away
   // instead of joining the saved network. The saved credentials stay until

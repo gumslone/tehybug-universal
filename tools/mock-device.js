@@ -28,7 +28,7 @@ const manifest = JSON.parse(fs.readFileSync(path.join(ROOT, 'manifest.json'), 'u
 const config = {
   key: 'mock00112233', mqttActive: false, mqttRetained: false, mqttUser: '', mqttPassword: '', mqttServer: '0.0.0.0', mqttMasterTopic: '/tehybug', mqttMessage: '', mqttPort: 1883, mqttFrequency: 900,
   haActive: false, eepromLogActive: false, eepromLogFrequency: 60, eepromLogMessage: '', eepromLogHourly: false, offlineModeActive: false,
-  httpGetURL: '', httpGetActive: false, httpGetFrequency: 900, httpPostURL: '', httpPostActive: false, httpPostFrequency: 900, httpPostJson: '', httpsFingerprint: '', ntpActive: true, ntpServer: 'pool.ntp.org', timezone: '', deviceName: '',
+  httpGetURL: '', httpGetActive: false, httpGetFrequency: 900, httpPostURL: '', httpPostActive: false, httpPostFrequency: 900, httpPostJson: '', httpsFingerprint: '', ntpActive: true, ntpServer: 'pool.ntp.org', timezone: '', deviceName: '', wifiPower: 'max', wifiMode: 'n',
   calibrationActive: false, calibrationTemp: 0, calibrationHumi: 0, calibrationQfe: 0, configModeActive: true, sleepModeActive: false, lightSleepModeActive: false,
   dht_sensor: false, second_dht_sensor: false, ds18b20_sensor: false, second_ds18b20_sensor: false, adc_sensor: false, rc_active: false, rc_url: ''
 };
@@ -42,7 +42,7 @@ if (BOARD === 'display') {
 const t0 = Date.now();
 const info = () => ({
   gumboardVersion: '1.1.0', fwBuild: '2609021200', board: BOARD, sketchSize: 561232, freeSketchSpace: 1449984, wifiRSSI: '-58', wifiQuality: 84, wifiSSID: 'MockNet', ipAddress: '127.0.0.1',
-  freeHeap: 25000, chipID: 424242, cpuFreqMHz: 80, sleepModeActive: config.sleepModeActive, deepSleepMax: 12884, key: config.key, uptimeS: Math.round((Date.now() - t0) / 1000), apSsid: 'TEHYBUG-67932', mdnsName: hostLabel(config.deviceName),
+  freeHeap: 25000, chipID: 424242, cpuFreqMHz: 80, sleepModeActive: config.sleepModeActive, deepSleepMax: 12884, key: config.key, uptimeS: Math.round((Date.now() - t0) / 1000), apSsid: 'TEHYBUG-67932', mdnsName: hostLabel(config.deviceName), wifiTxDbm: config.wifiPower === 'low' ? 10 : (config.wifiPower === 'auto' ? 14 : 20.5),
   detected: { bmx: true, bme680: false, aht20: false, am2320: false, max44009: false, sgp30: false, ds3231: true, eeprom: true }
 });
 const wobble = (v, r) => (v + (Math.random() - 0.5) * r).toFixed(1);

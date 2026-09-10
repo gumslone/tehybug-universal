@@ -24,6 +24,10 @@ struct Device {
   // Name the device answers to on the network (mDNS + WiFi hostname), as
   // typed; hostLabel() makes the address out of it. Empty = "tehybug".
   String deviceName{};
+  // Radio (wifi_hint.h): transmit power "max" | "auto" | "low", and the
+  // PHY mode "n" | "g" | "b" - the chip's defaults unless changed.
+  String wifiPower{"max"};
+  String wifiMode{"n"};
 };
 struct Sensor {
   bool bmx{false};

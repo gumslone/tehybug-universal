@@ -15,7 +15,7 @@
     haActive: false,
     eepromLogActive: false, eepromLogFrequency: 60, eepromLogMessage: '', eepromLogHourly: false, offlineModeActive: false,
     httpGetURL: '', httpGetActive: false, httpGetFrequency: 900,
-    httpPostURL: '', httpPostActive: false, httpPostFrequency: 900, httpPostJson: '', httpsFingerprint: '', ntpActive: true, ntpServer: 'pool.ntp.org', timezone: '', deviceName: '',
+    httpPostURL: '', httpPostActive: false, httpPostFrequency: 900, httpPostJson: '', httpsFingerprint: '', ntpActive: true, ntpServer: 'pool.ntp.org', timezone: '', deviceName: '', wifiPower: 'max', wifiMode: 'n',
     calibrationActive: false, calibrationTemp: 0, calibrationHumi: 0, calibrationQfe: 0,
     configModeActive: true, sleepModeActive: false, lightSleepModeActive: false,
     dht_sensor: false, second_dht_sensor: false, ds18b20_sensor: false, second_ds18b20_sensor: false, adc_sensor: false,
@@ -30,7 +30,7 @@
     gumboardVersion: '1.0.0', fwBuild: '2609021200', board,
     sketchSize: 561232, freeSketchSpace: 1449984, wifiRSSI: '-61', wifiQuality: 78, wifiSSID: 'Demo WiFi', ipAddress: '192.168.1.42',
     freeHeap: 24816, chipID: 1054321, cpuFreqMHz: 80, sleepModeActive: config.sleepModeActive, deepSleepMax: 12884, key: config.key,
-    uptimeS: Math.round((Date.now() - t0) / 1000), apSsid: 'TEHYBUG-A1B2C3', mdnsName: T.hostLabel(config.deviceName),
+    uptimeS: Math.round((Date.now() - t0) / 1000), apSsid: 'TEHYBUG-A1B2C3', mdnsName: T.hostLabel(config.deviceName), wifiTxDbm: 20.5,
     detected: { bmx: true, bme680: false, aht20: false, am2320: false, max44009: false, sgp30: false, ds3231: true, eeprom: true }
   });
   let clockSet = true;

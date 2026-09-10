@@ -186,6 +186,8 @@ class TeHyBugConfig {
       put(json, full, "ntpServer", m_device.ntpServer, device.ntpServer);
       put(json, full, "timezone", m_device.timezone, device.timezone);
       put(json, full, "deviceName", m_device.deviceName, device.deviceName);
+      put(json, full, "wifiPower", m_device.wifiPower, device.wifiPower);
+      put(json, full, "wifiMode", m_device.wifiMode, device.wifiMode);
 
 #if TEHYBUG_DISPLAY
       // Display board only. The key names are the original display
@@ -399,6 +401,8 @@ class TeHyBugConfig {
       setData(json, "ntpServer", m_device.ntpServer);
       setData(json, "timezone", m_device.timezone);
       setData(json, "deviceName", m_device.deviceName);
+      setData(json, "wifiPower", m_device.wifiPower);
+      setData(json, "wifiMode", m_device.wifiMode);
       // saveConfig() writes "key", so it must be read back here too — without
       // this the stored device key was ignored and regenerated on every boot.
       setData(json, "key", m_device.key);

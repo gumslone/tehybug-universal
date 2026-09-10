@@ -1,5 +1,6 @@
 #pragma once
 #include <stdint.h>
+#include <string.h>
 
 // Policy for the RTC-cached WiFi hint (wifi_service.h). Kept free of hardware
 // so it can be unit-tested on the host (tests/test_wifi_policy.cpp).
@@ -38,6 +39,25 @@ inline uint8_t nextWakeCount(uint8_t wakesSinceDhcp, bool renewed) {
     return 0;
   }
   return wakesSinceDhcp == 255 ? 255 : (uint8_t)(wakesSinceDhcp + 1);
+}
+
+// Transmit power for a connection, from the setting and the signal strength
+// seen last time (0 = no reading yet). "max" is the chip's default and its
+// best reach; "low" is for a device next to the router or on a supply that
+// cannot deliver the transmit bursts; "auto" steps the power down while the
+// signal is strong - the bursts are what dips a tired battery.
+constexpr float TX_POWER_MAX_DBM = 20.5f;
+constexpr float TX_POWER_LOW_DBM = 10.0f;
+inline float txPowerDbm(const char *setting, int8_t lastRssi) {
+  if (setting != nullptr && strcmp(setting, "low") == 0) {
+    return TX_POWER_LOW_DBM;
+  }
+  if (setting != nullptr && strcmp(setting, "auto") == 0 && lastRssi != 0) {
+    if (lastRssi >= -55) return TX_POWER_LOW_DBM;
+    if (lastRssi >= -63) return 14.0f;
+    if (lastRssi >= -70) return 17.0f;
+  }
+  return TX_POWER_MAX_DBM;
 }
 
 } // namespace wifi_policy

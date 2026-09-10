@@ -7,6 +7,7 @@
 // is included first.
 #include <ESP8266WiFi.h>
 #include "debug.h"
+#include "wifi_policy.h"
 
 /* WiFi fast reconnect ------------------------------------------------------
  *
@@ -44,6 +45,9 @@ struct WifiHint {
   uint8_t channel;
   // wakes since the address last came from DHCP (see wifi_policy.h)
   uint8_t wakesSinceDhcp;
+  // signal strength at the last connection, for the automatic transmit
+  // power (0 = unknown)
+  int8_t rssi;
 };
 
 // RTC user memory is not checksummed by the SDK and holds garbage on a cold
@@ -72,6 +76,31 @@ void clearWifiHint() {
   ESP.rtcUserMemoryWrite(WIFI_HINT_RTC_SLOT, (uint32_t *)&h, sizeof(h));
 }
 
+// The transmit power in use, reported by /api/info.
+float g_wifiTxDbm = wifi_policy::TX_POWER_MAX_DBM;
+
+// Radio settings, applied before an association. The SDK keeps the PHY mode
+// in its own flash config, the output power only in RAM - so both are set
+// on every boot, from the settings and the last signal strength.
+void applyRadioSettings(const String &power, const String &mode, int8_t lastRssi) {
+  WiFi.setPhyMode(mode == "b" ? WIFI_PHY_MODE_11B : (mode == "g" ? WIFI_PHY_MODE_11G : WIFI_PHY_MODE_11N));
+  g_wifiTxDbm = wifi_policy::txPowerDbm(power.c_str(), lastRssi);
+  WiFi.setOutputPower(g_wifiTxDbm);
+  D_print(F("WiFi radio: 802.11"));
+  D_print(mode == "b" ? "b" : (mode == "g" ? "g" : "n"));
+  D_print(F(", "));
+  D_print(g_wifiTxDbm);
+  D_println(F(" dBm"));
+}
+// Back to full power - for a retry after a failed connect on "auto".
+void wifiFullPower() {
+  if (g_wifiTxDbm != wifi_policy::TX_POWER_MAX_DBM) {
+    g_wifiTxDbm = wifi_policy::TX_POWER_MAX_DBM;
+    WiFi.setOutputPower(g_wifiTxDbm);
+    D_println(F("WiFi radio: back to full power"));
+  }
+}
+
 // Remember what worked, so the next wake can skip the scan and DHCP.
 // wakesSinceDhcp carries the lease-renewal counter forward; it defaults to 0,
 // which is right for every caller that has just been through DHCP.
@@ -84,6 +113,8 @@ void saveWifiHint(uint8_t wakesSinceDhcp = 0) {
   h.mask = (uint32_t)WiFi.subnetMask();
   h.dns = (uint32_t)WiFi.dnsIP();
   h.channel = WiFi.channel();
+  const long rssi = WiFi.RSSI();
+  h.rssi = (int8_t)(rssi < -127 ? -127 : (rssi > 0 ? 0 : rssi));
   const uint8_t *bssid = WiFi.BSSID();
   if (bssid != nullptr) {
     memcpy(h.bssid, bssid, sizeof(h.bssid));
