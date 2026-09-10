@@ -110,7 +110,7 @@ Buttons on the display board:
 
 ## Upload new firmware via web interface (recommended)
 
-To update the firmware from OTA WebInterface open http://tehybug.local/update in your browser, if this doesnt work, try to find out its IP from your router admin menu or use any local network ip scanner app for your mobile phone to get the device ip and then open http://<ip_address<ip address>>/update with your browser.
+The **Firmware** page of the web interface checks GitHub for a newer release and installs it in one tap (the browser fetches the file for your board and uploads it to the device); or pick a downloaded `.bin` there by hand. On older firmware, open http://tehybug.local/update in your browser, if this doesnt work, try to find out its IP from your router admin menu or use any local network ip scanner app for your mobile phone to get the device ip and then open http://<ip_address<ip address>>/update with your browser.
 
 ## Firmware binaries
 The prebuilt binaries in [`firmware/`](firmware/) are rebuilt automatically on every merge to `main`:
@@ -200,7 +200,8 @@ Then, on the web interface:
 3. **Go live** — the button on the Dashboard (or on *Power & go live*), greyed out until a destination is set: it opens with a checklist of readings and destinations, then pick the power mode (Deep sleep for battery) and confirm. The device restarts and starts sending; on battery boards the web interface stops being served, which is expected. The Dashboard's set-up checklist shows which of the three steps are done.
 4. **Getting back in later** — press RESET, then MODE within a second (see "Return to Config mode" above). A device that has nothing configured to serve always starts its setup portal, so it can't lock you out.
 5. **Changing the WiFi network** — *Power & go live → Change WiFi network* restarts the device into its own access point with the network chooser; nothing else is erased, and *Exit* keeps the old network. If the saved network is simply gone, setup mode opens the chooser by itself.
-6. **Several devices?** Give each one a name under *Power & go live → WiFi network*: "Living room" makes the device reachable at `http://living-room.local/` (and that is what your router's client list shows). Unnamed devices answer at `tehybug.local` as before; with more than one, use the IP the Dashboard shows.
+6. **Backup.** *Power & go live → Backup* downloads every setting as one JSON file and restores one — handy before an experiment, or to copy a setup onto a second device (the device key and WiFi are not part of the file).
+7. **Several devices?** Give each one a name under *Power & go live → WiFi network*: "Living room" makes the device reachable at `http://living-room.local/` (and that is what your router's client list shows). Unnamed devices answer at `tehybug.local` as before; with more than one, use the IP the Dashboard shows.
 
 ### Clock
 The device sets its clock from the internet (NTP) at start-up whenever WiFi is up — on a sleeping battery board only while the clock is still unset, so wakes stay short. Pick the time zone on *Data log → Clock* (or *Display &amp; alarms → Clock*): the list is pre-filled from your browser's zone, anything else can be typed as a POSIX TZ string. The DS3231 clock module keeps the time in between; the *set from this browser* button remains for devices without internet.
