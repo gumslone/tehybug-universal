@@ -79,11 +79,15 @@ void clearWifiHint() {
 // The transmit power in use, reported by /api/info.
 float g_wifiTxDbm = wifi_policy::TX_POWER_MAX_DBM;
 
-// Radio settings, applied before an association. The SDK keeps the PHY mode
-// in its own flash config, the output power only in RAM - so both are set
-// on every boot, from the settings and the last signal strength.
+// Radio settings, applied before an association, from the settings and the
+// last signal strength. The SDK keeps the PHY mode in its flash parameter
+// area - so it is written only when it differs, not on every deep-sleep
+// wake - while the output power lives in RAM and is set on every boot.
 void applyRadioSettings(const String &power, const String &mode, int8_t lastRssi) {
-  WiFi.setPhyMode(mode == "b" ? WIFI_PHY_MODE_11B : (mode == "g" ? WIFI_PHY_MODE_11G : WIFI_PHY_MODE_11N));
+  const WiFiPhyMode_t phy = mode == "b" ? WIFI_PHY_MODE_11B : (mode == "g" ? WIFI_PHY_MODE_11G : WIFI_PHY_MODE_11N);
+  if (WiFi.getPhyMode() != phy) {
+    WiFi.setPhyMode(phy);
+  }
   g_wifiTxDbm = wifi_policy::txPowerDbm(power.c_str(), lastRssi);
   WiFi.setOutputPower(g_wifiTxDbm);
   D_print(F("WiFi radio: 802.11"));

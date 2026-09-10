@@ -34,13 +34,14 @@
     });
   }
   // Settings as one JSON file: everything the device stores except what is
-  // this device's own (its key) or transient (setup mode), so the file can
-  // be kept or loaded onto another TeHyBug.
-  const NOT_EXPORTED = ['key', 'configModeActive', 'reboot'];
+  // this device's own (its key), transient (setup mode) or secret (the MQTT
+  // password, which the device never reveals), so the file can be kept or
+  // loaded onto another TeHyBug.
+  const NOT_EXPORTED = ['key', 'configModeActive', 'reboot', 'mqttPassword'];
   function exportSettings() {
     const c = T.State.config, i = T.State.info;
     const out = { _tehybug: { firmware: i.gumboardVersion || '', board: T.board(), exported: new Date().toISOString(), note: 'TeHyBug settings backup - load it on Power & go live' } };
-    Object.keys(c).forEach(k => { if (NOT_EXPORTED.indexOf(k) < 0 && !(k === 'mqttPassword' && c[k] === '********')) out[k] = c[k]; });
+    Object.keys(c).forEach(k => { if (NOT_EXPORTED.indexOf(k) < 0) out[k] = c[k]; });
     T.saveAs('tehybug-' + T.hostLabel(c.deviceName) + '-settings.json', JSON.stringify(out, null, 2), 'application/json');
     T.Shell.toast('Settings saved as a file' + (c.mqttPassword === '********' ? ' - the MQTT password is not in it' : ''));
   }
@@ -49,7 +50,10 @@
     try { data = JSON.parse(await file.text()); } catch (e) { T.Shell.toast('This is not a settings file', 'danger'); return; }
     if (!data || typeof data !== 'object' || Array.isArray(data)) { T.Shell.toast('This is not a settings file', 'danger'); return; }
     const known = Object.keys(T.State.config);
-    const keys = Object.keys(data).filter(k => k[0] !== '_' && NOT_EXPORTED.indexOf(k) < 0 && !(k === 'mqttPassword' && data[k] === '********'));
+    // a password is applied only when the file really carries one (typed
+    // into the file by hand): an empty or masked one must not clear the
+    // device's
+    const keys = Object.keys(data).filter(k => k[0] !== '_' && (k === 'mqttPassword' ? !!data[k] && data[k] !== '********' : NOT_EXPORTED.indexOf(k) < 0));
     const usable = keys.filter(k => known.indexOf(k) >= 0);
     if (!usable.length) { T.Shell.toast('No TeHyBug settings found in this file', 'danger'); return; }
     const meta = data._tehybug || {};
