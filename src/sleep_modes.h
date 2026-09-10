@@ -236,6 +236,10 @@ void startLightSleep(int freq)
     saveWifiHint();
   } else {
     D_println(F("WiFi did not return after light sleep; skipping this round"));
+    // a lowered transmit power is the first suspect: full power next round
+    if (tehybug.device.wifiPower == "auto") {
+      wifiFullPower();
+    }
   }
 }
 

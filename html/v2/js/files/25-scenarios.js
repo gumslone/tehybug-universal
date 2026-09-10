@@ -36,6 +36,13 @@
     if (now) now.textContent = nowText(k);
     if (sum) sum.textContent = summaryText({ data: k, condition: T.val(p + 'condition'), value: T.val(p + 'value'), type: T.val(p + 'type') });
   }
+  function firstRuleWhileLive() {
+    const c = T.State.config;
+    if (!T.State.configLoaded || c.configModeActive !== false) return false;
+    let before = false, now = false;
+    for (let n = 1; n <= COUNT; n++) { before = before || !!c['sc' + n + '_active']; now = now || T.checked('sc' + n + '_active'); }
+    return !before && now;
+  }
   const opts = (list, value) => html`${list.map(o => html`<option value="${o.value}" ${String(o.value) === String(value) ? 'selected' : ''}>${o.label}</option>`)}`;
   // readings arrived after the page was drawn: grow the lists in place
   function refreshDataOptions() {
@@ -83,8 +90,10 @@
   T.definePage({
     id: 'scenarios', title: 'Scenarios',
     nav: { group: 'more', icon: 'layers', order: 0 },
-    // the firmware reads the rules on every send, so a save applies at once
-    save: { reboot: false, label: 'Save scenarios' },
+    // The firmware reads the rules on every send, so a save applies at once -
+    // except the very first rule switched on while the device is live: its
+    // ticker is registered at start-up, so that one restarts.
+    save: () => ({ reboot: firstRuleWhileLive(), label: 'Save scenarios' }),
     render() {
       const c = T.State.config;
       return html`${UI.pagehead('Scenarios', 'If a reading crosses a value, request a URL or switch a pin — checked on every send, while the device is live.')}

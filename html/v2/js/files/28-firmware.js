@@ -46,7 +46,7 @@
           if (done) break;
           chunks.push(value);
           got += value.length;
-          if (total) status.textContent = 'Downloading ' + tag + '… ' + Math.round(got / total * 100) + '%';
+          if (total) status.textContent = 'Downloading ' + tag + '… ' + Math.min(100, Math.round(got / total * 100)) + '%';
         }
       } else chunks.push(new Uint8Array(await r.arrayBuffer()));
       picked = new File(chunks, 'tehybug.ino.' + build + '.bin', { type: 'application/octet-stream' });

@@ -76,6 +76,7 @@ eq('hostLabel words', T.hostLabel('Living room'), 'living-room');
 eq('hostLabel junk', T.hostLabel('  Green--house #2 '), 'green-house-2');
 eq('hostLabel none', T.hostLabel('!!!'), 'tehybug');
 eq('hostLabel long', T.hostLabel('abcdefghijklmnopqrstuvwxyz0123456789').length, 32);
+eq('hostLabel boundary', T.hostLabel('abcdefghijklmnopqrstuvwxyz01234 5'), 'abcdefghijklmnopqrstuvwxyz01234');
 check('isCloudUrl', T.isCloudUrl('http://tehybug.com/track/?bug_key=1') && !T.isCloudUrl('https://example.com/track'));
 
 // --- page registry is prototype-safe -----------------------------------------

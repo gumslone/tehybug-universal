@@ -35,6 +35,8 @@ static void test_host_label() {
   CHECK_EQ_STR(hostLabel("  Green--house #2 ").c_str(), "green-house-2");
   CHECK_EQ_STR(hostLabel("!!!").c_str(), "tehybug");
   CHECK(hostLabel("abcdefghijklmnopqrstuvwxyz0123456789").length() == 32);
+  // a separator that would land on the last slot ends the label (no lone hyphen, no dropped one)
+  CHECK_EQ_STR(hostLabel("abcdefghijklmnopqrstuvwxyz01234 5").c_str(), "abcdefghijklmnopqrstuvwxyz01234");
 }
 
 static void test_io_scenario_parsing() {

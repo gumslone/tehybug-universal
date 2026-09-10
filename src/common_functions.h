@@ -17,7 +17,10 @@ inline String hostLabel(const String &name) {
     if (c >= 'A' && c <= 'Z') c = (char)(c - 'A' + 'a');
     const bool ok = (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9');
     if (!ok) { pendingHyphen = n > 0; continue; }
-    if (pendingHyphen && n < sizeof(out) - 2) out[n++] = '-';
+    if (pendingHyphen) {
+      if (n >= sizeof(out) - 2) break; // no room for hyphen + letter: the UI cuts here too
+      out[n++] = '-';
+    }
     pendingHyphen = false;
     out[n++] = c;
   }
