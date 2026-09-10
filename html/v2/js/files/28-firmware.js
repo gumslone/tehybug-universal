@@ -12,6 +12,53 @@
     ['generic_debug', 'First-generation, with serial debug output', 'generic']
   ];
   let picked = null;
+  // the released binaries as committed at the release tag; GitHub serves
+  // this host with CORS headers, the release assets are not
+  const releaseFile = (tag, build) => 'https://raw.githubusercontent.com/gumslone/tehybug-universal/' + tag + '/firmware/tehybug.ino.' + build + '.bin';
+
+  function showPicked() {
+    const match = picked && fileMatchesBoard(picked.name);
+    T.render($('#ota-name'), picked
+      ? html`<strong>${picked.name}</strong> <span class="hint">${T.fmt.bytes(picked.size)}</span> ${match ? html`<span class="badge ok">your board</span>` : html`<span class="badge warn">not the ${T.buildName()} build</span>`}`
+      : html`<span class="hint">No file chosen yet</span>`);
+    $('#ota-install').disabled = !picked;
+    T.render($('#ota-install'), html`${T.icon('upload')} ${picked && !match ? 'Install anyway…' : 'Install'}`);
+    $('#ota-status').textContent = picked && !match ? 'Check the Downloads list below for the right file.' : '';
+  }
+  // Fetches the board's file for a release straight from GitHub and installs
+  // it: the browser does the download, so the device needs no internet.
+  async function installLatest(tag) {
+    const build = T.buildName();
+    const btn = $('#ota-latest'), status = $('#ota-status');
+    if (!build || !btn) return;
+    btn.disabled = true;
+    status.textContent = 'Downloading ' + tag + '…';
+    try {
+      const r = await fetch(releaseFile(tag, build), { cache: 'no-store' });
+      if (!r.ok) throw new Error('GitHub answered ' + r.status);
+      const total = parseInt(r.headers.get('content-length') || '0', 10);
+      const chunks = [];
+      let got = 0;
+      if (r.body && r.body.getReader) {
+        const reader = r.body.getReader();
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          chunks.push(value);
+          got += value.length;
+          if (total) status.textContent = 'Downloading ' + tag + '… ' + Math.round(got / total * 100) + '%';
+        }
+      } else chunks.push(new Uint8Array(await r.arrayBuffer()));
+      picked = new File(chunks, 'tehybug.ino.' + build + '.bin', { type: 'application/octet-stream' });
+      showPicked();
+      $('.filepick').scrollIntoView({ block: 'center' });
+      status.textContent = '';
+      await install();
+    } catch (e) {
+      status.textContent = '';
+      T.Shell.dialog({ title: 'Could not download the release', body: html`<p>${e.message}</p><p class="hint">Download the file from the list below and pick it by hand instead.</p>`, buttons: [{ label: 'Close' }] });
+    } finally { btn.disabled = false; }
+  }
 
   function fileMatchesBoard(name) {
     const b = T.buildName();
@@ -71,7 +118,9 @@
         const latest = rel.tag_name || rel.name || '';
         const installed = T.State.info.gumboardVersion;
         if (newerThan(latest, installed)) {
-          T.render(el, html`${UI.note('info', html`<strong>${latest.replace(/^v/, '')} is available</strong> (you run ${installed || '?'}). ${rel.html_url ? html`<a href="${rel.html_url}" target="_blank" rel="noopener">What changed</a> · ` : ''}download your board's file below and install it.`)}`);
+          const mine = T.buildName();
+          T.render(el, html`${UI.note('info', html`<strong>${latest.replace(/^v/, '')} is available</strong> (you run ${installed || '?'}). ${rel.html_url ? html`<a href="${rel.html_url}" target="_blank" rel="noopener">What changed</a>` : ''}
+            ${mine ? html`<div class="row mt"><button type="button" class="btn btn-sm btn-primary" id="ota-latest" data-tag="${latest}" data-nosave>${T.icon('download')} Install ${latest.replace(/^v/, '')} now</button><span class="hint">Fetches the ${mine} file from GitHub and installs it — or download it below.</span></div>` : html` · download your board's file below and install it.`}`)}`);
         } else {
           T.render(el, html`You run the newest release${latest ? ' (' + latest.replace(/^v/, '') + ')' : ''}.`);
         }
@@ -142,15 +191,13 @@
       root.addEventListener('change', e => {
         if (e.target.id !== 'ota-file') return;
         picked = e.target.files && e.target.files[0] ? e.target.files[0] : null;
-        const match = picked && fileMatchesBoard(picked.name);
-        T.render($('#ota-name'), picked
-          ? html`<strong>${picked.name}</strong> <span class="hint">${T.fmt.bytes(picked.size)}</span> ${match ? html`<span class="badge ok">your board</span>` : html`<span class="badge warn">not the ${T.buildName()} build</span>`}`
-          : html`<span class="hint">No file chosen yet</span>`);
-        $('#ota-install').disabled = !picked;
-        T.render($('#ota-install'), html`${T.icon('upload')} ${picked && !match ? 'Install anyway…' : 'Install'}`);
-        $('#ota-status').textContent = picked && !match ? 'Check the Downloads list below for the right file.' : '';
+        showPicked();
       });
-      root.addEventListener('click', e => { if (e.target.closest('#ota-install')) install(); });
+      root.addEventListener('click', e => {
+        if (e.target.closest('#ota-install')) install();
+        const latest = e.target.closest('#ota-latest');
+        if (latest) installLatest(latest.getAttribute('data-tag'));
+      });
     },
     unmount() { picked = null; }
   });
