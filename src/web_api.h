@@ -52,6 +52,7 @@ String getInfo() {
   root["key"] = tehybug.device.key;
   root["uptimeS"] = millis() / 1000;
   root["apSsid"] = wifiSsid; // the device's own access point, for the portal instructions
+  root["mdnsName"] = hostLabel(tehybug.device.deviceName); // <mdnsName>.local
 #if !defined(ARDUINO_ESP8266_GENERIC)
   // which copy of the web UI is built in (the /ui/ fallback)
   root["uiBuild"] = UI_BUNDLE_STAMP;

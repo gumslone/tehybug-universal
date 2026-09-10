@@ -21,6 +21,9 @@ struct Device {
   bool ntpActive{true};
   String ntpServer{"pool.ntp.org"};
   String timezone{};
+  // Name the device answers to on the network (mDNS + WiFi hostname), as
+  // typed; hostLabel() makes the address out of it. Empty = "tehybug".
+  String deviceName{};
 };
 struct Sensor {
   bool bmx{false};

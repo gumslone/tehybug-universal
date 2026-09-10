@@ -4,6 +4,27 @@
 #include "DHTesp.h"
 
 /// The host part of a URL ("https://user@Host.example.com:8443/x" -> the host).
+/// The address label made from a device name: "Living room" -> "living-room".
+/// Lowercase letters, digits and single hyphens, at most 32 characters, no
+/// hyphen at either end; anything else becomes a hyphen. An empty result
+/// falls back to "tehybug", the name every device answered to before.
+inline String hostLabel(const String &name) {
+  char out[33];
+  unsigned n = 0;
+  bool pendingHyphen = false;
+  for (unsigned i = 0; i < name.length() && n < sizeof(out) - 1; i++) {
+    char c = name[i];
+    if (c >= 'A' && c <= 'Z') c = (char)(c - 'A' + 'a');
+    const bool ok = (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9');
+    if (!ok) { pendingHyphen = n > 0; continue; }
+    if (pendingHyphen && n < sizeof(out) - 2) out[n++] = '-';
+    pendingHyphen = false;
+    out[n++] = c;
+  }
+  out[n] = 0;
+  return n ? String(out) : String("tehybug");
+}
+
 inline String hostOfUrl(const String &url) {
   int start = url.indexOf("://");
   start = start < 0 ? 0 : start + 3;

@@ -54,6 +54,7 @@ static size_t buildWorstCase(size_t poolSize, bool display, bool &overflowed) {
   json[std::string("ntpActive")] = true;
   json[std::string("ntpServer")] = filler(40);
   json[std::string("timezone")] = filler(40); // a POSIX TZ string with DST rules
+  json[std::string("deviceName")] = filler(32);
   json[std::string("httpGetActive")] = true;
   json[std::string("httpGetFrequency")] = 900;
   json[std::string("httpPostURL")] = filler(200);

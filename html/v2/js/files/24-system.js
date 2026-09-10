@@ -44,7 +44,7 @@
   T.definePage({
     id: 'system', title: 'Power & go live',
     nav: { group: 'setup', icon: 'power', order: 3 },
-    save: () => (T.isDisplay() ? null : { reboot: true }),
+    save: { reboot: true },
     render() {
       const c = T.State.config, i = T.State.info;
       const display = T.isDisplay();
@@ -80,6 +80,8 @@
 
         ${UI.card({ title: 'WiFi network', icon: 'wifi', body: html`
           <p class="hint">Connected to <strong>${i.wifiSSID || '…'}</strong>${i.ipAddress ? html` as <strong>${i.ipAddress}</strong>` : ''}.</p>
+          ${T.isGeneric() ? '' : UI.field({ id: 'deviceName', label: 'Device name', labelHint: 'its address on your network', value: c.deviceName || '', placeholder: 'TeHyBug', attrs: 'maxlength="32" autocomplete="off"',
+            after: html`<div class="hint">Reachable at <code id="mdns-preview">http://${T.hostLabel(c.deviceName)}.local/</code>. Letters, digits and hyphens; give each device its own name if you have several. The router's client list shows it too.</div>` })}
           <div class="row"><button type="button" class="btn" id="change-wifi">${T.icon('wifi')} Change WiFi network…</button><span class="hint">Restarts into the network chooser on the device's own access point; nothing else is erased.</span></div>` })}
         ${UI.card({ title: 'Restart', icon: 'rotate-ccw', body: html`<div class="row"><button type="button" class="btn" id="restart-btn">${T.icon('rotate-ccw')} Restart device</button><span class="hint">Keeps every setting. Handy after plugging in a new I²C sensor — they are detected at start-up.</span></div>` })}
 
@@ -88,6 +90,11 @@
           <ol class="small"><li>Press and release <strong>RESET</strong>.</li><li>Press and hold <strong>MODE</strong> for about 20 seconds until the LED turns ${T.led('red')}.</li><li>The device restarts with its own access point <code>TEHYBUG-…</code> (password <code>${T.AP_PASSWORD}</code>); join it and open <code>http://192.168.4.1/</code> to choose a WiFi network.</li></ol>` })}`;
     },
     mount(root) {
+      root.addEventListener('input', e => {
+        if (e.target.id !== 'deviceName') return;
+        const p = $('#mdns-preview');
+        if (p) p.textContent = 'http://' + T.hostLabel(e.target.value) + '.local/';
+      });
       root.addEventListener('click', e => {
         if (e.target.closest('#restart-btn')) restartDevice();
         if (e.target.closest('#change-wifi')) changeWifi();
@@ -95,8 +102,10 @@
       });
     },
     collect() {
-      const p = T.radio('power');
-      return { sleepModeActive: p === 'deep', lightSleepModeActive: p === 'light' };
+      const out = {};
+      if (!T.isGeneric()) out.deviceName = T.val('deviceName').trim();
+      if (!T.isDisplay()) { const p = T.radio('power'); out.sleepModeActive = p === 'deep'; out.lightSleepModeActive = p === 'light'; }
+      return out;
     }
   });
 })();

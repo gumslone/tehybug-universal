@@ -27,6 +27,16 @@ static void test_temp_to_imperial() {
   CHECK(temp2Imp(37.0f) == 98.6f);
 }
 
+static void test_host_label() {
+  CASE("hostLabel makes an mDNS label from a device name");
+  CHECK_EQ_STR(hostLabel("").c_str(), "tehybug");
+  CHECK_EQ_STR(hostLabel("TeHyBug").c_str(), "tehybug");
+  CHECK_EQ_STR(hostLabel("Living room").c_str(), "living-room");
+  CHECK_EQ_STR(hostLabel("  Green--house #2 ").c_str(), "green-house-2");
+  CHECK_EQ_STR(hostLabel("!!!").c_str(), "tehybug");
+  CHECK(hostLabel("abcdefghijklmnopqrstuvwxyz0123456789").length() == 32);
+}
+
 static void test_io_scenario_parsing() {
   CASE("io scenario type parsing");
   CHECK(isIoScenario("io13_1"));
@@ -172,6 +182,7 @@ int main() {
   test_int_format();
   test_rssi_quality();
   test_temp_to_imperial();
+  test_host_label();
   test_io_scenario_parsing();
   test_key_to_unit();
   test_key_to_name();

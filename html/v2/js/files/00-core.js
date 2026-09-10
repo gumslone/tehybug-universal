@@ -416,6 +416,12 @@
     try { return new URL(String(url)).host; } catch (e) { return String(url || '').replace(/^https?:\/\//i, '').split('/')[0]; }
   };
   T.isCloudUrl = url => /tehybug\.com\/track/i.test(String(url || ''));
+  // the address label the firmware makes from a device name (hostLabel in
+  // common_functions.h): lowercase, digits, single hyphens, 32 max, else "tehybug"
+  T.hostLabel = name => {
+    const s = String(name || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 32).replace(/-+$/, '');
+    return s || 'tehybug';
+  };
   // Where the readings go with the current configuration — the one list
   // the dashboard, the go-live dialog and the data pages all agree on.
   T.destinations = () => {

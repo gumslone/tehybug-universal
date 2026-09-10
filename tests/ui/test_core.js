@@ -71,6 +71,11 @@ eq('secs 3600', T.fmt.secs(3600), '1 h');
 eq('bytes', T.fmt.bytes(1449984), '1.38 MB');
 eq('duration', T.fmt.duration(90061), '1 d 1 h');
 eq('hostOf', T.hostOf('https://user@example.com:8443/a/b'), 'example.com:8443');
+eq('hostLabel default', T.hostLabel(''), 'tehybug');
+eq('hostLabel words', T.hostLabel('Living room'), 'living-room');
+eq('hostLabel junk', T.hostLabel('  Green--house #2 '), 'green-house-2');
+eq('hostLabel none', T.hostLabel('!!!'), 'tehybug');
+eq('hostLabel long', T.hostLabel('abcdefghijklmnopqrstuvwxyz0123456789').length, 32);
 check('isCloudUrl', T.isCloudUrl('http://tehybug.com/track/?bug_key=1') && !T.isCloudUrl('https://example.com/track'));
 
 // --- page registry is prototype-safe -----------------------------------------

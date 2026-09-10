@@ -17,7 +17,7 @@
         <div><div class="k">Device key</div><div class="v"><code>${key || '…'}</code>${key ? html`<button type="button" class="icon-btn" data-copy="${key}" title="Copy key" aria-label="Copy key">${T.icon('copy')}</button>` : ''}</div></div>
         <div><div class="k">Firmware</div><div class="v">${i.gumboardVersion || '…'}<span class="hint">build ${i.fwBuild || '—'}</span></div></div>
         <div><div class="k">WiFi</div><div class="v">${i.wifiSSID || '…'}<span class="hint">${isFinite(q) ? q + '% · ' + i.wifiRSSI + ' dBm' : ''}</span></div></div>
-        <div><div class="k">Address</div><div class="v">${i.ipAddress ? html`<a href="http://${i.ipAddress}/">${i.ipAddress}</a>` : '…'}${T.isGeneric() || !i.ipAddress ? '' : html`<span class="hint">or tehybug.local</span>`}</div></div>
+        <div><div class="k">Address</div><div class="v">${i.ipAddress ? html`<a href="http://${i.ipAddress}/">${i.ipAddress}</a>` : '…'}${T.isGeneric() || !i.ipAddress ? '' : html`<span class="hint">or ${i.mdnsName || 'tehybug'}.local</span>`}</div></div>
       </div>
       ${UI.disclosure('More about this device', UI.kv([
         ['Chip ID', i.chipID],

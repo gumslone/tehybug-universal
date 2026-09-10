@@ -259,7 +259,9 @@ void setupWifi() {
   // fast and falls into the config portal even for a good, saved network.
   wifiManager.setConnectTimeout(20);
   wifiManager.setConnectRetries(3);
-  WiFi.hostname(wifiSsid);
+  // The router's client list shows this: the device's own name when set,
+  // else the access-point name as before
+  WiFi.hostname(tehybug.device.deviceName.length() ? hostLabel(tehybug.device.deviceName) : wifiSsid);
   // set custom ip for portal
   wifiManager.setAPStaticIPConfig(apIP, apIP, IPAddress(255, 255, 255, 0));
 
@@ -399,7 +401,7 @@ void setupMdns() {
   // "end" must be called before "begin" is called a 2nd time
   // see https://github.com/esp8266/Arduino/issues/7213
   MDNS.end();
-  MDNS.begin("tehybug");
+  MDNS.begin(hostLabel(tehybug.device.deviceName)); // <name>.local
   D_println(F("mDNS started"));
   MDNS.addService("http", "tcp", 80);
   MDNS.addServiceTxt("http", "tcp", "mac", escapedMac.c_str());
